@@ -1,0 +1,4 @@
+name: TinkerCrew Companion
+icon: 🛠️
+ports: [7443]
+bricks: []
