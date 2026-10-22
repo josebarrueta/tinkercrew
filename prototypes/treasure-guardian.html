@@ -1,0 +1,623 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TinkerCrew — Treasure Guardian Prototype</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --ink: #f8f4e8;
+      --muted: #b9b6ab;
+      --panel: #20262d;
+      --panel-2: #2a323b;
+      --line: #404b57;
+      --accent: #ffb703;
+      --accent-dark: #5c4300;
+      --good: #5bd68a;
+      --warn: #ffd166;
+      --danger: #ff6b6b;
+      --sky: #58c7f3;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: #12171c;
+      color: var(--ink);
+      font-family: ui-rounded, "SF Pro Rounded", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.5;
+    }
+    button, input, select, textarea { font: inherit; }
+    button, select, input[type="range"] { cursor: pointer; }
+    button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible {
+      outline: 3px solid var(--sky);
+      outline-offset: 2px;
+    }
+    .prototype-banner {
+      padding: .55rem 1rem;
+      background: #402f00;
+      color: #ffe29a;
+      text-align: center;
+      font-size: .88rem;
+      font-weight: 800;
+      letter-spacing: .03em;
+    }
+    header {
+      padding: 2.5rem max(1rem, calc((100vw - 1180px) / 2));
+      background: linear-gradient(135deg, #173347, #1e2630 60%, #3d2f0a);
+      border-bottom: 1px solid var(--line);
+    }
+    header h1 { margin: 0 0 .35rem; font-size: clamp(2rem, 6vw, 4rem); line-height: 1; }
+    header p { margin: 0; max-width: 760px; color: #d9e8ee; }
+    main {
+      width: min(1180px, calc(100% - 2rem));
+      margin: 1.5rem auto 4rem;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 340px;
+      gap: 1.25rem;
+      align-items: start;
+    }
+    .stack { display: grid; gap: 1rem; }
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 1.2rem;
+      box-shadow: 0 16px 50px rgba(0,0,0,.18);
+    }
+    .panel h2, .panel h3 { margin-top: 0; }
+    .eyebrow {
+      color: var(--accent);
+      text-transform: uppercase;
+      font-size: .78rem;
+      font-weight: 900;
+      letter-spacing: .12em;
+    }
+    .mission-title { font-size: clamp(1.7rem, 4vw, 2.7rem); margin: .2rem 0 .5rem; }
+    .muted { color: var(--muted); }
+    .actions { display: flex; flex-wrap: wrap; gap: .65rem; margin-top: 1rem; }
+    button {
+      border: 1px solid #697786;
+      border-radius: 999px;
+      padding: .7rem 1rem;
+      background: #303a44;
+      color: var(--ink);
+      font-weight: 800;
+    }
+    button:hover { background: #3a4652; }
+    button.primary { background: var(--accent); border-color: var(--accent); color: #231b00; }
+    button.primary:hover { background: #ffc52b; }
+    button.danger { background: #562929; border-color: #9c4545; }
+    button:disabled { opacity: .4; cursor: not-allowed; }
+    .stage-list { display: grid; grid-template-columns: repeat(7, minmax(70px, 1fr)); gap: .4rem; }
+    .stage {
+      padding: .5rem .25rem;
+      border-radius: 10px;
+      background: #171c21;
+      color: #858c92;
+      text-align: center;
+      font-size: .74rem;
+      font-weight: 800;
+    }
+    .stage.active { background: var(--accent-dark); color: #ffe29a; outline: 2px solid var(--accent); }
+    .stage.done { background: #183b29; color: #8fe6ad; }
+    .crew-grid, .role-grid, .check-grid, .world-grid, .hardware-grid { display: grid; gap: .75rem; }
+    .crew-grid { grid-template-columns: repeat(3, 1fr); }
+    .role-grid { grid-template-columns: repeat(3, 1fr); }
+    .world-grid { grid-template-columns: repeat(3, 1fr); }
+    .hardware-grid { grid-template-columns: 1.2fr .8fr; }
+    .card {
+      background: var(--panel-2);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 1rem;
+    }
+    .card strong { display: block; }
+    label { display: grid; gap: .35rem; color: #d7d5cc; font-weight: 750; }
+    input[type="text"], input[type="number"], textarea, select {
+      width: 100%;
+      border: 1px solid #687481;
+      border-radius: 10px;
+      padding: .65rem .75rem;
+      background: #151a1f;
+      color: var(--ink);
+    }
+    textarea { min-height: 110px; resize: vertical; }
+    input[type="range"] { width: 100%; accent-color: var(--accent); }
+    .track { margin-top: .5rem; color: var(--sky); font-size: .85rem; }
+    .role-token { border-left: 5px solid var(--accent); }
+    .world { min-height: 130px; position: relative; overflow: hidden; }
+    .world.locked { opacity: .55; }
+    .world.current { outline: 2px solid var(--accent); }
+    .world .icon { font-size: 2rem; }
+    .telemetry {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: .55rem;
+      margin: 1rem 0;
+    }
+    .meter { background: #151a1f; border-radius: 12px; padding: .8rem; text-align: center; }
+    .meter span { display: block; color: var(--muted); font-size: .76rem; text-transform: uppercase; }
+    .meter strong { font-size: 1.1rem; }
+    .pixel-display {
+      min-height: 150px;
+      border-radius: 16px;
+      display: grid;
+      place-items: center;
+      color: #111;
+      font-weight: 950;
+      font-size: 1.4rem;
+      text-align: center;
+      transition: background .15s;
+    }
+    .button-bank { display: grid; grid-template-columns: repeat(3, 1fr); gap: .5rem; }
+    .button-bank button { border-radius: 14px; min-height: 62px; }
+    .check-grid { grid-template-columns: repeat(2, 1fr); }
+    .check { display: flex; gap: .65rem; align-items: flex-start; }
+    .check-mark { width: 1.5rem; height: 1.5rem; flex: 0 0 auto; border-radius: 50%; background: #4a5158; text-align: center; }
+    .check.passed .check-mark { background: var(--good); color: #092515; }
+    .hint { border-left: 4px solid var(--sky); background: #172c36; padding: .9rem; margin-top: .75rem; }
+    .callout { border-left: 4px solid var(--accent); padding: .8rem 1rem; background: #30280f; border-radius: 0 10px 10px 0; }
+    .debug { position: sticky; top: 1rem; }
+    .debug dl { display: grid; grid-template-columns: 1fr 1.3fr; gap: .3rem .8rem; margin: 0; font-size: .82rem; }
+    .debug dt { color: var(--muted); }
+    .debug dd { margin: 0; overflow-wrap: anywhere; text-align: right; }
+    .log { margin: 1rem 0 0; padding: 0; list-style: none; max-height: 270px; overflow: auto; }
+    .log li { border-top: 1px solid var(--line); padding: .5rem 0; font-size: .78rem; color: #d8d6ce; }
+    .log time { color: var(--muted); display: block; }
+    .free-build-result { font-size: 1.25rem; color: #ffe29a; }
+    .hidden { display: none !important; }
+    footer { text-align: center; color: var(--muted); padding: 2rem; }
+
+    @media (max-width: 900px) {
+      main { grid-template-columns: 1fr; }
+      .debug { position: static; }
+      .stage-list { grid-template-columns: repeat(4, 1fr); }
+    }
+    @media (max-width: 650px) {
+      .crew-grid, .role-grid, .world-grid, .hardware-grid, .check-grid { grid-template-columns: 1fr; }
+      .telemetry { grid-template-columns: repeat(2, 1fr); }
+      header { padding-top: 1.5rem; }
+    }
+  </style>
+</head>
+<body>
+  <div class="prototype-banner">THROWAWAY PRODUCT PROTOTYPE — not production software</div>
+  <header>
+    <h1>TinkerCrew</h1>
+    <p><strong>Prototype question:</strong> Can children aged 7, 10, and 14 share meaningful roles while one crew completes the Imagine → Build → Connect → Code → Test → Remix → Explain loop?</p>
+  </header>
+
+  <main>
+    <div class="stack">
+      <section class="panel" aria-label="Mission progress">
+        <div class="stage-list" id="stage-list"></div>
+      </section>
+
+      <section class="panel" id="screen"></section>
+
+      <section class="panel" id="mission-control">
+        <div class="eyebrow">Mission Control · simulated hardware</div>
+        <h2>Dragon senses</h2>
+        <div class="telemetry" id="telemetry"></div>
+        <div class="hardware-grid">
+          <div class="card">
+            <label for="distance">Move an intruder closer or farther: <strong><span id="distance-value">100</span> cm</strong></label>
+            <input id="distance" type="range" min="5" max="150" value="100" step="1">
+            <div class="actions">
+              <button data-distance="120">Far away</button>
+              <button data-distance="55">Warning range</button>
+              <button data-distance="15">At the treasure</button>
+            </div>
+            <h3>Modulino Buttons</h3>
+            <div class="button-bank">
+              <button data-hardware="arm">🛡️ Arm</button>
+              <button data-hardware="silence">🤫 Silence</button>
+              <button data-hardware="disarm">💤 Disarm</button>
+            </div>
+          </div>
+          <div class="card">
+            <div class="pixel-display" id="pixel-display">SAFE<br>GREEN</div>
+            <p id="buzzer-status" class="muted">Buzzer is quiet.</p>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <aside class="panel debug" aria-label="Visible prototype state">
+      <div class="eyebrow">Visible state after every action</div>
+      <h2>Crew dashboard</h2>
+      <dl id="debug-state"></dl>
+      <h3>What just happened</h3>
+      <ol class="log" id="activity-log"></ol>
+      <div class="actions">
+        <button id="reset-button" class="danger">Reset prototype</button>
+      </div>
+    </aside>
+  </main>
+
+  <footer>Open this file directly in a browser. Nothing is saved or sent anywhere.</footer>
+
+  <script>
+    // Portable prototype logic: pure state + reducer. It intentionally has no DOM access.
+    const TreasureGuardian = (() => {
+      const stages = ["imagine", "build", "connect", "code", "test", "remix", "explain"];
+      const roles = ["Architect", "Engineer", "Coder", "Tester", "Reporter"];
+      const hints = [
+        "Watch what color appears as the intruder moves through each distance zone.",
+        "Try three distances: farther than the warning number, between both numbers, and nearer than the intruder number.",
+        "A working rule looks like: if distance ≤ intruder threshold, show red and sound the alarm; else if distance ≤ warning threshold, show yellow; otherwise show green."
+      ];
+      const prompts = {
+        setting: ["moon base", "enchanted library", "underwater temple", "jungle laboratory", "cloud castle"],
+        creature: ["shy robot", "sleepy dragon", "curious octopus", "tiny giant", "time-travelling cat"],
+        sensor: ["distance", "button sequence", "secret timer", "light level", "movement"],
+        twist: ["must warn before sounding", "changes mood every round", "trusts one secret signal", "falls asleep after ten seconds", "needs two crew members to agree"]
+      };
+
+      function initialState() {
+        return {
+          view: "home",
+          stage: "imagine",
+          crew: [
+            { name: "Mia", age: 7, track: "Explorer", role: "Architect" },
+            { name: "Leo", age: 10, track: "Inventor", role: "Engineer" },
+            { name: "Sofia", age: 14, track: "Hacker", role: "Coder" }
+          ],
+          roleRound: 0,
+          missionStarted: false,
+          connected: false,
+          armed: false,
+          silenced: false,
+          distance: 100,
+          warningThreshold: 70,
+          intruderThreshold: 30,
+          hintLevel: 0,
+          checks: { green: false, yellow: false, red: false, buzzer: false, armed: false, silenced: false, disarmed: false },
+          remix: { chosen: "", applied: false, tested: false },
+          reflection: "",
+          completed: false,
+          freeBuildPrompt: "",
+          freeBuildPromptCount: 0,
+          lastChange: "Prototype ready. Set up the crew.",
+          activity: ["Prototype ready. Set up the crew."]
+        };
+      }
+
+      function zone(state) {
+        if (!state.connected) return "offline";
+        if (state.distance <= state.intruderThreshold) return "intruder";
+        if (state.distance <= state.warningThreshold) return "warning";
+        return "safe";
+      }
+
+      function outputs(state) {
+        const currentZone = zone(state);
+        if (currentZone === "offline") return { pixels: "off", buzzer: false };
+        if (!state.armed) return { pixels: "blue", buzzer: false };
+        if (currentZone === "intruder") return { pixels: "red", buzzer: !state.silenced };
+        if (currentZone === "warning") return { pixels: "yellow", buzzer: false };
+        return { pixels: "green", buzzer: false };
+      }
+
+      function withLog(state, message) {
+        return { ...state, lastChange: message, activity: [message, ...state.activity].slice(0, 30) };
+      }
+
+      function recordChecks(state) {
+        const out = outputs(state);
+        const checks = { ...state.checks };
+        if (state.armed) checks.armed = true;
+        if (!state.armed && checks.armed) checks.disarmed = true;
+        if (out.pixels === "green") checks.green = true;
+        if (out.pixels === "yellow") checks.yellow = true;
+        if (out.pixels === "red") checks.red = true;
+        if (out.buzzer) checks.buzzer = true;
+        if (state.silenced && zone(state) === "intruder" && !out.buzzer) checks.silenced = true;
+        return { ...state, checks };
+      }
+
+      function rotateRoles(crew, round) {
+        return crew.map((member, index) => ({ ...member, role: roles[(index + round) % roles.length] }));
+      }
+
+      function reducer(state, action) {
+        let next = state;
+        switch (action.type) {
+          case "SET_VIEW":
+            next = { ...state, view: action.view };
+            return withLog(next, `Opened ${action.view === "world" ? "the World Map" : action.view}.`);
+          case "UPDATE_CREW": {
+            const crew = state.crew.map((member, index) => index === action.index ? { ...member, [action.field]: action.value } : member);
+            return withLog({ ...state, crew }, "Crew setup changed.");
+          }
+          case "START_MISSION":
+            return withLog({ ...state, view: "mission", missionStarted: true, stage: "imagine" }, "The Sleeping Dragon mission began.");
+          case "ADVANCE": {
+            const current = stages.indexOf(state.stage);
+            const stage = stages[Math.min(current + 1, stages.length - 1)];
+            return withLog({ ...state, stage }, `The crew advanced to ${stage}.`);
+          }
+          case "ROTATE_ROLES": {
+            const roleRound = state.roleRound + 1;
+            return withLog({ ...state, roleRound, crew: rotateRoles(state.crew, roleRound) }, "Crew roles rotated so everyone contributes in a new way.");
+          }
+          case "CONNECT":
+            next = recordChecks({ ...state, connected: true, armed: false, silenced: false });
+            return withLog(next, "Simulated Distance, Buttons, Pixels, and Buzzer connected.");
+          case "SET_DISTANCE":
+            next = recordChecks({ ...state, distance: Number(action.value) });
+            return withLog(next, `The intruder moved to ${action.value} cm.`);
+          case "HARDWARE":
+            if (!state.connected) return withLog(state, "Nothing happened: connect the simulator first.");
+            if (action.command === "arm") next = { ...state, armed: true, silenced: false };
+            if (action.command === "silence") next = { ...state, silenced: true };
+            if (action.command === "disarm") next = { ...state, armed: false, silenced: false };
+            next = recordChecks(next);
+            return withLog(next, `${action.command[0].toUpperCase() + action.command.slice(1)} button pressed.`);
+          case "SET_THRESHOLDS": {
+            const warningThreshold = Number(action.warning);
+            const intruderThreshold = Number(action.intruder);
+            if (intruderThreshold >= warningThreshold) return withLog(state, "Rule rejected: the intruder distance must be smaller than the warning distance.");
+            next = recordChecks({ ...state, warningThreshold, intruderThreshold });
+            return withLog(next, `Rules updated: warning at ${warningThreshold} cm, alarm at ${intruderThreshold} cm.`);
+          }
+          case "SHOW_HINT":
+            return withLog({ ...state, hintLevel: Math.min(3, state.hintLevel + 1) }, `Hint level ${Math.min(3, state.hintLevel + 1)} opened.`);
+          case "CHOOSE_REMIX":
+            return withLog({ ...state, remix: { chosen: action.choice, applied: false, tested: false } }, `Remix chosen: ${action.choice}.`);
+          case "APPLY_REMIX": {
+            if (!state.remix.chosen) return withLog(state, "Choose a remix before applying it.");
+            let remixState = state;
+            if (state.remix.chosen === "brave") remixState = { ...state, warningThreshold: 55, intruderThreshold: 18 };
+            if (state.remix.chosen === "sleepy") remixState = { ...state, warningThreshold: 90, intruderThreshold: 40 };
+            if (state.remix.chosen === "silent") remixState = { ...state, silenced: true };
+            remixState = recordChecks({ ...remixState, remix: { ...state.remix, applied: true, tested: false } });
+            return withLog(remixState, `Remix applied: ${state.remix.chosen}. Test it in Mission Control.`);
+          }
+          case "TEST_REMIX":
+            if (!state.remix.applied) return withLog(state, "Apply a remix before testing it.");
+            return withLog({ ...state, remix: { ...state.remix, tested: true } }, "The crew marked the remixed rule as tested.");
+          case "SET_REFLECTION":
+            return { ...state, reflection: action.value, lastChange: "Reflection updated." };
+          case "COMPLETE":
+            if (!state.remix.tested || state.reflection.trim().length < 10) return withLog(state, "Completion needs a tested remix and a short crew explanation.");
+            return withLog({ ...state, completed: true }, "Mission complete! The treasure is safe and the crew explained its invention.");
+          case "GENERATE_PROMPT": {
+            const count = state.freeBuildPromptCount;
+            const pick = (items, offset) => items[(count + offset) % items.length];
+            const freeBuildPrompt = `Build a ${pick(prompts.setting, 0)} guarded by a ${pick(prompts.creature, 1)}. Use ${pick(prompts.sensor, 2)} and make sure it ${pick(prompts.twist, 3)}.`;
+            return withLog({ ...state, freeBuildPrompt, freeBuildPromptCount: count + 1 }, "A new Free Build challenge appeared.");
+          }
+          case "RESET":
+            return initialState();
+          default:
+            return state;
+        }
+      }
+
+      function canAdvance(state) {
+        if (state.stage === "imagine") return state.missionStarted;
+        if (state.stage === "build") return true; // Creative building is confirmed by humans, never judged by software.
+        if (state.stage === "connect") return state.connected;
+        if (state.stage === "code") return state.intruderThreshold < state.warningThreshold;
+        if (state.stage === "test") return Object.values(state.checks).every(Boolean);
+        if (state.stage === "remix") return state.remix.tested;
+        return false;
+      }
+
+      return { stages, hints, initialState, reducer, zone, outputs, canAdvance };
+    })();
+
+    // Throwaway page shell below this line.
+    let state = TreasureGuardian.initialState();
+    const screen = document.querySelector("#screen");
+    const missionControl = document.querySelector("#mission-control");
+    const stageList = document.querySelector("#stage-list");
+    const telemetry = document.querySelector("#telemetry");
+    const debugState = document.querySelector("#debug-state");
+    const activityLog = document.querySelector("#activity-log");
+    const distanceInput = document.querySelector("#distance");
+
+    function escapeHtml(value) {
+      return String(value).replace(/[&<>'"]/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[char]);
+    }
+
+    function dispatch(action) {
+      state = TreasureGuardian.reducer(state, action);
+      render();
+    }
+
+    function renderStages() {
+      const activeIndex = TreasureGuardian.stages.indexOf(state.stage);
+      stageList.innerHTML = TreasureGuardian.stages.map((stage, index) => {
+        const status = index < activeIndex ? "done" : index === activeIndex && state.missionStarted ? "active" : "";
+        return `<div class="stage ${status}">${index < activeIndex ? "✓ " : ""}${stage[0].toUpperCase() + stage.slice(1)}</div>`;
+      }).join("");
+    }
+
+    function renderHome() {
+      return `
+        <div class="eyebrow">Home Base</div>
+        <h2 class="mission-title">Assemble your family crew</h2>
+        <p>One crew, one shared adventure. Each person gets a different kind of challenge—not a separate game.</p>
+        <div class="crew-grid">
+          ${state.crew.map((member, index) => `
+            <div class="card">
+              <label>Name <input type="text" data-crew="${index}" data-field="name" value="${escapeHtml(member.name)}"></label>
+              <label>Age <input type="number" min="6" max="99" data-crew="${index}" data-field="age" value="${member.age}"></label>
+              <label>Challenge track
+                <select data-crew="${index}" data-field="track">
+                  ${["Explorer", "Inventor", "Hacker"].map(track => `<option ${member.track === track ? "selected" : ""}>${track}</option>`).join("")}
+                </select>
+              </label>
+              <div class="track">${member.track === "Explorer" ? "Story, choices, colors, and testing" : member.track === "Inventor" ? "Rules, thresholds, sequences, and timers" : "Telemetry, logic, extensions, and investigation"}</div>
+            </div>`).join("")}
+        </div>
+        <div class="actions"><button class="primary" data-action="world">Open World Map →</button></div>`;
+    }
+
+    function renderWorld() {
+      return `
+        <div class="eyebrow">World Map</div>
+        <h2 class="mission-title">Choose an adventure</h2>
+        <div class="world-grid">
+          <div class="card world current"><div class="icon">🐉</div><strong>The Sleeping Dragon</strong><p>Build a treasure guardian that sees intruders and warns the crew.</p><button class="primary" data-action="start">Begin mission</button></div>
+          <div class="card world locked"><div class="icon">🤖</div><strong>Curious Robot</strong><p>Coming after the prototype play test.</p></div>
+          <div class="card world locked"><div class="icon">🗼</div><strong>Signal Tower</strong><p>Coming after the prototype play test.</p></div>
+        </div>
+        <div class="actions"><button data-action="home">← Crew setup</button><button data-action="freebuild">Free Build prompt</button></div>`;
+    }
+
+    function roleCards() {
+      return `<div class="role-grid">${state.crew.map(member => `<div class="card role-token"><strong>${escapeHtml(member.role)}</strong>${escapeHtml(member.name)} · ${escapeHtml(member.track)}</div>`).join("")}</div>`;
+    }
+
+    function stageContent() {
+      const advance = `<button class="primary" data-action="advance" ${TreasureGuardian.canAdvance(state) ? "" : "disabled"}>Crew ready — next step →</button>`;
+      if (state.stage === "imagine") return `
+        <div class="eyebrow">Imagine · Story briefing</div><h2 class="mission-title">The Sleeping Dragon</h2>
+        <div class="callout">Deep beneath your creation, a dragon sleeps beside a treasure. It needs your crew to build senses: green when all is safe, yellow when something approaches, and red with an alarm when an intruder gets too close.</div>
+        <h3>Your crew roles</h3>${roleCards()}
+        <p class="muted">Architect shapes the story. Engineer plans connections. Coder invents rules. Roles rotate—no one owns the whole mission.</p>
+        <div class="actions"><button data-action="rotate">Rotate roles</button>${advance}</div>`;
+      if (state.stage === "build") return `
+        <div class="eyebrow">Build · Human-confirmed creative step</div><h2 class="mission-title">Make the guardian yours</h2>
+        <p>Build any cave, vault, spaceship, creature, or completely new idea around the imaginary electronics. There is no model to copy and the software will not judge the LEGO creation.</p>
+        <ul><li>Leave an entrance where the Distance sensor can look outward.</li><li>Put the Pixels somewhere the crew can see.</li><li>Decide where an intruder might approach.</li></ul>
+        <div class="callout"><strong>Ask the Architect:</strong> What is the treasure, and why does the guardian protect it?</div>
+        <div class="actions"><button data-action="rotate">Rotate roles</button>${advance}</div>`;
+      if (state.stage === "connect") return `
+        <div class="eyebrow">Connect · Simulator self-test</div><h2 class="mission-title">Wake the machine</h2>
+        <p>This prototype replaces the physical board with controls below. Connect all four simulated Modulinos together.</p>
+        <div class="check-grid">
+          ${["Distance reports centimeters", "Buttons accept commands", "Pixels can show colors", "Buzzer can sound safely"].map(item => `<div class="card check ${state.connected ? "passed" : ""}"><span class="check-mark">${state.connected ? "✓" : ""}</span><span>${item}</span></div>`).join("")}
+        </div>
+        <div class="actions"><button data-action="connect">${state.connected ? "Reconnect simulator" : "Connect simulator"}</button>${advance}</div>`;
+      if (state.stage === "code") return `
+        <div class="eyebrow">Code · Invent the rules</div><h2 class="mission-title">Choose the dragon’s boundaries</h2>
+        <p>The Inventor proposes distances. The Coder explains the order of the rules. Try them immediately in Mission Control.</p>
+        <div class="crew-grid">
+          <label>Warning begins at (cm)<input id="warning-threshold" type="number" min="10" max="140" value="${state.warningThreshold}"></label>
+          <label>Intruder alarm begins at (cm)<input id="intruder-threshold" type="number" min="5" max="130" value="${state.intruderThreshold}"></label>
+          <div class="card"><strong>Rule order</strong>Check intruder first, then warning, then safe.</div>
+        </div>
+        <div class="actions"><button data-action="save-rules">Try these rules</button><button data-action="hint">Show ${state.hintLevel ? "next" : "a"} hint</button>${advance}</div>
+        ${state.hintLevel ? `<div class="hint"><strong>Hint ${state.hintLevel} of 3:</strong> ${TreasureGuardian.hints[state.hintLevel - 1]}</div>` : ""}`;
+      if (state.stage === "test") {
+        const labels = { green: "Far range turns Pixels green", yellow: "Warning range turns Pixels yellow", red: "Intruder range turns Pixels red", buzzer: "Intruder sounds the Buzzer", armed: "Arm button wakes the guardian", silenced: "Silence button stops an active alarm", disarmed: "Disarm button returns to a safe state" };
+        return `
+          <div class="eyebrow">Test · Automatic behavior checks</div><h2 class="mission-title">Try to outsmart the guardian</h2>
+          <p>Use every distance shortcut and button below. The checks observe behavior, not the LEGO design. Failed attempts simply invite another try.</p>
+          <div class="check-grid">${Object.entries(labels).map(([key, label]) => `<div class="card check ${state.checks[key] ? "passed" : ""}"><span class="check-mark">${state.checks[key] ? "✓" : ""}</span><span>${label}</span></div>`).join("")}</div>
+          <div class="actions"><button data-action="hint">Show ${state.hintLevel ? "next" : "a"} hint</button>${advance}</div>
+          ${state.hintLevel ? `<div class="hint"><strong>Hint ${state.hintLevel} of 3:</strong> ${TreasureGuardian.hints[state.hintLevel - 1]}</div>` : ""}`;
+      }
+      if (state.stage === "remix") return `
+        <div class="eyebrow">Remix · Change one rule</div><h2 class="mission-title">Make it your invention</h2>
+        <p>Following instructions is not the finish line. Pick a personality, apply it, then test what changed.</p>
+        <div class="role-grid">
+          <button data-remix="brave">🦁 Brave dragon<br><small>Lets intruders come closer</small></button>
+          <button data-remix="sleepy">😴 Sleepy dragon<br><small>Notices movement sooner</small></button>
+          <button data-remix="silent">🥷 Silent guardian<br><small>Uses light without sound</small></button>
+        </div>
+        <p>Chosen remix: <strong>${escapeHtml(state.remix.chosen || "none yet")}</strong> · Applied: ${state.remix.applied ? "yes" : "no"} · Tested: ${state.remix.tested ? "yes" : "no"}</p>
+        <div class="actions"><button data-action="apply-remix">Apply remix</button><button data-action="test-remix">We tested the change</button>${advance}</div>`;
+      return `
+        <div class="eyebrow">Explain · Crew reflection</div><h2 class="mission-title">Tell the invention story</h2>
+        <p>The Reporter asks the crew: What changed? What surprised you? What failed before it worked?</p>
+        <label>Crew explanation<textarea id="reflection" placeholder="We changed… We noticed… Next time…">${escapeHtml(state.reflection)}</textarea></label>
+        <div class="actions"><button class="primary" data-action="complete">Complete mission</button><button data-action="rotate">Rotate roles for next mission</button></div>
+        ${state.completed ? `<div class="callout"><h3>🏆 Treasure secured!</h3><p>Every crew member contributed, the guardian passed its checks, and your remix made it unique.</p><button data-action="freebuild">Continue to Free Build</button></div>` : ""}`;
+    }
+
+    function renderMission() {
+      return `${stageContent()}<div class="actions"><button data-action="world">← World Map</button></div>`;
+    }
+
+    function renderFreeBuild() {
+      return `
+        <div class="eyebrow">Free Build</div><h2 class="mission-title">Invent without a recipe</h2>
+        <p>Use the prompt as a spark, then ignore any part your crew wants to replace.</p>
+        <div class="card free-build-result">${escapeHtml(state.freeBuildPrompt || "Generate a challenge when your crew is ready.")}</div>
+        <div class="actions"><button class="primary" data-action="generate">Generate prompt</button><button data-action="world">← World Map</button></div>`;
+    }
+
+    function renderScreen() {
+      if (state.view === "home") screen.innerHTML = renderHome();
+      else if (state.view === "world") screen.innerHTML = renderWorld();
+      else if (state.view === "freebuild") screen.innerHTML = renderFreeBuild();
+      else screen.innerHTML = renderMission();
+    }
+
+    function renderHardware() {
+      const zone = TreasureGuardian.zone(state);
+      const out = TreasureGuardian.outputs(state);
+      const colors = { off: "#3b4248", blue: "#58c7f3", green: "#5bd68a", yellow: "#ffd166", red: "#ff6b6b" };
+      const labels = { off: "OFFLINE", blue: "SLEEPING", green: "SAFE", yellow: "CURIOUS", red: "INTRUDER!" };
+      document.querySelector("#distance-value").textContent = state.distance;
+      distanceInput.value = state.distance;
+      document.querySelector("#pixel-display").style.background = colors[out.pixels];
+      document.querySelector("#pixel-display").innerHTML = `${labels[out.pixels]}<br>${out.pixels.toUpperCase()}`;
+      document.querySelector("#buzzer-status").textContent = out.buzzer ? "🔊 Buzzer is sounding!" : "Buzzer is quiet.";
+      telemetry.innerHTML = [
+        ["Connection", state.connected ? "Ready" : "Offline"],
+        ["Distance", `${state.distance} cm`],
+        ["Zone", zone],
+        ["Guardian", state.armed ? (state.silenced ? "Armed · silent" : "Armed") : "Sleeping"]
+      ].map(([label, value]) => `<div class="meter"><span>${label}</span><strong>${escapeHtml(value)}</strong></div>`).join("");
+      missionControl.classList.toggle("hidden", state.view === "home" || state.view === "world" || state.view === "freebuild");
+    }
+
+    function renderDebug() {
+      const passed = Object.values(state.checks).filter(Boolean).length;
+      const rows = [
+        ["Location", state.view], ["Mission stage", state.stage], ["Crew", state.crew.map(m => `${m.name} (${m.track}/${m.role})`).join(", ")],
+        ["Connected", state.connected ? "yes" : "no"], ["Distance zone", TreasureGuardian.zone(state)], ["Thresholds", `${state.intruderThreshold} / ${state.warningThreshold} cm`],
+        ["Outputs", `${TreasureGuardian.outputs(state).pixels}, buzzer ${TreasureGuardian.outputs(state).buzzer ? "on" : "off"}`], ["Checks", `${passed}/7 passed`],
+        ["Hint level", `${state.hintLevel}/3`], ["Remix", state.remix.chosen || "not chosen"], ["Completed", state.completed ? "yes" : "no"]
+      ];
+      debugState.innerHTML = rows.map(([term, description]) => `<dt>${term}</dt><dd>${escapeHtml(description)}</dd>`).join("");
+      activityLog.innerHTML = state.activity.map((item, index) => `<li>${escapeHtml(item)}${index === 0 ? " <strong>← latest</strong>" : ""}</li>`).join("");
+    }
+
+    function render() {
+      renderStages();
+      renderScreen();
+      renderHardware();
+      renderDebug();
+    }
+
+    document.addEventListener("click", event => {
+      const action = event.target.closest("[data-action]")?.dataset.action;
+      if (action === "home" || action === "world" || action === "freebuild") dispatch({ type: "SET_VIEW", view: action });
+      if (action === "start") dispatch({ type: "START_MISSION" });
+      if (action === "advance") dispatch({ type: "ADVANCE" });
+      if (action === "rotate") dispatch({ type: "ROTATE_ROLES" });
+      if (action === "connect") dispatch({ type: "CONNECT" });
+      if (action === "hint") dispatch({ type: "SHOW_HINT" });
+      if (action === "save-rules") dispatch({ type: "SET_THRESHOLDS", warning: document.querySelector("#warning-threshold").value, intruder: document.querySelector("#intruder-threshold").value });
+      if (action === "apply-remix") dispatch({ type: "APPLY_REMIX" });
+      if (action === "test-remix") dispatch({ type: "TEST_REMIX" });
+      if (action === "complete") dispatch({ type: "COMPLETE" });
+      if (action === "generate") dispatch({ type: "GENERATE_PROMPT" });
+      const distance = event.target.closest("[data-distance]")?.dataset.distance;
+      if (distance) dispatch({ type: "SET_DISTANCE", value: distance });
+      const hardware = event.target.closest("[data-hardware]")?.dataset.hardware;
+      if (hardware) dispatch({ type: "HARDWARE", command: hardware });
+      const remix = event.target.closest("[data-remix]")?.dataset.remix;
+      if (remix) dispatch({ type: "CHOOSE_REMIX", choice: remix });
+    });
+
+    document.addEventListener("change", event => {
+      if (event.target.matches("[data-crew]")) dispatch({ type: "UPDATE_CREW", index: Number(event.target.dataset.crew), field: event.target.dataset.field, value: event.target.dataset.field === "age" ? Number(event.target.value) : event.target.value });
+      if (event.target.id === "reflection") dispatch({ type: "SET_REFLECTION", value: event.target.value });
+    });
+    distanceInput.addEventListener("input", event => dispatch({ type: "SET_DISTANCE", value: event.target.value }));
+    document.querySelector("#reset-button").addEventListener("click", () => dispatch({ type: "RESET" }));
+
+    render();
+  </script>
+</body>
+</html>

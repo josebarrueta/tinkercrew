@@ -1,3 +1,9 @@
 # TinkerCrew
 
 Build. Code. Imagine.
+
+## Product prototype
+
+Open [`prototypes/treasure-guardian.html`](prototypes/treasure-guardian.html) directly in a browser to try the throwaway Treasure Guardian family mission prototype.
+
+Use [`prototypes/treasure-guardian-playtest.md`](prototypes/treasure-guardian-playtest.md) to facilitate a family session and record observations in [`prototypes/treasure-guardian-findings.md`](prototypes/treasure-guardian-findings.md).
