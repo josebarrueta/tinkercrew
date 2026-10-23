@@ -12,6 +12,10 @@ Use [`prototypes/treasure-guardian-playtest.md`](prototypes/treasure-guardian-pl
 
 Launch the Tauri/Svelte app with `cd app && npm install && npm run dev:app`. See [`app/README.md`](app/README.md) for checks and production builds.
 
+## macOS release preparation
+
+See [`docs/release/macos.md`](docs/release/macos.md) for DMG packaging, the protected signing/notarization workflow, signed update metadata, and pending clean-Mac acceptance. No public signed release has been validated yet.
+
 ## Checks and safety
 
 Run `bash scripts/check-mvp.sh --build` for repeatable software checks and a versioned local report. See [`docs/qa/recovery-safety.md`](docs/qa/recovery-safety.md) for the pending physical acceptance matrix. Hardware wiring limits are also shown in the app's build stage and Parent Settings.

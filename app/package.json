@@ -11,6 +11,7 @@
     "dev:app": "tauri dev",
     "build": "vite build",
     "build:app": "tauri build --bundles app",
+    "build:dmg": "CI=true tauri build --bundles app,dmg --ci",
     "preview": "vite preview",
     "prepare": "svelte-kit sync || echo ''",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",

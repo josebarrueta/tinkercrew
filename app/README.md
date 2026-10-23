@@ -31,7 +31,7 @@ npm run test:e2e
 npm run build:app
 ```
 
-The production command creates `src-tauri/target/release/bundle/macos/TinkerCrew.app`. Development bundles are unsigned. Tauri's hardened runtime is enabled and the signing identity remains unset until issue #12 configures Developer ID signing and notarization.
+The app command creates `src-tauri/target/release/bundle/macos/TinkerCrew.app`. `npm run build:dmg` also creates a headless drag-to-Applications DMG under `src-tauri/target/release/bundle/dmg/`. Development artifacts use ad-hoc signing, not a public Developer ID identity. Hardened Runtime is enabled. The manual protected release workflow prepares Universal signed/notarized candidates only when owner-provided credentials exist; actual notarization and clean-Mac acceptance remain pending. See [`docs/release/macos.md`](../docs/release/macos.md).
 
 ## Architecture boundary
 

@@ -41,6 +41,10 @@ run_check 'Frontend quality and Rust lint' bash -c 'cd app && npm run quality'
 run_check 'Native persistence and real loopback TLS Companion' cargo test --manifest-path app/src-tauri/Cargo.toml
 run_check 'Companion core and HTTP' env PYTHONPATH=companion/python python3 -m unittest discover -s companion/tests
 run_check 'Browser Mission, offline resources, and recovery' bash -c 'cd app && npm run test:e2e'
+run_check 'Release metadata tests' python3 -m unittest discover -s scripts/tests
+run_check 'Detached release signature and tamper checks' cargo test --locked --manifest-path tools/release-verify/Cargo.toml
+run_check 'Release verifier formatting' cargo fmt --manifest-path tools/release-verify/Cargo.toml --check
+run_check 'Release verifier lint' cargo clippy --locked --manifest-path tools/release-verify/Cargo.toml --all-targets -- -D warnings
 run_check 'Python compilation' python3 -m compileall -q companion/python companion/tests scripts
 run_check 'Whitespace validation' git diff --check
 if [[ "$build" == 1 ]]; then
