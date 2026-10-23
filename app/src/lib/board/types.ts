@@ -23,6 +23,7 @@ export interface BoardSnapshot {
   capabilities: Capability[];
   observables: {
     distanceMillimeters: number;
+    distanceAgeMs: number;
     buttons: boolean[];
   };
   outputs: {
@@ -36,4 +37,6 @@ export interface BoardClient {
   getSnapshot(): Promise<BoardSnapshot>;
   subscribe(listener: (event: BoardEvent) => void): () => void;
   command(command: BoardCommand): Promise<void>;
+  renewControl(): Promise<void>;
+  releaseControl(): Promise<void>;
 }

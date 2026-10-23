@@ -40,6 +40,7 @@
   });
 
   async function glow(color: string) {
+    await board.renewControl();
     await board.command({
       operation: "pixels.set",
       arguments: { color, brightness: 0.35 },
@@ -161,7 +162,7 @@
         {/if}
       </section>
     {:else if active === "Mission"}
-      <MissionPanel />
+      <MissionPanel {board} simulation={simulator.controls} />
     {:else if active === "Hardware Lab"}
       <section class="panel">
         <span class="eyebrow">BOARD ADAPTER</span>

@@ -15,15 +15,30 @@ const capabilities: BoardSnapshot["capabilities"] = [
 
 export class SimulatorBoardClient implements BoardClient {
   private listeners = new Set<(event: BoardEvent) => void>();
+  private leaseUntil = 0;
+  private buzzerUntil = 0;
+  private frozenAt: number | null = null;
   private snapshot: BoardSnapshot = {
     mode: "simulator",
     health: "ready",
     capabilities,
-    observables: { distanceMillimeters: 600, buttons: [false, false, false] },
+    observables: {
+      distanceMillimeters: 600,
+      distanceAgeMs: 0,
+      buttons: [false, false, false],
+    },
     outputs: { pixels: null, buzzer: null, matrix: null },
   };
 
   readonly controls = {
+    freezeDistance: (frozen: boolean) => {
+      this.frozenAt = frozen ? Date.now() : null;
+    },
+    setHealth: (health: BoardSnapshot["health"]) => {
+      this.snapshot.health = health;
+      if (health !== "ready") this.clearOutputs();
+      this.emit({ type: "health.changed", health });
+    },
     setDistance: (millimeters: number) => {
       if (!Number.isFinite(millimeters)) {
         throw new Error("distance must be a finite number");
@@ -44,7 +59,33 @@ export class SimulatorBoardClient implements BoardClient {
   };
 
   async getSnapshot(): Promise<BoardSnapshot> {
+    if (this.leaseUntil && Date.now() >= this.leaseUntil) {
+      this.clearOutputs();
+      this.snapshot.health = "safe_state";
+      this.leaseUntil = 0;
+    }
+    if (Date.now() >= this.buzzerUntil) this.snapshot.outputs.buzzer = null;
+    this.snapshot.observables.distanceAgeMs =
+      this.frozenAt === null ? 0 : Date.now() - this.frozenAt;
     return structuredClone(this.snapshot);
+  }
+
+  async renewControl(): Promise<void> {
+    if (this.snapshot.health === "disconnected")
+      throw new Error("Board disconnected; reconnect and retry.");
+    this.leaseUntil = Date.now() + 1500;
+    this.snapshot.health = "ready";
+  }
+
+  async releaseControl(): Promise<void> {
+    this.leaseUntil = 0;
+    this.clearOutputs();
+    if (this.snapshot.health !== "disconnected")
+      this.snapshot.health = "safe_state";
+  }
+
+  private clearOutputs() {
+    this.snapshot.outputs = { pixels: null, buzzer: null, matrix: null };
   }
 
   subscribe(listener: (event: BoardEvent) => void): () => void {
@@ -53,6 +94,15 @@ export class SimulatorBoardClient implements BoardClient {
   }
 
   async command(command: BoardCommand): Promise<void> {
+    if (
+      command.operation !== "outputs.clear" &&
+      Date.now() >= this.leaseUntil
+    ) {
+      await this.releaseControl();
+      throw new Error(
+        "Safe state active; renew control before sending outputs.",
+      );
+    }
     if (command.operation === "pixels.set") {
       const { color, brightness } = command.arguments;
       if (!/^#[0-9a-f]{6}$/i.test(color))
@@ -73,9 +123,10 @@ export class SimulatorBoardClient implements BoardClient {
       if (!Number.isFinite(durationMs) || durationMs < 1 || durationMs > 3000)
         throw new Error("duration must be a finite number from 1..3000 ms");
       this.snapshot.outputs.buzzer = { frequencyHz, durationMs };
+      this.buzzerUntil = Date.now() + durationMs;
       return;
     }
-    this.snapshot.outputs = { pixels: null, buzzer: null, matrix: null };
+    await this.releaseControl();
   }
 
   private emit(event: BoardEvent) {

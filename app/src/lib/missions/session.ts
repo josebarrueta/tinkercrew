@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { defaultRules, guardianRulesSchema } from "./guardian-rules";
 import {
   checks,
   roles,
@@ -19,6 +20,7 @@ export const progressSchema = z.strictObject({
   missionId: z.string(),
   missionVersion: z.number().int(),
   stageIndex: z.number().int().min(0),
+  guardianRules: guardianRulesSchema.default(defaultRules),
   crew: z.array(crewMember).length(3),
   completedStages: z.array(z.string()),
   hints: z.record(z.string(), z.number().int().min(0).max(3)),
@@ -44,6 +46,7 @@ export class MissionSession {
             missionId: mission.id,
             missionVersion: mission.version,
             stageIndex: 0,
+            guardianRules: { ...defaultRules },
             crew: roles.map((role, index) => ({
               name: `Maker ${index + 1}`,
               role,
@@ -95,6 +98,10 @@ export class MissionSession {
           role: this.progress.crew[index]?.role,
         })),
       );
+  }
+
+  setGuardianRules(input: unknown) {
+    this.progress.guardianRules = guardianRulesSchema.parse(input);
   }
 
   rotateRoles() {

@@ -1,16 +1,29 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import type { BoardClient, BoardSnapshot } from "../board/types";
+  import type { SimulatorBoardClient } from "../board/simulator";
   import { treasureGuardian as mission } from "./catalog";
   import { tracks, type Track } from "./definition";
   import { MissionSession, type MissionProgress } from "./session";
   import { ProgressRepository } from "./storage";
+  import { GuardianRuntime } from "./guardian";
 
+  let {
+    board,
+    simulation,
+  }: { board: BoardClient; simulation?: SimulatorBoardClient["controls"] } =
+    $props();
   const repository = new ProgressRepository();
   let session: MissionSession;
+  let runtime: GuardianRuntime;
   let progress = $state<MissionProgress | null>(null);
+  let live = $state<ReturnType<GuardianRuntime["getStatus"]> | null>(null);
+  let snapshot = $state<BoardSnapshot | null>(null);
   let error = $state("");
   let status = $state("Loading local progress…");
   let busy = $state(false);
+  let polling = false;
+  let ready = $state(false);
   const stage = $derived(progress ? mission.stages[progress.stageIndex] : null);
   const hintLevel = $derived(
     progress && stage ? (progress.hints[stage.id] ?? 0) : 0,
@@ -18,47 +31,113 @@
   let remix = $state("");
   let changed = $state("");
   let failed = $state("");
+  let lights = $state(false);
+  let sound = $state(false);
+  let intruderMm = $state(150);
+  let warningMm = $state(350);
+  let warningColor = $state("#ffb703");
+  let alarmMs = $state(350);
+  let ruleText = $state("");
+
+  async function refreshLive() {
+    await runtime.tick();
+    live = runtime.getStatus();
+    snapshot = await board.getSnapshot();
+    for (const [check, passed] of Object.entries(live.evidence)) {
+      session.observe(check as keyof typeof live.evidence, passed);
+    }
+  }
 
   onMount(() => {
-    void (async () => {
+    let disposed = false;
+    let timer: ReturnType<typeof setInterval> | undefined;
+    const initialization = (async () => {
       try {
-        session = new MissionSession(
-          mission,
-          await repository.load(mission.id),
-        );
+        const saved = await repository.load(mission.id);
+        if (disposed) return;
+        session = new MissionSession(mission, saved);
         progress = session.getProgress();
         remix = progress.remix ?? "";
         changed = progress.reflection?.changed ?? "";
         failed = progress.reflection?.failed ?? "";
+        ({ intruderMm, warningMm, warningColor, alarmMs } =
+          progress.guardianRules);
+        ruleText = JSON.stringify(progress.guardianRules, null, 2);
         status = "Progress saved on this Mac only.";
+        runtime = new GuardianRuntime(board, progress.guardianRules);
+        if (progress.completion) return;
+        await runtime.start();
+        ready = true;
+        await refreshLive();
+        if (disposed) return;
+        timer = setInterval(() => {
+          if (polling || busy || progress?.completion) return;
+          polling = true;
+          void refreshLive()
+            .catch((cause) => {
+              error = String(cause);
+            })
+            .finally(() => {
+              polling = false;
+            });
+        }, 250);
       } catch (cause) {
-        error = `Could not resume this Mission: ${String(cause)}. Your save has not been replaced.`;
+        error = `Could not open this Mission: ${String(cause)}. Existing saves have not been replaced.`;
       }
     })();
+    return () => {
+      disposed = true;
+      clearInterval(timer);
+      void initialization
+        .then(() => runtime?.stop())
+        .catch(() => {
+          /* Board watchdog clears outputs if unavailable. */
+        });
+    };
   });
 
-  async function act(action: () => void) {
+  async function act(action: () => void | Promise<void>) {
     if (!progress || busy) return;
     busy = true;
     error = "";
     try {
-      action();
+      await action();
       progress = session.getProgress();
       status = "Saving…";
       await repository.save(progress);
       status = "Progress saved on this Mac only.";
+      if (progress.completion) {
+        ready = false;
+        await runtime.stop();
+      }
     } catch (cause) {
       error = String(cause);
-      status = "Not saved yet. Retry saving before closing the app.";
+      status =
+        "Check the message above. Use Save again to retry an unsaved change.";
     } finally {
       busy = false;
     }
+  }
+
+  async function continueMission() {
+    if (session.stage.condition.kind === "observable") await refreshLive();
+    session.advance();
+    if (session.stage.id === "checks") runtime.resetChallenge();
   }
 
   function updateMember(index: number, name: string, track: Track) {
     const members = session.getProgress().crew;
     members[index] = { ...members[index], name, track };
     session.setCrew(members);
+  }
+
+  async function applyRules(input: unknown) {
+    runtime.updateRules(input);
+    session.setGuardianRules(runtime.getStatus().rules);
+    const rules = runtime.getStatus().rules;
+    ({ intruderMm, warningMm, warningColor, alarmMs } = rules);
+    ruleText = JSON.stringify(rules, null, 2);
+    await refreshLive();
   }
 </script>
 
@@ -145,9 +224,9 @@
             <button
               class="primary"
               onclick={() =>
-                act(() => {
+                act(async () => {
                   session.confirm();
-                  session.advance();
+                  await continueMission();
                 })}>Our Crew confirms — continue →</button
             >
           {:else if stage.condition.kind === "remix"}
@@ -159,9 +238,14 @@
             <button
               class="primary"
               onclick={() =>
-                act(() => {
+                act(async () => {
+                  await refreshLive();
+                  if (!runtime.getStatus().testedRemix)
+                    throw new Error(
+                      "Change a rule below, arm the guardian, and test it before recording your remix.",
+                    );
                   session.recordRemix(remix);
-                  session.advance();
+                  await continueMission();
                 })}>Record our remix →</button
             >
           {:else if stage.condition.kind === "reflection"}
@@ -177,17 +261,53 @@
             <button
               class="primary"
               onclick={() =>
-                act(() => {
+                act(async () => {
                   session.reflect(changed, failed);
-                  session.advance();
+                  await continueMission();
                 })}>Finish our Mission →</button
             >
           {:else}
             <p>
-              Live check: {stage.condition.check}. Connect a Mission runtime to
-              collect fresh evidence.
+              Live check: {stage.condition.check} — {live?.evidence[
+                stage.condition.check
+              ]
+                ? "passed"
+                : "keep experimenting; retry any time"}.
             </p>
-            <button class="primary" onclick={() => act(() => session.advance())}
+            {#if stage.condition.check === "self-test"}
+              <button
+                disabled={!ready}
+                onclick={() =>
+                  act(async () => {
+                    lights = false;
+                    sound = false;
+                    await runtime.beginSelfTest();
+                    await refreshLive();
+                  })}>Run hardware self-test</button
+              >
+              <label class="check"
+                ><input type="checkbox" bind:checked={lights} />We saw the blue
+                light</label
+              >
+              <label class="check"
+                ><input type="checkbox" bind:checked={sound} />We heard the
+                short tone (or saw the simulator buzzer output)</label
+              >
+              <button
+                disabled={!ready}
+                onclick={() =>
+                  act(async () => {
+                    await runtime.confirmSelfTest(lights, sound);
+                    await refreshLive();
+                  })}>Confirm light and sound</button
+              >
+            {/if}
+            {#if stage.condition.check === "behavior"}
+              <button onclick={() => act(() => runtime.resetChallenge())}
+                >Restart behavior challenge</button
+              >
+            {/if}
+            <button class="primary" onclick={() => act(continueMission)}
               >Check and continue →</button
             >
           {/if}
@@ -203,6 +323,127 @@
             </p>{/each}
         </fieldset>
       </article>
+      <fieldset disabled={!ready || busy}>
+        <legend>Live guardian — {snapshot?.mode ?? "Board"}</legend>
+        <p aria-live="polite">
+          <strong data-testid="guardian-state"
+            >{live?.state ?? "starting"}</strong
+          >
+          · {snapshot?.observables.distanceMillimeters ?? "—"} mm · {live?.silenced
+            ? "silenced"
+            : "sound enabled"}
+        </p>
+        {#if live?.error}<p class="error" role="alert">{live.error}</p>{/if}
+        <div class="outputs">
+          <span
+            class="pixel"
+            style:background={snapshot?.outputs.pixels?.color ?? "#777"}
+          ></span>
+          <span>Pixels: {snapshot?.outputs.pixels?.color ?? "off"}</span>
+          <span
+            >Buzzer: {snapshot?.outputs.buzzer
+              ? `${snapshot.outputs.buzzer.frequencyHz} Hz / ${snapshot.outputs.buzzer.durationMs} ms`
+              : "off"}</span
+          >
+        </div>
+        {#if simulation}
+          <label
+            >Simulated distance (mm)<input
+              type="range"
+              min="20"
+              max="1000"
+              step="10"
+              value={snapshot?.observables.distanceMillimeters ?? 600}
+              oninput={(event) => {
+                simulation?.setDistance(Number(event.currentTarget.value));
+              }}
+            /></label
+          >
+          {#each ["A — Arm", "B — Silence", "C — Disarm"] as label, index}
+            <button onclick={() => simulation?.pressButton(index)}
+              >{label}</button
+            >
+          {/each}
+          <label class="check"
+            ><input
+              type="checkbox"
+              onchange={(event) =>
+                simulation?.freezeDistance(event.currentTarget.checked)}
+            />Freeze distance readings (safety experiment)</label
+          >
+        {:else}
+          <p>
+            Move an object in front of the distance sensor and use the Board's
+            A, B, and C buttons.
+          </p>
+        {/if}
+        <details>
+          <summary>Inventor — adjust the rules</summary>
+          <div class="crew-grid">
+            <label
+              >Intruder boundary (mm)<input
+                type="number"
+                min="20"
+                max="3800"
+                bind:value={intruderMm}
+              /></label
+            >
+            <label
+              >Warning boundary (mm)<input
+                type="number"
+                min="40"
+                max="4000"
+                bind:value={warningMm}
+              /></label
+            >
+            <label
+              >Warning color<input
+                type="color"
+                bind:value={warningColor}
+              /></label
+            >
+            <label
+              >Alarm duration (ms)<input
+                type="number"
+                min="100"
+                max="1000"
+                bind:value={alarmMs}
+              /></label
+            >
+          </div>
+          <button
+            onclick={() =>
+              act(() =>
+                applyRules({
+                  ...runtime.getStatus().rules,
+                  intruderMm,
+                  warningMm,
+                  warningColor,
+                  alarmMs,
+                }),
+              )}>Apply and test rules</button
+          >
+        </details>
+        <details>
+          <summary>Hacker — bounded rule configuration & event log</summary>
+          <p>
+            This JSON is data, never executable code. Only the six displayed
+            rules are accepted.
+          </p>
+          <label
+            >Guardian rule JSON<textarea rows="10" bind:value={ruleText}
+            ></textarea></label
+          >
+          <button onclick={() => act(() => applyRules(JSON.parse(ruleText)))}
+            >Validate and apply JSON</button
+          >
+          <pre>{live?.log.join("\n") ?? "Waiting for input events…"}</pre>
+        </details>
+        <details>
+          <summary>Live evidence</summary>
+          <pre>{JSON.stringify(live?.evidence, null, 2)}</pre>
+        </details>
+      </fieldset>
     {/if}
     <button disabled={busy} onclick={() => act(() => {})}>Save again</button>
   {/if}
@@ -256,6 +497,15 @@
     border: 1px solid #aaa;
     border-radius: 6px;
   }
+  .check {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .check input {
+    width: auto;
+    margin: 0;
+  }
   textarea {
     min-height: 75px;
   }
@@ -282,5 +532,33 @@
     color: #9d2121;
     padding: 15px;
     background: #ffe6df;
+  }
+  .outputs {
+    display: flex;
+    gap: 14px;
+    align-items: center;
+    margin: 15px 0;
+  }
+  .pixel {
+    display: inline-block;
+    width: 36px;
+    height: 36px;
+    border: 2px solid #173b35;
+    border-radius: 50%;
+  }
+  details {
+    margin: 16px 0;
+  }
+  summary {
+    cursor: pointer;
+    font-weight: bold;
+  }
+  pre {
+    overflow: auto;
+    max-height: 220px;
+    font-size: 12px;
+    background: #173b35;
+    color: white;
+    padding: 15px;
   }
 </style>
