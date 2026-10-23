@@ -1,0 +1,133 @@
+/* Tinkeroo: quiet surfaces, playful accents, and one obvious next action. */
+:root {
+  color-scheme: light;
+  --canvas: #f6f7fc;
+  --surface: #ffffff;
+  --surface-soft: #f0edfc;
+  --ink: #26304b;
+  --muted: #59647c;
+  --border: #d6dbea;
+  --primary: #5842bd;
+  --primary-hover: #453198;
+  --primary-soft: #ebe5ff;
+  --teal: #137c73;
+  --teal-soft: #e0f4ef;
+  --sunshine: #ffd66b;
+  --sunshine-ink: #705014;
+  --coral: #f18b70;
+  --warning-bg: #fff4d9;
+  --warning-ink: #684b12;
+  --warning-border: #c1902d;
+  --danger: #a82d38;
+  --danger-bg: #fff0ef;
+  --code-bg: #28324e;
+  --code-ink: #f0f4ff;
+  --focus: #315acb;
+  --shadow: 0 8px 28px #26304b08;
+  font-family: "Avenir Next", "Nunito", ui-rounded, system-ui, sans-serif;
+  color: var(--ink);
+  background: var(--canvas);
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  min-width: 900px;
+  font-size: 16px;
+  line-height: 1.55;
+}
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+button,
+select,
+summary {
+  min-height: 44px;
+}
+button {
+  font-weight: 700;
+}
+button:not(:disabled),
+summary {
+  cursor: pointer;
+}
+button:disabled {
+  cursor: not-allowed;
+}
+input,
+select,
+textarea {
+  color: var(--ink);
+  background-color: var(--surface);
+  accent-color: var(--primary);
+}
+input:not([type="checkbox"]):not([type="range"]),
+select {
+  min-height: 44px;
+}
+input[type="checkbox"] {
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+}
+input[type="range"] {
+  min-height: 44px;
+}
+textarea {
+  line-height: 1.6;
+}
+:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 4px;
+}
+::selection {
+  background: var(--primary-soft);
+  color: var(--ink);
+}
+summary {
+  display: list-item;
+  padding-block: 10px;
+  color: var(--primary);
+}
+legend {
+  font-weight: 800;
+  padding-inline: 8px;
+}
+a {
+  color: var(--primary);
+  text-underline-offset: 3px;
+}
+progress {
+  width: 100%;
+  height: 10px;
+  border: 0;
+  border-radius: 99px;
+  overflow: hidden;
+  background: var(--border);
+  accent-color: var(--primary);
+}
+progress::-webkit-progress-bar {
+  background: var(--border);
+  border-radius: 99px;
+}
+progress::-webkit-progress-value {
+  background: var(--primary);
+  border-radius: 99px;
+}
+progress::-moz-progress-bar {
+  background: var(--primary);
+  border-radius: 99px;
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}

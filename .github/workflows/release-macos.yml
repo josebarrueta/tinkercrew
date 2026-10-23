@@ -95,7 +95,7 @@ jobs:
           bundle=app/src-tauri/target/universal-apple-darwin/release/bundle
           dmgs=("$bundle"/dmg/*.dmg)
           test "${#dmgs[@]}" = 1
-          bash scripts/finalize-macos-release.sh "$bundle/macos/TinkerCrew.app" "${dmgs[0]}" "$version" darwin-universal
+          bash scripts/finalize-macos-release.sh "$bundle/macos/Tinkeroo.app" "${dmgs[0]}" "$version" darwin-universal
       - name: Create draft only (owner must complete acceptance before publication)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -103,8 +103,8 @@ jobs:
           set -euo pipefail
           version="${GITHUB_REF_NAME#v}"
           out="artifacts/release/$version/darwin-universal"
-          gh release create "$GITHUB_REF_NAME" --verify-tag --draft --title "TinkerCrew $version" \
-            --notes 'Signed/notarized release candidate. Owner must complete clean-Mac, hardware, offline, and family acceptance before publication. Install by dragging TinkerCrew to Applications; no Gatekeeper bypass is supported.' \
+          gh release create "$GITHUB_REF_NAME" --verify-tag --draft --title "Tinkeroo $version" \
+            --notes 'Signed/notarized release candidate. Owner must complete clean-Mac, hardware, offline, and family acceptance before publication. Install by dragging Tinkeroo to Applications; no Gatekeeper bypass is supported.' \
             "$out"/*.dmg "$out"/*.dmg.sig "$out/release-manifest.json" "$out/release-manifest.json.sig"
       - name: Remove temporary signing material
         if: always()

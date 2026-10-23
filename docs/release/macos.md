@@ -58,7 +58,7 @@ No release inputs belong in source, `.env` commits, issue comments, build logs, 
 For an attended local finalization, first build with an installed Developer ID identity and Tauri's documented notarization environment. Then supply absolute key-file paths, `TAURI_SIGNING_PRIVATE_KEY` or `TAURI_SIGNING_PRIVATE_KEY_PATH`, `TC_UPDATE_PUBLIC_KEY_FILE`, and either `TC_NOTARY_PROFILE` (an existing local Keychain notary profile) or the App Store Connect API environment. Run:
 
 ```sh
-bash scripts/finalize-macos-release.sh /absolute/TinkerCrew.app /absolute/input.dmg VERSION darwin-universal
+bash scripts/finalize-macos-release.sh /absolute/Tinkeroo.app /absolute/input.dmg VERSION darwin-universal
 ```
 
 This performs real Apple submissions and is intentionally **not** part of routine checks. Production credentials/notarization remain untested here. The release verifier's signed public fixture tests prove Tauri/Minisign compatibility and tamper rejection, not Apple approval or custody of a production key.

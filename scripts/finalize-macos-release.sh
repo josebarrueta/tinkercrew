@@ -27,7 +27,7 @@ if [[ -z "${TC_NOTARY_PROFILE:-}" ]]; then
 fi
 out="$root/artifacts/release/$version/$target"
 mkdir -p "$out"
-dmg="$out/TinkerCrew_${version}_${target#darwin-}.dmg"
+dmg="$out/Tinkeroo_${version}_${target#darwin-}.dmg"
 [[ ! -e "$dmg" ]] || { printf 'Release output already exists; do not overwrite immutable artifacts.\n' >&2; exit 1; }
 cp "$source_dmg" "$dmg"
 if [[ -n "${TC_NOTARY_PROFILE:-}" ]]; then

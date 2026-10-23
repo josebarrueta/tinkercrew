@@ -33,5 +33,5 @@ pub fn run() {
             setup::open_official_setup
         ])
         .run(tauri::generate_context!())
-        .expect("error while running TinkerCrew");
+        .expect("error while running Tinkeroo");
 }

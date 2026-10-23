@@ -12,7 +12,6 @@
 
   type Screen =
     "Home Base" | "World Map" | "Mission" | "Hardware Lab" | "Parent Settings";
-
   const screens: { name: Screen; icon: string }[] = [
     { name: "Home Base", icon: "⌂" },
     { name: "World Map", icon: "✦" },
@@ -20,7 +19,6 @@
     { name: "Hardware Lab", icon: "⚙" },
     { name: "Parent Settings", icon: "☰" },
   ];
-
   const simulator = new SimulatorBoardClient();
   let board = $state.raw<BoardClient>(simulator);
   let connectionState = $state<ConnectionState>({ phase: "simulator" });
@@ -42,7 +40,6 @@
         "Board unavailable. Check power and connections; Parent Settings offers USB/manual recovery.";
     }
   }
-
   $effect(() => {
     const selected = board;
     let polling = false;
@@ -62,7 +59,6 @@
       unsubscribe();
     };
   });
-
   async function glow(color: string) {
     try {
       await board.renewControl();
@@ -79,18 +75,20 @@
 </script>
 
 <svelte:head>
-  <title>TinkerCrew — Build. Code. Imagine.</title>
+  <title>Tinkeroo — Build. Code. Imagine. Together.</title>
   <meta
     name="description"
-    content="A local-first cooperative maker game for one family crew."
+    content="A playful, local-first maker adventure for one family Crew."
   />
 </svelte:head>
 
 <div class="app-shell">
   <aside>
     <div class="brand">
-      <span class="brand-mark">TC</span>
-      <div><strong>TinkerCrew</strong><small>Build. Code. Imagine.</small></div>
+      <img src="/icon.svg" alt="Tinkeroo" width="44" height="44" />
+      <div>
+        <strong>Tinkeroo</strong><small>Little ideas. Big possibilities.</small>
+      </div>
     </div>
     <nav aria-label="Main navigation">
       {#each screens as screen}
@@ -103,12 +101,14 @@
         </button>
       {/each}
     </nav>
+    <div class="sidebar-note">
+      <span aria-hidden="true">✧</span> One Crew.<br />Lots of ways to create.
+    </div>
     <div class="board-status">
       <span
         class="status-dot"
-        style:background={connectionState.phase === "failed"
-          ? "#ffb703"
-          : "#4ade80"}
+        class:attention={connectionState.phase === "failed" ||
+          connectionState.phase === "searching"}
       ></span>
       <div>
         <strong
@@ -128,84 +128,97 @@
       </div>
     </div>
   </aside>
-
   <main>
     <header>
       <div>
-        <span class="eyebrow">FAMILY CREW</span>
+        <span class="eyebrow">YOUR MAKER ADVENTURE</span>
         <h1>{active}</h1>
       </div>
       <div class="crew">
         <span>🧭</span><span>🧰</span><span>💻</span><b>Dragon Crew</b>
       </div>
     </header>
-
     {#if active === "Home Base"}
       <section class="hero">
         <div>
-          <span class="eyebrow">WELCOME BACK, MAKERS</span>
-          <h2>Your next invention is waiting.</h2>
-          <p>Build together, make it move, then remix the rules.</p>
-          <button class="primary" onclick={() => (active = "World Map")}
-            >Explore the world map →</button
+          <span class="eyebrow">BUILD. CODE. IMAGINE. TOGETHER.</span>
+          <h2>Small ideas.<br />Wonderful inventions.</h2>
+          <p>Your Crew brings the story. Let’s bring your guardian to life.</p>
+          <button
+            class="primary"
+            data-testid="start-mission"
+            onclick={() => (active = "Mission")}
+            >Continue Treasure Guardian →</button
           >
+          <p class="gentle-note">No rush. Try things. Make them yours.</p>
         </div>
-        <div class="orb" aria-hidden="true"><span>✦</span></div>
+        <div class="maker-mark" aria-hidden="true">
+          <img src="/icon.svg" alt="" width="152" height="152" /><span
+            class="spark">✦</span
+          ><span class="block"></span>
+        </div>
       </section>
-      <section class="cards">
+      <section class="cards" aria-label="Adventure overview">
         <article>
           <span class="card-icon amber">◆</span>
           <div>
-            <small>NEXT MISSION</small>
+            <small>YOUR MISSION</small>
             <h3>Treasure Guardian</h3>
-            <p>Wake the cave guardian with distance, lights, and sound.</p>
+            <p>Build a hideaway. Give it lights, sounds, and a personality.</p>
           </div>
         </article>
         <article>
           <span class="card-icon blue">⚙</span>
           <div>
-            <small>HARDWARE</small>
+            <small>READY TO EXPERIMENT</small>
             <h3>{snapshot?.capabilities.length ?? 0} capabilities</h3>
-            <p>Practice safely with the built-in simulator.</p>
+            <p>Practice with the simulator or your selected Board.</p>
           </div>
         </article>
         <article>
           <span class="card-icon green">★</span>
           <div>
-            <small>CREW PROGRESS</small>
+            <small>EVERY MAKER MATTERS</small>
             <h3>One shared adventure</h3>
-            <p>Explorer, Inventor, and Hacker tracks stay together.</p>
+            <p>
+              Explorer, Inventor, and Hacker: different challenges, together.
+            </p>
           </div>
         </article>
       </section>
     {:else if active === "World Map"}
       <section class="panel">
         <span class="eyebrow">ADVENTURE PATH</span>
-        <h2>From first signal to free invention</h2>
+        <h2>Follow your curiosity.</h2>
+        <p>
+          Start with Treasure Guardian, then turn your discoveries into a Free
+          Build.
+        </p>
         <div class="mission-path">
-          {#each world.stops as stop, index}<button
+          {#each world.stops as stop, index}
+            <button
               class:current={stop.missionId === treasureGuardian.id}
               disabled={stop.missionId === null}
               onclick={() => {
                 if (stop.missionId === "free-build") freeBuild = !freeBuild;
                 else active = "Mission";
               }}
-              ><b>{index + 1}</b><span
+            >
+              <b>{index + 1}</b><span
                 >{stop.title}{stop.missionId === null
                   ? " — coming later"
                   : ""}</span
-              ></button
-            >{/each}
+              >
+            </button>
+          {/each}
         </div>
         {#if freeBuild}
           <h3>Free Build invitations</h3>
-          {#each treasureGuardian.freeBuild as invitation}
-            <p>
+          {#each treasureGuardian.freeBuild as invitation}<p>
               <strong>{invitation.prompt}</strong>: {invitation.components.join(
                 ", ",
               )} — {invitation.constraint}.
-            </p>
-          {/each}
+            </p>{/each}
         {/if}
       </section>
     {:else if active === "Mission"}
@@ -215,7 +228,7 @@
         />{/key}
     {:else if active === "Hardware Lab"}
       <section class="panel">
-        <span class="eyebrow">BOARD ADAPTER</span>
+        <span class="eyebrow">TRY. NOTICE. TRY AGAIN.</span>
         <h2>
           {board === simulator ? "Simulator" : "Connected Board"} Hardware Lab
         </h2>
@@ -285,46 +298,38 @@
 </div>
 
 <style>
-  :global(*) {
-    box-sizing: border-box;
-  }
-  :global(body) {
-    margin: 0;
-    min-width: 900px;
-    background: #f5f1e8;
-    color: #18302b;
-    font-family: Inter, ui-rounded, "Avenir Next", system-ui, sans-serif;
-  }
-  button {
-    font: inherit;
-  }
   .app-shell {
     display: grid;
-    grid-template-columns: 245px 1fr;
+    grid-template-columns: 238px minmax(0, 1fr);
     min-height: 100vh;
   }
   aside {
+    position: sticky;
+    top: 0;
+    height: 100vh;
     display: flex;
     flex-direction: column;
-    padding: 28px 18px;
-    color: #f9f6ed;
-    background: #173b35;
+    padding: 28px 16px;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
   }
   .brand {
     display: flex;
-    gap: 12px;
+    gap: 11px;
     align-items: center;
-    padding: 0 10px 30px;
+    padding: 0 6px 34px;
   }
-  .brand-mark {
-    display: grid;
-    width: 40px;
-    height: 40px;
-    place-items: center;
-    border: 2px solid #ffb703;
-    border-radius: 14px 8px;
-    color: #ffb703;
-    font-weight: 900;
+  .brand img {
+    border-radius: 14px;
+  }
+  .brand strong {
+    font-size: 24px;
+    letter-spacing: -0.8px;
+    color: var(--primary);
+  }
+  .brand small {
+    font-size: 10px;
+    color: var(--muted);
   }
   .brand strong,
   .brand small,
@@ -332,78 +337,85 @@
   .board-status small {
     display: block;
   }
-  .brand strong {
-    font-size: 18px;
-  }
-  .brand small {
-    margin-top: 2px;
-    color: #a8c3bc;
-    font-size: 10px;
-    letter-spacing: 0.08em;
-  }
   nav {
     display: grid;
-    gap: 7px;
+    gap: 8px;
   }
   nav button {
     display: flex;
-    gap: 12px;
     align-items: center;
+    gap: 11px;
     width: 100%;
-    padding: 12px 14px;
-    border: 0;
-    border-radius: 10px;
-    color: #bcd0cb;
+    padding: 13px;
+    border: 1px solid transparent;
+    border-radius: 12px;
+    color: var(--muted);
     background: transparent;
     text-align: left;
-    cursor: pointer;
   }
-  nav button:hover,
-  nav button.active {
-    color: white;
-    background: #285148;
+  nav button:hover {
+    background: var(--canvas);
+    color: var(--primary);
   }
   nav button.active {
-    box-shadow: inset 3px 0 #ffb703;
+    background: var(--primary-soft);
+    color: var(--primary);
+    border-color: #d2c7f5;
+    box-shadow: inset 3px 0 var(--primary);
   }
   nav span {
-    width: 20px;
-    color: #ffb703;
+    width: 22px;
+    font-size: 20px;
     text-align: center;
+  }
+  .sidebar-note {
+    margin: 38px 14px;
+    color: var(--muted);
+    font-size: 13px;
+  }
+  .sidebar-note span {
+    float: left;
+    font-size: 32px;
+    margin-right: 10px;
+    color: var(--teal);
   }
   .board-status {
     display: flex;
     gap: 10px;
     align-items: center;
     margin-top: auto;
-    padding: 14px;
-    border: 1px solid #3b635a;
+    padding: 13px;
+    border: 1px solid var(--border);
     border-radius: 12px;
+    background: var(--canvas);
   }
   .status-dot {
     width: 9px;
     height: 9px;
+    flex-shrink: 0;
     border-radius: 50%;
-    background: #4ade80;
-    box-shadow: 0 0 12px #4ade80;
+    background: var(--teal);
+  }
+  .status-dot.attention {
+    background: var(--warning-ink);
   }
   .board-status strong {
     font-size: 12px;
   }
   .board-status small {
-    color: #9bb9b1;
-    font-size: 10px;
+    color: var(--muted);
+    font-size: 11px;
   }
   main {
-    padding: 0 48px 48px;
-    overflow: hidden;
+    padding: 0 36px 48px;
+    min-width: 0;
   }
   header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    min-height: 110px;
-    border-bottom: 1px solid #d9d2c3;
+    min-height: 112px;
+    border-bottom: 1px solid var(--border);
   }
   h1,
   h2,
@@ -414,198 +426,205 @@
   h1 {
     margin-bottom: 0;
     font-size: 30px;
+    letter-spacing: -0.7px;
   }
   h2 {
-    max-width: 650px;
-    margin-bottom: 14px;
-    font-family: Georgia, serif;
-    font-size: clamp(38px, 5vw, 64px);
-    line-height: 1.02;
+    margin: 12px 0 18px;
+    font-size: clamp(34px, 4vw, 50px);
+    line-height: 1.15;
+    letter-spacing: -1.3px;
   }
   .eyebrow,
   article small {
-    color: #b66926;
+    color: var(--primary);
     font-size: 11px;
     font-weight: 800;
-    letter-spacing: 0.15em;
+    letter-spacing: 0.09em;
   }
   .crew {
     display: flex;
     align-items: center;
-    gap: 0;
-    color: #405c55;
+    color: var(--muted);
     font-size: 13px;
   }
   .crew span {
     display: grid;
-    width: 34px;
-    height: 34px;
-    margin-left: -5px;
+    width: 32px;
+    height: 32px;
+    margin-left: -4px;
     place-items: center;
-    border: 2px solid #f5f1e8;
+    border: 2px solid var(--canvas);
     border-radius: 50%;
-    background: #dfd7c6;
+    background: var(--primary-soft);
   }
   .crew b {
     margin-left: 9px;
   }
   .hero {
-    position: relative;
-    display: flex;
-    min-height: 340px;
-    margin: 38px 0 24px;
-    padding: 52px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 170px;
+    gap: 20px;
     align-items: center;
-    overflow: hidden;
+    margin: 32px 0 24px;
+    padding: 38px;
+    border: 1px solid #e0d9f5;
     border-radius: 24px;
-    color: white;
-    background: linear-gradient(120deg, #24584d, #163a34);
+    background: var(--surface-soft);
   }
   .hero p {
-    max-width: 480px;
-    color: #c9ddd8;
-    font-size: 18px;
+    color: var(--muted);
+    max-width: 460px;
+    font-size: 17px;
   }
-  .hero .eyebrow {
-    color: #ffc449;
+  .hero .gentle-note {
+    margin: 14px 0 0;
+    font-size: 13px;
   }
   .primary {
-    padding: 13px 20px;
+    padding: 14px 20px;
     border: 0;
-    border-radius: 10px;
-    color: #263526;
-    background: #ffbd39;
-    font-weight: 800;
-    cursor: pointer;
+    border-radius: 12px;
+    color: white;
+    background: var(--primary);
   }
-  .orb {
+  .primary:hover {
+    background: var(--primary-hover);
+  }
+  .maker-mark {
+    position: relative;
+    padding: 30px 0;
+  }
+  .maker-mark img {
+    position: relative;
+    z-index: 1;
+    border-radius: 38px;
+    transform: rotate(-6deg);
+  }
+  .spark {
     position: absolute;
-    right: -40px;
-    width: 330px;
-    height: 330px;
-    border: 1px solid #48756b;
-    border-radius: 50%;
-    box-shadow: inset 0 0 80px #2d685c;
+    right: -5px;
+    top: 0;
+    color: var(--sunshine-ink);
+    font-size: 45px;
   }
-  .orb::before,
-  .orb::after {
+  .block {
     position: absolute;
-    content: "";
-    border: 1px solid #48756b;
-    border-radius: 50%;
-    inset: 38px;
-  }
-  .orb::after {
-    inset: 88px;
-  }
-  .orb span {
-    position: absolute;
-    inset: 0;
-    display: grid;
-    place-items: center;
-    color: #ffbd39;
-    font-size: 86px;
+    width: 90px;
+    height: 75px;
+    right: -2px;
+    bottom: 12px;
+    border-radius: 22px;
+    background: var(--sunshine);
+    transform: rotate(12deg);
   }
   .cards {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 18px;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 16px;
   }
   .cards article {
-    display: flex;
-    gap: 16px;
-    min-height: 145px;
-    padding: 22px;
-    border: 1px solid #dfd8ca;
+    padding: 20px;
+    border: 1px solid var(--border);
     border-radius: 16px;
-    background: #fffdf7;
+    background: var(--surface);
+    box-shadow: var(--shadow);
   }
   .cards h3 {
-    margin: 5px 0 8px;
+    margin: 14px 0 8px;
+    font-size: 18px;
   }
   .cards p {
-    color: #6c7a75;
-    font-size: 13px;
-    line-height: 1.5;
+    margin: 0;
+    color: var(--muted);
+    font-size: 14px;
+  }
+  .cards small {
+    display: block;
+    margin-top: 16px;
+    font-size: 10px;
   }
   .card-icon {
     display: grid;
-    flex: 0 0 43px;
-    height: 43px;
+    width: 42px;
+    height: 42px;
     place-items: center;
-    border-radius: 12px;
+    border-radius: 13px;
+    font-size: 21px;
   }
   .amber {
-    background: #fff0cd;
-    color: #b66926;
+    background: #fff3cc;
+    color: var(--sunshine-ink);
   }
   .blue {
-    background: #dceef4;
-    color: #286b80;
+    background: var(--primary-soft);
+    color: var(--primary);
   }
   .green {
-    background: #dcf1e4;
-    color: #267247;
+    background: var(--teal-soft);
+    color: var(--teal);
   }
   .panel {
-    margin-top: 38px;
-    padding: 45px;
-    border: 1px solid #ded6c7;
-    border-radius: 22px;
-    background: #fffdf7;
+    margin-top: 32px;
+    padding: 32px;
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    background: var(--surface);
   }
   .panel > p {
     max-width: 740px;
-    color: #60716b;
-    font-size: 17px;
-    line-height: 1.6;
+    color: var(--muted);
   }
   .panel h2 {
-    font-size: 46px;
+    font-size: 36px;
   }
   .mission-path {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 15px;
-    margin-top: 32px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+    margin: 28px 0;
   }
   .mission-path button {
     display: flex;
-    gap: 12px;
+    gap: 14px;
     align-items: center;
     padding: 20px;
-    border: 1px solid #d9d2c3;
+    border: 1px solid var(--border);
     border-radius: 14px;
-    background: #f8f4eb;
+    background: var(--canvas);
+    color: var(--muted);
     text-align: left;
+  }
+  .mission-path button:disabled {
+    opacity: 0.7;
   }
   .mission-path b {
     display: grid;
-    width: 32px;
-    height: 32px;
+    min-width: 34px;
+    height: 34px;
     place-items: center;
     border-radius: 50%;
-    color: white;
-    background: #789087;
+    background: var(--border);
+    color: var(--ink);
   }
   .mission-path .current {
-    border-color: #dc9c33;
-    box-shadow: 0 5px 20px #d5aa6533;
-    cursor: pointer;
+    background: var(--primary-soft);
+    border: 2px solid var(--primary);
+    color: var(--primary);
   }
   .mission-path .current b {
-    background: #d6842c;
+    background: var(--primary);
+    color: white;
   }
   .lab-grid {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 16px;
     margin-top: 26px;
   }
   .lab-grid > * {
-    padding: 20px;
+    padding: 18px;
     border-radius: 14px;
-    background: #f4f0e7;
+    background: var(--canvas);
   }
   .lab-grid label strong,
   .lab-grid > div > strong {
@@ -614,52 +633,55 @@
   }
   .lab-grid input {
     width: 100%;
-    accent-color: #d6842c;
   }
   .button-row {
     display: flex;
+    flex-wrap: wrap;
     gap: 8px;
   }
   .button-row button {
-    padding: 9px 13px;
-    border: 1px solid #cfc6b7;
-    border-radius: 8px;
-    background: white;
-    cursor: pointer;
+    padding: 8px 12px;
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    background: var(--surface);
   }
-  .green-button {
-    color: #168044;
+  .button-row .green-button {
+    color: #14663e;
+    background: #e4f5e9;
   }
-  .amber-button {
-    color: #b66926;
+  .button-row .amber-button {
+    color: var(--warning-ink);
+    background: var(--warning-bg);
   }
-  .red-button {
-    color: #bb3030;
+  .button-row .red-button {
+    color: var(--danger);
+    background: var(--danger-bg);
   }
   pre {
     overflow: auto;
     padding: 18px;
     border-radius: 12px;
-    color: #d9efe9;
-    background: #173b35;
+    color: var(--code-ink);
+    background: var(--code-bg);
   }
   code {
     padding: 2px 5px;
     border-radius: 4px;
-    background: #e8e3d8;
+    background: var(--surface-soft);
   }
   @media (max-width: 1050px) {
     main {
-      padding-inline: 28px;
+      padding-inline: 24px;
+    }
+    .hero {
+      grid-template-columns: 1fr;
+      padding: 30px;
+    }
+    .maker-mark {
+      display: none;
     }
     .cards {
       grid-template-columns: 1fr;
-    }
-    .orb {
-      opacity: 0.35;
-    }
-    .hero > div:first-child {
-      z-index: 1;
     }
     .lab-grid {
       grid-template-columns: 1fr;

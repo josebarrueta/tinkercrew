@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
   <key>NSLocalNetworkUsageDescription</key>
-  <string>TinkerCrew connects to your selected Arduino UNO Q on your local network to read sensors and control bounded lights and sounds. USB and simulator modes remain available.</string>
+  <string>Tinkeroo connects to your selected Arduino UNO Q on your local network to read sensors and control bounded lights and sounds. USB and simulator modes remain available.</string>
   <key>NSBonjourServices</key>
   <array><string>_tinkercrew._tcp</string></array>
 </dict>
