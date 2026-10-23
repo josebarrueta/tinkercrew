@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { ConnectedBoardClient, type GameplayTransport } from "./connected";
 
 const hello = {
@@ -33,6 +33,34 @@ const buttonEvent = (sequence: number) => ({
 });
 
 describe("connected Companion adapter", () => {
+  it("counts request/transit delay against sensor freshness instead of trusting wire age alone", async () => {
+    let elapsed = 0;
+    vi.spyOn(performance, "now").mockImplementation(() => elapsed);
+    let client: ConnectedBoardClient | undefined;
+    try {
+      const transport: GameplayTransport = async (_handle, request) => {
+        if (request.operation === "hello") return hello;
+        if (request.operation === "state") {
+          elapsed += 800;
+          return state;
+        }
+        return { events: [] };
+      };
+      client = await ConnectedBoardClient.open(
+        7,
+        "board-one",
+        transport,
+        () => {},
+      );
+      const snapshot = await client.getSnapshot();
+      expect(snapshot.observables.distanceAgeMs).toBe(840);
+      expect(snapshot.capabilities).not.toContain("distance");
+      expect(snapshot.capabilities).not.toContain("buttons");
+    } finally {
+      client?.close();
+      vi.restoreAllMocks();
+    }
+  });
   it("maps actual Companion wire state and never replays historical arm events on reconnect", async () => {
     let events = [buttonEvent(1)];
     const transport: GameplayTransport = async (_handle, request) =>
@@ -56,10 +84,12 @@ describe("connected Companion adapter", () => {
     const observed: string[] = [];
     const unsubscribe = client.subscribe((event) => observed.push(event.type));
     try {
-      await expect(client.getSnapshot()).resolves.toMatchObject({
+      const snapshot = await client.getSnapshot();
+      expect(snapshot).toMatchObject({
         mode: "connected",
-        observables: { distanceMillimeters: 250, distanceAgeMs: 40 },
+        observables: { distanceMillimeters: 250 },
       });
+      expect(snapshot.observables.distanceAgeMs).toBeGreaterThanOrEqual(40);
       await client.pollEvents();
       expect(observed).toEqual([]);
       events = [...events, buttonEvent(2)];

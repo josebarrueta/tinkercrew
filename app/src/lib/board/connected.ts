@@ -136,17 +136,18 @@ export class ConnectedBoardClient implements BoardClient {
 
   async getSnapshot(): Promise<BoardSnapshot> {
     try {
-      if (!this.hello || Date.now() - this.helloAt > 1000) {
+      if (!this.hello || performance.now() - this.helloAt > 1000) {
         this.hello = helloSchema.parse(
           await this.request({ operation: "hello" }),
         );
-        this.helloAt = Date.now();
+        this.helloAt = performance.now();
         if (this.hello.board.board_id !== this.boardId)
           throw {
             code: "identity_mismatch",
             message: "The Companion identity changed. Recover through USB.",
           };
       }
+      const requestStarted = performance.now();
       const state = stateSchema.parse(
         await this.request({ operation: "state" }),
       );
@@ -157,12 +158,16 @@ export class ConnectedBoardClient implements BoardClient {
             "The Board restarted. Reconnect, rerun live checks, and arm again.",
         };
       this.uptime = state.health.uptime_ms;
-      this.uptimeAt = Date.now();
+      // Count the entire request time conservatively; wire age alone excludes transit/IPC delay.
+      this.uptimeAt = requestStarted;
+      const transitMs = Math.max(0, performance.now() - requestStarted);
       const capabilities = (
         ["buttons", "distance", "pixels", "buzzer", "matrix"] as Capability[]
       ).filter((name) =>
         name === "buttons" || name === "distance"
-          ? state.observables[name].health === "operational"
+          ? state.observables[name].health === "operational" &&
+            state.observables[name].age_ms !== null &&
+            state.observables[name].age_ms + transitMs <= 750
           : this.hello?.capabilities[name]?.health === "operational",
       );
       return {
@@ -172,7 +177,8 @@ export class ConnectedBoardClient implements BoardClient {
         observables: {
           distanceMillimeters: state.observables.distance.value ?? Number.NaN,
           distanceAgeMs:
-            state.observables.distance.age_ms ?? Number.POSITIVE_INFINITY,
+            (state.observables.distance.age_ms ?? Number.POSITIVE_INFINITY) +
+            transitMs,
           buttons: state.observables.buttons.value ?? [false, false, false],
         },
         outputs: {
@@ -229,7 +235,8 @@ export class ConnectedBoardClient implements BoardClient {
             "Some input events were lost. Reconnect and repeat the live check.",
         };
       this.cursor = event.sequence;
-      const age = this.uptime + Date.now() - this.uptimeAt - event.monotonic_ms;
+      const age =
+        this.uptime + performance.now() - this.uptimeAt - event.monotonic_ms;
       if (event.type === "button.changed") {
         if (event.health !== "operational" || age > 750)
           throw {
