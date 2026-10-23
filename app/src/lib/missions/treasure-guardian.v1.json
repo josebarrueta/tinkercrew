@@ -1,0 +1,151 @@
+{
+  "schemaVersion": 1,
+  "id": "treasure-guardian",
+  "version": 1,
+  "world": "Maker Islands",
+  "title": "Treasure Guardian",
+  "narrative": "Build a cave, vault, spaceship, or creature around your electronics. What does your guardian protect? Your Crew decides. There is no correct LEGO model.",
+  "tracks": {
+    "Explorer": "Choose the story, LEGO design, colors, and test distances.",
+    "Inventor": "Tune distance thresholds, alarm timing, and button rules; explain your predictions.",
+    "Hacker": "Inspect the live event log and edit the bounded guardian rule configuration. Predict and test the change; no arbitrary code executes on the Board."
+  },
+  "components": {
+    "required": ["buttons", "distance", "pixels", "buzzer"],
+    "optional": ["matrix"]
+  },
+  "stages": [
+    {
+      "id": "story",
+      "title": "What are we protecting?",
+      "goal": "Invent a treasure and a reason it needs a guardian. Tell the Crew your story.",
+      "condition": { "kind": "human" },
+      "hints": [
+        "What would your creature keep safe?",
+        "Choose a place, treasure, and visitor.",
+        "Our spaceship protects a tiny star from curious visitors."
+      ]
+    },
+    {
+      "id": "roles",
+      "title": "Choose your Crew roles",
+      "goal": "Name three Crew members. Each chooses a challenge track independently of their role. Rotate Storykeeper, Builder, and Logic keeper whenever you like.",
+      "condition": { "kind": "human" },
+      "hints": [
+        "Everyone can contribute something different.",
+        "Storykeeper: imagine. Builder: arrange. Logic keeper: predict and test.",
+        "Rotate roles after each experiment; keep your own challenge track."
+      ]
+    },
+    {
+      "id": "build",
+      "title": "Build your own guardian",
+      "goal": "Use any LEGO design. Leave the sensor entrance clear. Disconnect power before changing wiring. UNO Q maker I/O is 3.3 V; never apply 5 V to analog inputs. Confirm together when your creation is ready.",
+      "condition": { "kind": "human" },
+      "hints": [
+        "How can a visitor approach the treasure?",
+        "Leave an opening for the sensor and space to see the Pixels.",
+        "Try a cardboard tunnel or LEGO arch; your design is never graded."
+      ]
+    },
+    {
+      "id": "hardware",
+      "title": "Check your senses",
+      "goal": "Run the hardware check. Move an object and press A, B, and C. Confirm you can see the light and hear the short tone. This checks electronics, not your LEGO design.",
+      "condition": { "kind": "observable", "check": "self-test" },
+      "hints": [
+        "Can the guardian see and signal?",
+        "Move the distance slider or an object, then press all three buttons.",
+        "If a component is missing, disconnect power before reconnecting it, then retry."
+      ]
+    },
+    {
+      "id": "zones",
+      "title": "Establish three distance zones",
+      "goal": "Choose an intruder boundary and a farther warning boundary. Arm with A, then visit far, warning, and intruder distances.",
+      "condition": { "kind": "observable", "check": "zones" },
+      "hints": [
+        "Which visitor is close enough to worry about?",
+        "distance < intruder → alert; distance < warning → curious; otherwise → sleeping.",
+        "Example: intruder = 150 mm; warning = 350 mm. Test 600, 250, and 80 mm."
+      ]
+    },
+    {
+      "id": "signals",
+      "title": "Give the guardian a voice",
+      "goal": "While armed, move between sleeping, curious, and alert. Check green, yellow, and red Pixels and a short alarm. The live state shows what the Board was asked to do.",
+      "condition": { "kind": "observable", "check": "signals" },
+      "hints": [
+        "How could a visitor understand the warning?",
+        "sleeping → green; curious → yellow; alert → red + short tone.",
+        "An alarm sounds on entering alert, not continuously on every reading."
+      ]
+    },
+    {
+      "id": "buttons",
+      "title": "Put the Crew in control",
+      "goal": "Use A to arm, B to silence an alert, and C to disarm. Try all three while testing distances.",
+      "condition": { "kind": "observable", "check": "buttons" },
+      "hints": [
+        "How could you stop a noisy guardian?",
+        "A → armed; B → silent until you leave alert; C → disarmed.",
+        "Disarming clears all outputs; arming again restores distance-based behavior."
+      ]
+    },
+    {
+      "id": "checks",
+      "title": "Test your predictions",
+      "goal": "Run a fresh behavior challenge. Arm, visit all three zones, silence an alert, and disarm. Retry as often as needed.",
+      "condition": { "kind": "observable", "check": "behavior" },
+      "hints": [
+        "Can you predict each signal before it appears?",
+        "A; far; warning; intruder; B; C. Watch the event log for evidence.",
+        "With default boundaries, try A, 600 mm, 250 mm, 80 mm, B, C."
+      ]
+    },
+    {
+      "id": "remix",
+      "title": "Change the rules",
+      "goal": "Change a threshold, color, or alarm duration. Test the new rule, then tell the Crew what changed. Following the defaults alone does not finish the Mission.",
+      "condition": { "kind": "remix" },
+      "hints": [
+        "What would make your guardian uniquely yours?",
+        "Change one rule → predict → test → explain.",
+        "Try warning = 500 mm and test 400 mm. How is that different?"
+      ]
+    },
+    {
+      "id": "reflection",
+      "title": "Tell your invention story",
+      "goal": "Explain what changed and describe one failed experiment or surprising result. A retry is discovery, not failure.",
+      "condition": { "kind": "reflection" },
+      "hints": [
+        "What surprised your Crew?",
+        "We changed… We expected… We observed… Next time…",
+        "Our alarm fired too early, so we reduced the warning distance and tested again."
+      ]
+    }
+  ],
+  "remixPrompts": [
+    "Make a shy guardian with a larger warning zone.",
+    "Invent a new warning color.",
+    "Make the alarm a shorter chirp."
+  ],
+  "freeBuild": [
+    {
+      "prompt": "Build a creature that greets visitors",
+      "components": ["distance", "pixels"],
+      "constraint": "Communicate without sound"
+    },
+    {
+      "prompt": "Make a secret LEGO doorway",
+      "components": ["buttons", "buzzer"],
+      "constraint": "Two Crew members must cooperate"
+    },
+    {
+      "prompt": "Invent a space traffic signal",
+      "components": ["distance", "pixels", "matrix"],
+      "constraint": "Show at least three states"
+    }
+  ]
+}

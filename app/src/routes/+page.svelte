@@ -1,5 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import MissionPanel from "$lib/missions/MissionPanel.svelte";
+  import { world, treasureGuardian } from "$lib/missions/catalog";
   import { SimulatorBoardClient } from "$lib/board/simulator";
   import type {
     BoardClient,
@@ -21,6 +23,7 @@
   const simulator = new SimulatorBoardClient();
   const board: BoardClient = simulator;
   let active = $state<Screen>("Home Base");
+  let freeBuild = $state(false);
   let snapshot = $state<BoardSnapshot | null>(null);
   let lastEvent = $state<BoardEvent | null>(null);
 
@@ -132,28 +135,33 @@
         <span class="eyebrow">ADVENTURE PATH</span>
         <h2>From first signal to free invention</h2>
         <div class="mission-path">
-          {#each ["Wake the Machine", "Signal Tower", "Curious Robot", "Control Panel", "Treasure Guardian", "Free Build"] as mission, index}<button
-              class:current={index === 4}
-              onclick={() => index === 4 && (active = "Mission")}
-              ><b>{index + 1}</b><span>{mission}</span></button
+          {#each world.stops as stop, index}<button
+              class:current={stop.missionId === treasureGuardian.id}
+              disabled={stop.missionId === null}
+              onclick={() => {
+                if (stop.missionId === "free-build") freeBuild = !freeBuild;
+                else active = "Mission";
+              }}
+              ><b>{index + 1}</b><span
+                >{stop.title}{stop.missionId === null
+                  ? " — coming later"
+                  : ""}</span
+              ></button
             >{/each}
         </div>
+        {#if freeBuild}
+          <h3>Free Build invitations</h3>
+          {#each treasureGuardian.freeBuild as invitation}
+            <p>
+              <strong>{invitation.prompt}</strong>: {invitation.components.join(
+                ", ",
+              )} — {invitation.constraint}.
+            </p>
+          {/each}
+        {/if}
       </section>
     {:else if active === "Mission"}
-      <section class="panel">
-        <span class="eyebrow">MISSION 05</span>
-        <h2>Treasure Guardian</h2>
-        <p>
-          Imagine a cave, vault, spaceship, or creature. Your Crew decides what
-          the guardian protects.
-        </p>
-        <div class="roles">
-          <span>🧭 Explorer: story & style</span><span
-            >🧰 Inventor: rules & testing</span
-          ><span>💻 Hacker: logic & telemetry</span>
-        </div>
-        <button class="primary">Begin story briefing →</button>
-      </section>
+      <MissionPanel />
     {:else if active === "Hardware Lab"}
       <section class="panel">
         <span class="eyebrow">BOARD ADAPTER</span>
@@ -530,18 +538,6 @@
   }
   .mission-path .current b {
     background: #d6842c;
-  }
-  .roles {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
-    margin: 25px 0;
-  }
-  .roles span {
-    padding: 10px 13px;
-    border-radius: 999px;
-    background: #edf1e9;
-    font-size: 13px;
   }
   .lab-grid {
     display: grid;
