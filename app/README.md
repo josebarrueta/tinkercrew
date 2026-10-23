@@ -54,11 +54,13 @@ Mission definitions are versioned, schema-validated local JSON in `src/lib/missi
 
 The native app stores progress in `crew-progress.sqlite` inside its macOS application-data directory. Saves are atomic and revision-checked so a stale window cannot overwrite newer progress. Mission/version validation refuses incompatible or corrupt saves rather than silently resetting them. Browser-only development uses localStorage for **non-secret progress only**, separate from native SQLite saves. Live hardware evidence is never restored as if newly observed after a restart.
 
-Connected Board records and credentials use macOS Keychain, never SQLite or frontend storage. The Mission engine never collects credentials. Parent Settings provides an explicit USB-verified provisioned-record import for development; full TBP Pairing remains integration work. See [`docs/architecture/board-connections.md`](../docs/architecture/board-connections.md) for transport, trust, diagnostics, and pending physical acceptance.
+Connected Board records and credentials use macOS Keychain, never SQLite or frontend storage. The Mission engine never collects credentials. Board Setup provides an explicit USB-verified provisioned-record import for development; full TBP Pairing remains integration work. See [`docs/architecture/board-connections.md`](../docs/architecture/board-connections.md) for transport, trust, diagnostics, and pending physical acceptance.
 
-## Parent setup guide
+## Board Setup
 
-Parent Settings includes a resumable USB identity/official-tool handoff guide, with checkpoint records in Keychain and explicit observed versus human confirmation. It stops honestly at unsupported full Pairing/deployment instead of allowing fake completion. Already provisioned connections remain separate. See [`docs/architecture/setup-checkpoints.md`](../docs/architecture/setup-checkpoints.md) for implemented behavior and missing integrations; factory-first provisioning is not complete.
+Board Setup adds serial-targeted physical USB/SSH authentication with request-only Linux credentials, hostname/Wi-Fi configuration, scheduled restart, explicit local credential/fingerprint cleanup, and guarded official-tool Linux factory restore. The destructive path binds the exact SoC serial, image version/SHA-256, flasher 0.5.4 contract, typed erase, and every safety acknowledgement; boot and human-reported external recovery are distinguished. Native management pauses/disconnects gameplay and never provides Mission code a shell endpoint. Physical acceptance remains pending; no reset was executed during development. See [`docs/architecture/board-setup.md`](../docs/architecture/board-setup.md).
+
+Board Setup also includes a resumable USB identity/official-tool handoff guide, with checkpoint records in Keychain and explicit observed versus human confirmation. It stops honestly at unsupported full Pairing/deployment instead of allowing fake completion. Already provisioned connections remain separate. See [`docs/architecture/setup-checkpoints.md`](../docs/architecture/setup-checkpoints.md) for implemented behavior and missing integrations; factory-first provisioning is not complete.
 
 ## Treasure Guardian
 
@@ -66,7 +68,7 @@ Open **Mission** to play the ten-stage adventure with three named Crew members a
 
 Inventor controls adjust thresholds, warning color, and alarm duration. The Hacker panel exposes the bounded six-field rule JSON and a rolling input event log; it never executes arbitrary code. A tested change from the default rules plus a description and reflection are required to complete the Mission. Saved configuration resumes on restart, but the guardian always restarts disarmed and live checks must collect new evidence.
 
-`GuardianRuntime` accepts only `BoardClient`, so the same Mission behavior runs over simulator and connected adapters. Select a provisioned Board in Parent Settings for connected play; otherwise the shell uses the simulator. Physical connected-mode acceptance remains pending until tested on UNO Q.
+`GuardianRuntime` accepts only `BoardClient`, so the same Mission behavior runs over simulator and connected adapters. Select a provisioned Board in Board Setup for connected play; otherwise the shell uses the simulator. Physical connected-mode acceptance remains pending until tested on UNO Q.
 
 The runtime rejects stale/implausible distance readings, clears outputs on failure or exit, and requires explicit rearming after recovery. The simulator models the 1.5-second control lease and bounded buzzer duration; use **Freeze distance readings** to explore recovery. The Companion's Linux/STM32 watchdogs are the physical safety authority, not frontend timers.
 

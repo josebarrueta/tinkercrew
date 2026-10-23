@@ -38,14 +38,14 @@ run_check() {
   fi
 }
 run_check 'Frontend quality and Rust lint' bash -c 'cd app && npm run quality'
-run_check 'Native persistence and real loopback TLS Companion' cargo test --manifest-path app/src-tauri/Cargo.toml
+run_check 'Native persistence, TLS Companion, management and restore guards' cargo test --manifest-path app/src-tauri/Cargo.toml
 run_check 'Companion core and HTTP' env PYTHONPATH=companion/python python3 -m unittest discover -s companion/tests
-run_check 'Browser Mission, offline resources, and recovery' bash -c 'cd app && npm run test:e2e'
-run_check 'Release metadata tests' python3 -m unittest discover -s scripts/tests
+run_check 'Browser Mission, recovery, and mocked Board Setup contracts' bash -c 'cd app && npm run test:e2e'
+run_check 'Board management helper and release metadata tests' python3 -m unittest discover -s scripts/tests
 run_check 'Detached release signature and tamper checks' cargo test --locked --manifest-path tools/release-verify/Cargo.toml
 run_check 'Release verifier formatting' cargo fmt --manifest-path tools/release-verify/Cargo.toml --check
 run_check 'Release verifier lint' cargo clippy --locked --manifest-path tools/release-verify/Cargo.toml --all-targets -- -D warnings
-run_check 'Python compilation' python3 -m compileall -q companion/python companion/tests scripts
+run_check 'Python compilation' python3 -m compileall -q companion/python companion/tests scripts app/src-tauri/src/board_management.py
 run_check 'Whitespace validation' git diff --check
 if [[ "$build" == 1 ]]; then
   run_check 'Production macOS app bundle' bash -c 'cd app && npm run build:app'
@@ -53,7 +53,7 @@ else
   printf '| Production macOS app bundle | NOT RUN (use --build) |\n' >> "$report"
 fi
 {
-  printf '\nPhysical UNO Q, actual ADB/Bonjour/VPN behavior, family play-testing, and clean-Mac Gatekeeper/notarization acceptance: **PENDING — not run by this script**.\n'
+  printf '\nPhysical UNO Q, actual USB/SSH/EDL/factory-restore/ADB/Bonjour/VPN behavior, family play-testing, and clean-Mac Gatekeeper/notarization acceptance: **PENDING — not run by this script**.\n'
   printf '\nSee docs/qa/recovery-safety.md for the physical matrix and evidence template.\n'
 } >> "$report"
 printf '\nReport: %s\n' "$report"

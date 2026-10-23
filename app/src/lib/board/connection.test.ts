@@ -25,22 +25,28 @@ describe("selected Board connection ladder", () => {
     expect(stages).toEqual(["known", "mdns", "local", "usb"]);
   });
 
-  it("does not hunt for another Board after authentication fails", async () => {
-    const states: string[] = [];
-    const backend: ConnectionBackend = {
-      async candidates(_id, stage) {
-        states.push(stage);
-        return [{ host: "192.168.1.2", port: 7443 }];
-      },
-      async probe() {
-        throw { code: "authentication_failed", message: "Recover through USB" };
-      },
-    };
-    await expect(
-      connectBoard(backend, { boardId: "chosen", localConsent: true }),
-    ).rejects.toMatchObject({ code: "authentication_failed" });
-    expect(states).toEqual(["known"]);
-  });
+  it.each(["authentication_failed", "maintenance_active"])(
+    "does not hunt for another Board after %s",
+    async (code) => {
+      const states: string[] = [];
+      const backend: ConnectionBackend = {
+        async candidates(_id, stage) {
+          states.push(stage);
+          return [{ host: "192.168.1.2", port: 7443 }];
+        },
+        async probe() {
+          throw {
+            code,
+            message: "Pause gameplay and recover through Board Setup",
+          };
+        },
+      };
+      await expect(
+        connectBoard(backend, { boardId: "chosen", localConsent: true }),
+      ).rejects.toMatchObject({ code });
+      expect(states).toEqual(["known"]);
+    },
+  );
   it("falls back in order without scanning neighbors without consent", async () => {
     const attempts: string[] = [];
     const backend: ConnectionBackend = {

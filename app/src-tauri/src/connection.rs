@@ -1,10 +1,16 @@
 use reqwest::{Client, Method};
-use security_framework::passwords::{get_generic_password, set_generic_password};
+use security_framework::passwords::{
+    delete_generic_password, get_generic_password, set_generic_password,
+};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::{
     net::{IpAddr, SocketAddr},
     path::PathBuf,
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    },
     time::Duration,
 };
 use tokio::sync::Mutex;
@@ -141,6 +147,7 @@ struct ActiveBoard {
 
 pub struct Connections {
     pub directory: PathBuf,
+    pub(crate) maintenance: Arc<AtomicBool>,
     active: Mutex<Option<ActiveBoard>>,
     pub forwards: Mutex<Vec<(String, u16)>>,
     sequence: std::sync::atomic::AtomicU64,
@@ -150,17 +157,41 @@ impl Connections {
     pub fn new(directory: PathBuf) -> Self {
         Self {
             directory,
+            maintenance: Arc::new(AtomicBool::new(false)),
             active: Mutex::new(None),
             forwards: Mutex::new(vec![]),
             sequence: std::sync::atomic::AtomicU64::new(1),
             profile_writes: std::sync::Mutex::new(()),
         }
     }
+    pub(crate) fn maintenance_active(&self) -> bool {
+        self.maintenance.load(Ordering::SeqCst)
+            || self
+                .directory
+                .join("board-recovery/factory-restore-active.json")
+                .exists()
+    }
+    pub(crate) fn begin_maintenance(&self) -> std::result::Result<MaintenancePermit, String> {
+        if self
+            .directory
+            .join("board-recovery/factory-restore-active.json")
+            .exists()
+        {
+            return Err("A factory restore is active or pending verification, possibly in another app instance. Resolve recovery before other management changes.".into());
+        }
+        self.maintenance
+            .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+            .map_err(|_| "Board maintenance is already running; do not start another operation.")?;
+        Ok(MaintenancePermit {
+            flag: self.maintenance.clone(),
+            keep: false,
+        })
+    }
     pub fn profile(&self, board_id: &str) -> Result<BoardProfile> {
         let bytes = get_generic_password(KEYCHAIN_SERVICE, board_id).map_err(|_| {
             ConnectionError::new(
                 "pairing_required",
-                "Unlock macOS Keychain or import the USB-verified Board record in Parent Settings.",
+                "Unlock macOS Keychain or import the USB-verified Board record in Board Setup.",
             )
         })?;
         let profile: BoardProfile = serde_json::from_slice(&bytes).map_err(|_| {
@@ -206,8 +237,20 @@ impl Connections {
     }
 }
 
+pub(crate) struct MaintenancePermit {
+    pub(crate) flag: Arc<AtomicBool>,
+    pub(crate) keep: bool,
+}
+impl Drop for MaintenancePermit {
+    fn drop(&mut self) {
+        if !self.keep {
+            self.flag.store(false, Ordering::SeqCst);
+        }
+    }
+}
+
 #[tauri::command]
-pub fn register_board(
+pub async fn register_board(
     state: tauri::State<'_, Connections>,
     record: String,
     usb_confirmed: bool,
@@ -225,6 +268,19 @@ pub fn register_board(
         )
     })?;
     profile.validate()?;
+    if state.maintenance_active() {
+        return Err(ConnectionError::new(
+            "maintenance_active",
+            "Finish Board maintenance/recovery verification before importing gameplay credentials.",
+        ));
+    }
+    let devices = crate::discovery::adb(&["devices", "-l"]).await?;
+    if !crate::management::physical_usb_ready(&devices, &profile.adb_serial) {
+        return Err(ConnectionError::new(
+            "usb_confirmation_required",
+            "The exact record's Board must be ready on physical USB through this Mac's local ADB server. Wireless ADB is not USB proof.",
+        ));
+    }
     let _guard = state.profile_writes.lock().map_err(|_| {
         ConnectionError::new(
             "storage_error",
@@ -418,9 +474,21 @@ pub async fn probe_board(
     board_id: String,
     candidate: Candidate,
 ) -> Result<u64> {
+    if state.maintenance_active() {
+        return Err(ConnectionError::new(
+            "maintenance_active",
+            "Board maintenance is active. Finish it before connecting for gameplay.",
+        ));
+    }
     let mut profile = state.profile(&board_id)?;
     let (client, addresses) = verify_candidate(&profile, &candidate).await?;
     let mut active = state.active.lock().await;
+    if state.maintenance_active() {
+        return Err(ConnectionError::new(
+            "maintenance_active",
+            "Board maintenance started while connecting; gameplay remains paused.",
+        ));
+    }
     if let Some(old) = active.take() {
         let _ = request(
             &old.client,
@@ -469,6 +537,43 @@ pub async fn disconnect_board(state: tauri::State<'_, Connections>) -> Result<()
     Ok(())
 }
 
+#[tauri::command]
+pub async fn forget_board(
+    state: tauri::State<'_, Connections>,
+    board_id: String,
+    confirmation: String,
+) -> Result<()> {
+    if confirmation != format!("FORGET {board_id}") {
+        return Err(ConnectionError::new(
+            "confirmation_required",
+            "Type FORGET followed by the selected Board ID. This removes only this Mac's Tinkeroo record, not the Board or other installations.",
+        ));
+    }
+    disconnect_board(state.clone()).await?;
+    let _guard = state.profile_writes.lock().map_err(|_| {
+        ConnectionError::new("storage_error", "Restart the app before removing a record.")
+    })?;
+    let _ = state.profile(&board_id)?;
+    let ids: Vec<_> = state
+        .ids()?
+        .into_iter()
+        .filter(|id| id != &board_id)
+        .collect();
+    match delete_generic_password(KEYCHAIN_SERVICE, &board_id) {
+        Ok(()) => {}
+        Err(error) if error.code() == -25300 => {}
+        Err(_) => {
+            return Err(ConnectionError::new(
+                "keychain_unavailable",
+                "Unlock Keychain before removing this Mac's Board record.",
+            ));
+        }
+    }
+    let temp = state.directory.join("board-handles.json.tmp");
+    std::fs::write(&temp, serde_json::to_vec(&ids).map_err(|_| ConnectionError::new("storage_error", "Could not update the Board index."))?).and_then(|_| std::fs::rename(&temp, state.directory.join("board-handles.json"))).map_err(|_| ConnectionError::new("storage_error", "The credential was removed but the Board index update failed. Re-import/recover the record; no Board data was erased."))?;
+    Ok(())
+}
+
 #[derive(Deserialize)]
 #[serde(tag = "operation", rename_all = "snake_case", deny_unknown_fields)]
 pub enum GameplayRequest {
@@ -487,7 +592,19 @@ pub async fn board_request(
     handle: u64,
     operation: GameplayRequest,
 ) -> Result<Value> {
+    if state.maintenance_active() {
+        return Err(ConnectionError::new(
+            "maintenance_active",
+            "Board maintenance is active; gameplay commands are paused.",
+        ));
+    }
     let active = state.active.lock().await;
+    if state.maintenance_active() {
+        return Err(ConnectionError::new(
+            "maintenance_active",
+            "Board maintenance is active; gameplay remains paused.",
+        ));
+    }
     let selected = active
         .as_ref()
         .filter(|board| board.handle == handle)
@@ -576,6 +693,28 @@ pub fn adb_status<'a>(output: &'a str, selected: &str) -> Option<&'a str> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn maintenance_blocks_competing_operations_and_other_instances_with_pending_restore() {
+        let directory = tempfile::tempdir().unwrap();
+        let first = Connections::new(directory.path().to_path_buf());
+        let second = Connections::new(directory.path().to_path_buf());
+        let permit = first.begin_maintenance().unwrap();
+        assert!(first.maintenance_active());
+        assert!(first.begin_maintenance().is_err());
+        std::fs::create_dir(directory.path().join("board-recovery")).unwrap();
+        let marker = directory
+            .path()
+            .join("board-recovery/factory-restore-active.json");
+        std::fs::write(&marker, b"{}").unwrap();
+        assert!(second.maintenance_active());
+        assert!(second.begin_maintenance().is_err());
+        drop(permit);
+        assert!(first.maintenance_active());
+        std::fs::remove_file(marker).unwrap();
+        assert!(!first.maintenance_active());
+        assert!(!second.maintenance_active());
+    }
 
     #[test]
     fn real_tls_companion_checks_certificate_identity_authentication_and_commands() {

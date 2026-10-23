@@ -35,7 +35,7 @@ export function connectionError(cause: unknown): ConnectionError {
   return {
     code: "connection_failed",
     message:
-      "The Board connection stopped. Check power and the data cable, or retry from Parent Settings.",
+      "The Board connection stopped. Check power and the data cable, or retry from Board Setup.",
   };
 }
 
@@ -74,6 +74,7 @@ export async function connectBoard(
               "authentication_failed",
               "pairing_required",
               "protocol_incompatible",
+              "maintenance_active",
             ].includes(last.code)
           )
             throw last;
@@ -86,6 +87,7 @@ export async function connectBoard(
           "authentication_failed",
           "pairing_required",
           "protocol_incompatible",
+          "maintenance_active",
         ].includes(last.code)
       ) {
         observe({ phase: "failed", error: last });

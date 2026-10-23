@@ -89,10 +89,16 @@ Simulator mode is the easiest first step. For hardware play:
 
 1. Complete supported first-time configuration in official Arduino App Lab; Tinkeroo's all-in-one factory provisioning is not complete.
 2. Install/start the reusable [UNO Q Companion](companion/README.md) on the Board and provision its TLS identity and credential outside source control.
-3. Follow the [USB-verified connection guide](docs/architecture/board-connections.md) and select the exact Board in Parent Settings. The current provisioned-record import is a development bridge, not full TBP Pairing.
+3. Follow the [USB-verified connection guide](docs/architecture/board-connections.md) and select the exact Board in Board Setup. The current provisioned-record import is a development bridge, not full TBP Pairing.
 4. For USB fallback, separately install official [Android Platform-Tools](https://developer.android.com/tools/releases/platform-tools) (Arduino documents `brew install android-platform-tools`). Tinkeroo does **not** bundle Google's binaries or accept their license for you. `TC_ADB_PATH` may point to an absolute `adb` executable.
 
 UNO Q maker GPIO is **3.3 V**; never apply 5 V to analog inputs. Disconnect power before changing wiring. Follow the in-app safety panel and pending [physical acceptance plan](docs/qa/recovery-safety.md).
+
+## Board Setup and recovery
+
+**Board Setup** replaces Parent Settings and brings connections, existing-Board Linux authentication, hostname/Wi-Fi configuration, scheduled restart, local pairing cleanup, and guarded factory restore into one hub. Linux passwords are request-only, never saved. Management pauses gameplay.
+
+Factory restore is a **destructive Linux OS reflash**, not a restart or checkpoint reset. It requires a separately installed official Arduino Flasher CLI **0.5.4**, an inspected physical Board, exact version/checksum, backup/EDL/power acknowledgements, and `ERASE <hardware serial>`. Actual hardware acceptance is **pending**; no reset was performed during development. Full TBP Pairing/automatic Companion deployment remains unfinished, so this is not yet complete one-click onboarding. See the [Board Setup workflow, safety boundaries, and recovery evidence](docs/architecture/board-setup.md).
 
 ## Tinkeroo look and feel
 
@@ -106,6 +112,7 @@ The GitHub repository remains `josebarrueta/tinkercrew`. Existing bundle identit
 
 - [App architecture and playable Mission](app/README.md)
 - [Companion installation, API, and tests](companion/README.md)
+- [Board Setup management and destructive recovery](docs/architecture/board-setup.md)
 - [Resumable setup handoffs and remaining implementation](docs/architecture/setup-checkpoints.md)
 - [Secure protocol proposal](docs/architecture/secure-board-protocol.md)
 - [MVP roadmap and open work](https://github.com/josebarrueta/tinkercrew/issues/13)

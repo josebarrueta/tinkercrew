@@ -29,7 +29,7 @@ Covered behavior includes:
 
 - An adult supervises powered tests and follows the in-app hardware safety panel.
 - Record Mac model/architecture/macOS/app commit; Board serial/ID/model/revision; OS image; App CLI, Companion, sketch, Bridge, and Modulino library versions. Record network type, VPN product/settings, cable/power supply, and connected components without logging passwords, keys, tokens, or private Wi-Fi details.
-- Have official Arduino App Lab/Platform-Tools and a known-good USB-C data cable available for recovery. Never modify the bootloader or flash the OS as part of these tests.
+- Have official Arduino App Lab/Platform-Tools and a known-good USB-C data cable available for recovery. Never modify the bootloader or flash the OS as part of the H-series tests. The separate M-series factory-restore tests below are destructive, owner-only, opt-in runs on backed-up/sacrificial hardware; they are never part of automated checks.
 - Back up progress/Board configuration through an owner-approved method. Never commit a live provisioned record or Keychain export.
 - Measure output-off timing using a video/timer or instrumentation; a UI label alone is not evidence that physical outputs went off.
 
@@ -61,6 +61,26 @@ Every row starts **PENDING** until a person records a run and evidence. Software
 | H20 | Wrong credential, changed certificate, wrong Board ID | Fail closed with USB recovery action; no gameplay command to the wrong Board | PENDING |
 | H21 | Light/sound self-test and unavailable component | Human confirms actual outputs; missing component is not a judgment of LEGO design | PENDING |
 | H22 | macOS local-network/Keychain permission denied | Safe diagnostic and simulator/USB path; no plaintext credential fallback | PENDING |
+
+## Board Setup management/recovery acceptance (#19)
+
+All rows remain **PENDING**. See [Board Setup boundaries and recovery procedure](../architecture/board-setup.md). M09–M11 require a separate explicit destructive-run approval, backups, isolated target, disconnected loads, and official EDL/power procedure. Do not unplug/kill a live flasher just to explore failure; interruption experiments require a vendor-supported recovery plan and sacrificial hardware.
+
+| ID | Scenario / action | Required evidence | Physical result |
+| --- | --- | --- | --- |
+| M01 | Physical USB versus wireless ADB; unrelated/multiple devices | Only local physical `usb:` evidence is eligible; UNO Q/SoC inspection matches selected hardware before changes | PENDING |
+| M02 | Correct/incorrect Linux credentials, SSH disabled, unsupported image | No guessed password or implicit service enablement; wrong credentials fail without accepting authentication | PENDING |
+| M03 | Explicit SSH enablement and USB-forwarded login | Exact serial, matching USB/SSH SoC, password absent from argv/logs/storage; service/network exposure explained | PENDING |
+| M04 | Existing/changed SSH key, expiry, leave Board Setup | Unexpected key fails; five-minute authorization enforced; explicit physical trust removal only; fields/session clear on exit | PENDING |
+| M05 | Wi-Fi scan, correct/incorrect/hidden SSID/password | NetworkManager result observed; secret stdin only; errors do not claim a working LAN connection | PENDING |
+| M06 | Hostname change during connected Mission | Gameplay lease closed; expected hostname observed; identity retained; no automatic reconnection/rearm | PENDING |
+| M07 | Schedule reboot | UI says scheduled only; independently observe actual restart and fresh disarmed USB/LAN recovery | PENDING |
+| M08 | Local gameplay/fingerprint cleanup | Only chosen Mac records removed; Mission progress/unrelated keys untouched; copied bearer token is not falsely described as revoked | PENDING |
+| M09 | Factory plan/version/checksum/disk/wrong-target guards | No flasher before every native guard succeeds; exact `--serial`, no `--preserve-user`, no implicit latest/other Board | PENDING |
+| M10 | Explicit successful Linux restore | Official flasher completion plus same SoC/exact BUILD_ID, actual userdata reset, new credentials/SSH trust, source-labeled local receipt; STM32/Companion self-test separately verified | PENDING |
+| M11 | Supported interrupted/external recovery | App never starts duplicate erase or kills writer; PID/boot-session ambiguity blocks unsafe acceptance; human confirmation is not app-observed success; interrupted download never claims a restore | PENDING |
+
+No M-series test has been run during implementation. Full TBP/atomic deployment and integrated setup completion remain **BLOCKED** code work under #11, not merely physical tests awaiting execution.
 
 ## Per-run evidence template
 

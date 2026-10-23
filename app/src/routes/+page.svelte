@@ -11,13 +11,13 @@
   } from "$lib/board/types";
 
   type Screen =
-    "Home Base" | "World Map" | "Mission" | "Hardware Lab" | "Parent Settings";
+    "Home Base" | "World Map" | "Mission" | "Hardware Lab" | "Board Setup";
   const screens: { name: Screen; icon: string }[] = [
     { name: "Home Base", icon: "⌂" },
     { name: "World Map", icon: "✦" },
     { name: "Mission", icon: "◆" },
     { name: "Hardware Lab", icon: "⚙" },
-    { name: "Parent Settings", icon: "☰" },
+    { name: "Board Setup", icon: "☰" },
   ];
   const simulator = new SimulatorBoardClient();
   let board = $state.raw<BoardClient>(simulator);
@@ -37,7 +37,7 @@
       }
     } catch {
       boardError =
-        "Board unavailable. Check power and connections; Parent Settings offers USB/manual recovery.";
+        "Board unavailable. Check power and connections; Board Setup offers USB/manual recovery.";
     }
   }
   $effect(() => {
@@ -69,7 +69,7 @@
       await refresh();
     } catch {
       boardError =
-        "The light command did not finish. Check Board health and reconnect in Parent Settings.";
+        "The light command did not finish. Check Board health and reconnect in Board Setup.";
     }
   }
 </script>
@@ -123,7 +123,7 @@
         <small
           >{connectionState.phase === "simulator"
             ? "No Board required"
-            : "Parent Settings for recovery"}</small
+            : "Board Setup for recovery"}</small
         >
       </div>
     </div>
@@ -283,7 +283,7 @@
       </section>
     {/if}
     <ConnectionPanel
-      visible={active === "Parent Settings"}
+      visible={active === "Board Setup"}
       onConnected={(client) => {
         board = client;
       }}

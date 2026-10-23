@@ -1,0 +1,433 @@
+import { expect, test, type Page } from "@playwright/test";
+
+// UI/IPC contract only: every native call is intercepted. No Board, SSH, or flasher runs.
+async function mockManagement(page: Page, initialPhase = "idle") {
+  await page.addInitScript((initialPhase) => {
+    const scope = window as unknown as {
+      isTauri: boolean;
+      __managementCalls: { command: string; args: Record<string, unknown> }[];
+      __TAURI_INTERNALS__: {
+        invoke: (
+          command: string,
+          args?: Record<string, unknown>,
+        ) => Promise<unknown>;
+      };
+    };
+    scope.isTauri = true;
+    scope.__managementCalls = [];
+    const board = {
+      adbSerial: "USB_TEST",
+      serial: "42",
+      username: "arduino",
+      hostname: "test-unoq",
+      os: "debian",
+      osVersion: "13",
+      imageVersion: "test-build",
+    };
+    const image = {
+      version: "20260528-558",
+      os: "Debian GNU/Linux 13",
+      url: "https://downloads.arduino.cc/test-only.tar.zst",
+      sha256: "a".repeat(64),
+    };
+    let phase = initialPhase;
+    scope.__TAURI_INTERNALS__ = {
+      invoke: async (command, args = {}) => {
+        scope.__managementCalls.push({ command, args });
+        if (command === "list_boards") return [];
+        if (command === "load_progress" || command === "load_setup")
+          return null;
+        if (command === "save_progress")
+          return Number(args.expectedRevision) + 1;
+        if (command === "factory_restore_status")
+          return {
+            phase,
+            bytes: 0,
+            message: "Mocked native status; no hardware execution.",
+          };
+        if (command === "inspect_setup_usb")
+          return [{ serial: "USB_TEST", state: "device" }];
+        if (command === "admin_inspect_usb" || command === "admin_login")
+          return board;
+        if (command === "admin_action")
+          return { ssids: ["Makers-net"], state: "configured" };
+        if (command === "recovery_images") return [image];
+        if (command === "prepare_factory_restore")
+          return { planId: 1, board, image };
+        if (command === "start_factory_restore") {
+          phase = "flashing";
+          return {
+            phase,
+            bytes: 0,
+            message: "Mock only; no flasher was executed.",
+          };
+        }
+        if (command === "verify_factory_boot") {
+          const source =
+            phase === "download_interrupted"
+              ? "no_flash_started"
+              : args.officialRecoveryConfirmed
+                ? "human_official_recovery"
+                : "tinkeroo_flasher";
+          phase = "idle";
+          return { board, source };
+        }
+        if (command === "disconnect_board" || command === "admin_logout")
+          return null;
+        throw new Error(`Unexpected mock command: ${command}`);
+      },
+    };
+  }, initialPhase);
+  await page.goto("/");
+  await page
+    .getByRole("button", { name: "☰ Board Setup", exact: true })
+    .click();
+  const management = page.getByRole("region", {
+    name: "Board configuration and recovery",
+  });
+  if (initialPhase !== "idle") return management;
+  await management
+    .getByRole("button", { name: "Refresh USB Boards", exact: true })
+    .click();
+  await management
+    .getByRole("combobox", { name: "USB Board serial", exact: true })
+    .selectOption("USB_TEST");
+  await management
+    .getByRole("button", { name: "Inspect selected UNO Q", exact: true })
+    .click();
+  await management
+    .getByRole("checkbox", {
+      name: "I physically verified this USB Board and its displayed serial",
+      exact: true,
+    })
+    .check();
+  return management;
+}
+
+async function managementCalls(page: Page) {
+  return page.evaluate(
+    () =>
+      (
+        window as unknown as {
+          __managementCalls: {
+            command: string;
+            args: Record<string, unknown>;
+          }[];
+        }
+      ).__managementCalls,
+  );
+}
+
+test("Board Setup distinguishes credentials, restart, local cleanup, and destructive restore", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await expect(
+    page.getByRole("button", { name: "☰ Parent Settings", exact: true }),
+  ).toHaveCount(0);
+  await page
+    .getByRole("button", { name: "☰ Board Setup", exact: true })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "Board Setup", exact: true }).first(),
+  ).toBeVisible();
+  const management = page.getByRole("region", {
+    name: "Board configuration and recovery",
+  });
+  await expect(
+    management.getByLabel("Linux username", { exact: true }),
+  ).toHaveValue("arduino");
+  await expect(
+    management.getByLabel("Linux password (this request only)"),
+  ).toHaveAttribute("type", "password");
+  await expect(
+    management.getByRole("button", { name: "Authenticate selected Board" }),
+  ).toBeDisabled();
+  await management
+    .getByText("Restart, pairing cleanup, and factory recovery", {
+      exact: true,
+    })
+    .click();
+  await expect(
+    management.getByRole("heading", {
+      name: "Restart the UNO Q — keeps its data",
+    }),
+  ).toBeVisible();
+  await expect(
+    management.getByRole("heading", {
+      name: "Forget Tinkeroo records — this Mac only",
+    }),
+  ).toBeVisible();
+  await expect(
+    management.getByRole("heading", {
+      name: "Factory restore — erases the UNO Q Linux system and data",
+    }),
+  ).toBeVisible();
+  await expect(
+    management.getByRole("button", { name: "Schedule Board restart" }),
+  ).toBeDisabled();
+  await expect(
+    management.getByRole("button", {
+      name: "Prepare exact-Board restore plan (does not erase)",
+    }),
+  ).toBeDisabled();
+  await expect(
+    management.getByRole("button", {
+      name: "Erase this UNO Q and restore the approved image",
+    }),
+  ).toHaveCount(0);
+  await expect(
+    management.getByText("Recovery: idle", { exact: false }),
+  ).toBeVisible();
+  // Preview mode has no real native management execution or credential persistence.
+  expect(
+    await page.evaluate(() =>
+      Object.keys(localStorage).some((key) => /password|credential/i.test(key)),
+    ),
+  ).toBe(false);
+});
+
+test("management uses transient credential requests and clears them on navigation", async ({
+  page,
+}) => {
+  const management = await mockManagement(page);
+  const password = management.getByLabel("Linux password (this request only)");
+  await password.fill("fixture-only-linux-password");
+  await management
+    .getByRole("button", { name: "Authenticate selected Board", exact: true })
+    .click();
+  await expect(password).toHaveValue("");
+  await expect(
+    management.getByText(
+      "Linux authentication and physical Board identity verified.",
+      { exact: false },
+    ),
+  ).toBeVisible();
+  await password.fill("fixture-only-linux-password");
+  await management
+    .getByLabel("Board hostname", { exact: true })
+    .fill("makers-unoq");
+  await management
+    .getByRole("button", {
+      name: "Set hostname using the password above",
+      exact: true,
+    })
+    .click();
+  await expect(password).toHaveValue("");
+  const wifiPassword = management.getByLabel(
+    "Wi-Fi password (this request only)",
+  );
+  await management
+    .getByLabel("Wi-Fi name / hidden SSID", { exact: true })
+    .fill("Makers-net");
+  await wifiPassword.fill("fixture-only-wifi-password");
+  await management
+    .getByRole("button", { name: "Join this Wi-Fi network", exact: true })
+    .click();
+  await expect(wifiPassword).toHaveValue("");
+  const calls = await managementCalls(page);
+  expect(
+    calls.find((call) => call.command === "admin_login")?.args,
+  ).toMatchObject({
+    serial: "USB_TEST",
+    username: "arduino",
+    password: "fixture-only-linux-password",
+    usbConfirmed: true,
+  });
+  expect(
+    calls
+      .filter((call) => call.command === "admin_action")
+      .map((call) => call.args.action),
+  ).toEqual([
+    {
+      operation: "hostname",
+      hostname: "makers-unoq",
+      password: "fixture-only-linux-password",
+    },
+    {
+      operation: "wifi_join",
+      ssid: "Makers-net",
+      password: "fixture-only-wifi-password",
+    },
+  ]);
+  expect(
+    await page.evaluate(() =>
+      JSON.stringify({
+        local: { ...localStorage },
+        session: { ...sessionStorage },
+      }),
+    ),
+  ).not.toContain("fixture-only-");
+  await password.fill("fixture-only-not-submitted");
+  await page.getByRole("button", { name: "⌂ Home Base", exact: true }).click();
+  await page
+    .getByRole("button", { name: "☰ Board Setup", exact: true })
+    .click();
+  await expect(password).toHaveValue("");
+});
+
+test("factory restore requires a prepared exact target, every acknowledgement, and typed hardware serial", async ({
+  page,
+}) => {
+  const management = await mockManagement(page);
+  await management
+    .getByText("Restart, pairing cleanup, and factory recovery", {
+      exact: true,
+    })
+    .click();
+  await management
+    .getByLabel("Absolute path to official arduino-flasher-cli", {
+      exact: true,
+    })
+    .fill("/fixture-only/arduino-flasher-cli");
+  await management
+    .getByRole("button", {
+      name: "Read supported official UNO Q image catalog",
+      exact: true,
+    })
+    .click();
+  await management
+    .getByRole("combobox", {
+      name: "Exact official image version",
+      exact: true,
+    })
+    .selectOption("0");
+  await management
+    .getByRole("button", {
+      name: "Prepare exact-Board restore plan (does not erase)",
+      exact: true,
+    })
+    .click();
+  const erase = management.getByRole("button", {
+    name: "Erase this UNO Q and restore the approved image",
+    exact: true,
+  });
+  await expect(erase).toBeDisabled();
+  await management
+    .getByLabel("Type ERASE 42", { exact: true })
+    .fill("ERASE USB_TEST");
+  await management
+    .getByRole("checkbox", {
+      name: "I backed up needed Board files",
+      exact: false,
+    })
+    .check();
+  await management
+    .getByRole("checkbox", {
+      name: "I followed the official UNO Q EDL preparation",
+      exact: false,
+    })
+    .check();
+  await management
+    .getByRole("checkbox", {
+      name: "Only the exact target Board is connected",
+      exact: false,
+    })
+    .check();
+  await expect(erase).toBeDisabled();
+  await management
+    .getByRole("checkbox", {
+      name: "Loads/accessories are disconnected",
+      exact: false,
+    })
+    .check();
+  await expect(erase).toBeDisabled();
+  await management
+    .getByLabel("Type ERASE 42", { exact: true })
+    .fill("ERASE 42");
+  await expect(erase).toBeEnabled();
+  expect(
+    (await managementCalls(page)).some(
+      (call) => call.command === "start_factory_restore",
+    ),
+  ).toBe(false);
+  await erase.click();
+  await expect(
+    management.getByText("Recovery: flashing", { exact: false }),
+  ).toBeVisible();
+  await expect(erase).toBeDisabled();
+  const invocation = (await managementCalls(page)).find(
+    (call) => call.command === "start_factory_restore",
+  );
+  expect(invocation?.args).toEqual({
+    planId: 1,
+    confirmation: {
+      phrase: "ERASE 42",
+      backup: true,
+      edl: true,
+      onlyTarget: true,
+      power: true,
+    },
+  });
+});
+
+for (const initialPhase of ["outcome_unknown", "download_interrupted"]) {
+  test(`recovery evidence distinguishes ${initialPhase} from an app-observed restore`, async ({
+    page,
+  }) => {
+    const management = await mockManagement(page, initialPhase);
+    await management
+      .getByText("Restart, pairing cleanup, and factory recovery", {
+        exact: true,
+      })
+      .click();
+    await management
+      .getByRole("button", {
+        name: "Refresh USB Boards for recovery verification",
+        exact: true,
+      })
+      .click();
+    await management
+      .getByRole("combobox", { name: "USB serial to verify", exact: true })
+      .selectOption("USB_TEST");
+    const verify = management.getByRole("button", {
+      name: "Verify Board boot and recovery evidence",
+      exact: true,
+    });
+    if (initialPhase === "outcome_unknown") {
+      await management
+        .getByLabel("Type VERIFY followed by the hardware serial", {
+          exact: true,
+        })
+        .fill("VERIFY 42");
+      await expect(verify).toBeDisabled();
+      await management
+        .getByRole("checkbox", {
+          name: "The official Arduino tool reported a successful destructive restore",
+          exact: false,
+        })
+        .check();
+      await management
+        .getByLabel("Type RECOVERED followed by the hardware serial", {
+          exact: true,
+        })
+        .fill("RECOVERED 42");
+    } else {
+      await management
+        .getByLabel("Type VERIFY followed by the hardware serial", {
+          exact: true,
+        })
+        .fill("VERIFY 42");
+    }
+    await verify.click();
+    await expect(
+      management.getByText(
+        initialPhase === "outcome_unknown"
+          ? "Official-tool restore completion was confirmed by you, not observed by this app."
+          : "This app never started flashing and no factory restore is claimed.",
+        { exact: false },
+      ),
+    ).toBeVisible();
+    const call = (await managementCalls(page)).find(
+      (call) => call.command === "verify_factory_boot",
+    );
+    expect(call?.args.officialRecoveryConfirmed).toBe(
+      initialPhase === "outcome_unknown",
+    );
+    expect(
+      (await managementCalls(page)).some(
+        (call) => call.command === "start_factory_restore",
+      ),
+    ).toBe(false);
+  });
+}

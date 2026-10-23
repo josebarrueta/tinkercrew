@@ -5,7 +5,7 @@ test("setup preview exposes official handoff and never invents factory success",
 }) => {
   await page.goto("/");
   await page
-    .getByRole("button", { name: "☰ Parent Settings", exact: true })
+    .getByRole("button", { name: "☰ Board Setup", exact: true })
     .click();
   await page
     .getByText("Set up a UNO Q — resumable official-tool handoff guide", {
