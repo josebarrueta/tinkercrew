@@ -7,7 +7,8 @@ Tauri 2 + Svelte/TypeScript foundation for the local-first family Crew experienc
 - macOS 12 or newer
 - Xcode Command Line Tools (`xcode-select --install`)
 - current stable Rust toolchain
-- Node.js 20.19 or newer (or Node.js 22.12+)
+- Node.js 22.12+ recommended, or Node.js 20.19+ within the 20.x line
+- Python 3.11+ for combined checks and release tooling
 
 ## Start
 
@@ -15,7 +16,7 @@ From the repository root:
 
 ```sh
 cd app
-npm install
+npm ci
 npm run dev:app
 ```
 
@@ -33,9 +34,15 @@ npm run build:app
 
 The app command creates `src-tauri/target/release/bundle/macos/TinkerCrew.app`. `npm run build:dmg` also creates a headless drag-to-Applications DMG under `src-tauri/target/release/bundle/dmg/`. Development artifacts use ad-hoc signing, not a public Developer ID identity. Hardened Runtime is enabled. The manual protected release workflow prepares Universal signed/notarized candidates only when owner-provided credentials exist; actual notarization and clean-Mac acceptance remain pending. See [`docs/release/macos.md`](../docs/release/macos.md).
 
+## CI downloads and licensing
+
+[macOS CI](../.github/workflows/ci-macos.yml) runs the checks and native-architecture app/DMG build without signing secrets. Download development bundles from the run's Artifacts section (14-day retention); QA reports and failed browser diagnostics are retained for 7 days. They are not production-signed/notarized installers. See the root [installation and CI guidance](../README.md#install-the-macos-app).
+
+Original project code/documentation uses the root [MIT License](../LICENSE); upstream dependencies and tools retain their own licenses. Generated binaries are not committed to git.
+
 ## Architecture boundary
 
-UI and Mission code depend on the `BoardClient` interface in `src/lib/board/types.ts`. `SimulatorBoardClient` is the first adapter and sends inputs through the same event subscription used by a future connected-Board adapter. Domain/UI code must not execute shell commands.
+UI and Mission code depend on the `BoardClient` interface in `src/lib/board/types.ts`. `SimulatorBoardClient` and `ConnectedBoardClient` deliver inputs through the same event subscription. Domain/UI code must not execute shell commands.
 
 Mission definitions are versioned, schema-validated local JSON in `src/lib/missions/`. The intentionally limited `MissionSession` supports human-confirmed creative stages, named live checks, three progressive hints, independent Crew roles/tracks, remix, reflection, and completion records. Other World Map adventures are explicitly marked as future content; Free Build invitations are available now.
 
