@@ -1,0 +1,111 @@
+name: Prepare signed macOS release
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: macos-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: github.repository == 'josebarrueta/tinkercrew'
+    runs-on: macos-latest
+    environment: release
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Require a matching version tag
+        run: |
+          python3 - <<'PY'
+          import json, os, tomllib
+          version = json.load(open('app/package.json'))['version']
+          assert json.load(open('app/src-tauri/tauri.conf.json'))['version'] == version
+          assert tomllib.load(open('app/src-tauri/Cargo.toml', 'rb'))['package']['version'] == version
+          assert os.environ['GITHUB_REF'] == f'refs/tags/v{version}', 'Run only on an owner-approved matching vVERSION tag'
+          PY
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - name: Install Rust targets and locked frontend dependencies
+        run: |
+          rustup update stable --no-self-update
+          rustup default stable
+          rustup target add aarch64-apple-darwin x86_64-apple-darwin
+          cd app
+          npm ci
+          npx playwright install chromium
+      - name: Software release checks (no signing secrets)
+        run: bash scripts/check-mvp.sh
+      - name: Prepare protected signing inputs
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_API_PRIVATE_KEY: ${{ secrets.APPLE_API_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TC_UPDATE_PUBLIC_KEY: ${{ vars.TC_UPDATE_PUBLIC_KEY }}
+        run: |
+          set -euo pipefail
+          for name in APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_SIGNING_IDENTITY APPLE_API_KEY APPLE_API_ISSUER APPLE_API_PRIVATE_KEY TAURI_SIGNING_PRIVATE_KEY TC_UPDATE_PUBLIC_KEY; do
+            test -n "${!name:-}" || { printf 'Missing release input: %s\n' "$name"; exit 1; }
+          done
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          key = Path(os.environ['RUNNER_TEMP']) / 'tinkercrew-notary.p8'
+          public = Path(os.environ['RUNNER_TEMP']) / 'tinkercrew-update-public.txt'
+          key.write_text(os.environ['APPLE_API_PRIVATE_KEY'])
+          key.chmod(0o600)
+          public.write_text(os.environ['TC_UPDATE_PUBLIC_KEY'])
+          with open(os.environ['GITHUB_ENV'], 'a') as env:
+              env.write(f'APPLE_API_KEY_PATH={key}\nTC_UPDATE_PUBLIC_KEY_FILE={public}\n')
+          PY
+      - name: Build Developer ID signed and notarized Universal app and DMG
+        uses: tauri-apps/tauri-action@1deb371b0cd8bd54025b384f1cd735e725c4060f # v1
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+        with:
+          projectPath: app
+          args: --target universal-apple-darwin --bundles app,dmg --ci
+      - name: Final notarization, stapling, signature checks, and signed metadata
+        env:
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          version="$(node -p 'JSON.parse(require("fs").readFileSync("app/package.json", "utf8")).version')"
+          bundle=app/src-tauri/target/universal-apple-darwin/release/bundle
+          dmgs=("$bundle"/dmg/*.dmg)
+          test "${#dmgs[@]}" = 1
+          bash scripts/finalize-macos-release.sh "$bundle/macos/TinkerCrew.app" "${dmgs[0]}" "$version" darwin-universal
+      - name: Create draft only (owner must complete acceptance before publication)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          out="artifacts/release/$version/darwin-universal"
+          gh release create "$GITHUB_REF_NAME" --verify-tag --draft --title "TinkerCrew $version" \
+            --notes 'Signed/notarized release candidate. Owner must complete clean-Mac, hardware, offline, and family acceptance before publication. Install by dragging TinkerCrew to Applications; no Gatekeeper bypass is supported.' \
+            "$out"/*.dmg "$out"/*.dmg.sig "$out/release-manifest.json" "$out/release-manifest.json.sig"
+      - name: Remove temporary signing material
+        if: always()
+        run: rm -f "$RUNNER_TEMP/tinkercrew-notary.p8" "$RUNNER_TEMP/tinkercrew-update-public.txt"

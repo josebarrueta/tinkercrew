@@ -1,0 +1,83 @@
+name: macOS CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: macos-ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check-and-build:
+    runs-on: macos-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - name: Prepare Rust toolchain
+        run: |
+          rustup update stable --no-self-update
+          rustup default stable
+          rustup component add rustfmt clippy
+      - name: Install locked frontend dependencies and test browser
+        working-directory: app
+        run: |
+          npm ci
+          npx playwright install chromium
+      - name: Run software checks and build native app
+        run: bash scripts/check-mvp.sh --build
+      - name: Bundle native development DMG without rebuilding
+        working-directory: app
+        env:
+          CI: 'true'
+        run: npm exec --offline -- tauri bundle --bundles app,dmg --ci
+      - name: Verify DMG layout and prepare downloadable artifacts
+        run: |
+          set -euo pipefail
+          bundle=app/src-tauri/target/release/bundle
+          dmgs=("$bundle"/dmg/*.dmg)
+          test "${#dmgs[@]}" = 1
+          bash scripts/check-dmg-layout.sh "${dmgs[0]}"
+          mkdir -p artifacts/build
+          ditto -c -k --sequesterRsrc --keepParent "$bundle/macos/TinkerCrew.app" artifacts/build/TinkerCrew.app.zip
+          cp "${dmgs[0]}" artifacts/build/
+          cd artifacts/build
+          shasum -a 256 ./*.dmg TinkerCrew.app.zip > SHA256SUMS.txt
+      - name: Store development downloads (not production installers)
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: tinkercrew-macos-${{ runner.arch }}-${{ github.sha }}
+          path: artifacts/build/
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
+      - name: Store QA reports and failed browser diagnostics
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: qa-macos-${{ runner.arch }}-${{ github.sha }}
+          path: |
+            artifacts/qa/*.md
+            app/test-results/
+          if-no-files-found: warn
+          retention-days: 7
+      - name: Summarize download trust and retention
+        if: always()
+        run: |
+          {
+            printf '### Development build\n\n'
+            printf 'Native runner architecture: `%s`. No signing secrets or notarization are used.\n\n' "$RUNNER_ARCH"
+            printf 'Build artifacts: 14 days. QA reports/failed browser diagnostics: 7 days.\n\n'
+            printf 'These are ad-hoc development artifacts, not approved public installers. Do not bypass Gatekeeper to claim release acceptance.\n'
+          } >> "$GITHUB_STEP_SUMMARY"
