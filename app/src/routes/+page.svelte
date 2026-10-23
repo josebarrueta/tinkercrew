@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import ConnectionPanel from "$lib/board/ConnectionPanel.svelte";
+  import type { ConnectionState } from "$lib/board/connection";
   import MissionPanel from "$lib/missions/MissionPanel.svelte";
   import { world, treasureGuardian } from "$lib/missions/catalog";
   import { SimulatorBoardClient } from "$lib/board/simulator";
@@ -21,31 +22,59 @@
   ];
 
   const simulator = new SimulatorBoardClient();
-  const board: BoardClient = simulator;
+  let board = $state.raw<BoardClient>(simulator);
+  let connectionState = $state<ConnectionState>({ phase: "simulator" });
+  let boardError = $state("");
   let active = $state<Screen>("Home Base");
   let freeBuild = $state(false);
   let snapshot = $state<BoardSnapshot | null>(null);
   let lastEvent = $state<BoardEvent | null>(null);
 
-  async function refresh() {
-    snapshot = await board.getSnapshot();
+  async function refresh(selected = board) {
+    try {
+      const next = await selected.getSnapshot();
+      if (selected === board) {
+        snapshot = next;
+        boardError = "";
+      }
+    } catch {
+      boardError =
+        "Board unavailable. Check power and connections; Parent Settings offers USB/manual recovery.";
+    }
   }
 
-  onMount(() => {
-    void refresh();
-    return board.subscribe((event) => {
+  $effect(() => {
+    const selected = board;
+    let polling = false;
+    void refresh(selected);
+    const unsubscribe = selected.subscribe((event) => {
       lastEvent = event;
-      void refresh();
     });
+    const timer = setInterval(() => {
+      if (polling || active !== "Hardware Lab") return;
+      polling = true;
+      void refresh(selected).finally(() => {
+        polling = false;
+      });
+    }, 250);
+    return () => {
+      clearInterval(timer);
+      unsubscribe();
+    };
   });
 
   async function glow(color: string) {
-    await board.renewControl();
-    await board.command({
-      operation: "pixels.set",
-      arguments: { color, brightness: 0.35 },
-    });
-    await refresh();
+    try {
+      await board.renewControl();
+      await board.command({
+        operation: "pixels.set",
+        arguments: { color, brightness: 0.35 },
+      });
+      await refresh();
+    } catch {
+      boardError =
+        "The light command did not finish. Check Board health and reconnect in Parent Settings.";
+    }
   }
 </script>
 
@@ -75,9 +104,27 @@
       {/each}
     </nav>
     <div class="board-status">
-      <span class="status-dot"></span>
+      <span
+        class="status-dot"
+        style:background={connectionState.phase === "failed"
+          ? "#ffb703"
+          : "#4ade80"}
+      ></span>
       <div>
-        <strong>Simulator ready</strong><small>No Board required</small>
+        <strong
+          >{connectionState.phase === "simulator"
+            ? "Simulator ready"
+            : connectionState.phase === "connected"
+              ? "Board connected"
+              : connectionState.phase === "searching"
+                ? "Reconnecting Board…"
+                : "Board needs attention"}</strong
+        >
+        <small
+          >{connectionState.phase === "simulator"
+            ? "No Board required"
+            : "Parent Settings for recovery"}</small
+        >
       </div>
     </div>
   </aside>
@@ -162,39 +209,50 @@
         {/if}
       </section>
     {:else if active === "Mission"}
-      <MissionPanel {board} simulation={simulator.controls} />
+      {#key board}<MissionPanel
+          {board}
+          simulation={board === simulator ? simulator.controls : undefined}
+        />{/key}
     {:else if active === "Hardware Lab"}
       <section class="panel">
         <span class="eyebrow">BOARD ADAPTER</span>
-        <h2>Simulator Hardware Lab</h2>
+        <h2>
+          {board === simulator ? "Simulator" : "Connected Board"} Hardware Lab
+        </h2>
+        {#if boardError}<p role="alert">{boardError}</p>{/if}
         <p>
           These controls feed the same <code>BoardClient</code> event interface used
           by connected hardware.
         </p>
         <div class="lab-grid">
-          <label
-            >Distance <strong
-              >{snapshot?.observables.distanceMillimeters ?? "—"} mm</strong
-            ><input
-              type="range"
-              min="20"
-              max="1000"
-              value={snapshot?.observables.distanceMillimeters ?? 600}
-              oninput={(event) =>
-                simulator.controls.setDistance(
-                  Number(event.currentTarget.value),
-                )}
-            /></label
-          >
-          <div>
-            <strong>Buttons</strong>
-            <div class="button-row">
-              {#each [0, 1, 2] as button}<button
-                  onclick={() => simulator.controls.pressButton(button)}
-                  >{String.fromCharCode(65 + button)}</button
-                >{/each}
+          {#if board === simulator}
+            <label
+              >Distance <strong
+                >{snapshot?.observables.distanceMillimeters ?? "—"} mm</strong
+              ><input
+                type="range"
+                min="20"
+                max="1000"
+                value={snapshot?.observables.distanceMillimeters ?? 600}
+                oninput={(event) =>
+                  simulator.controls.setDistance(
+                    Number(event.currentTarget.value),
+                  )}
+              /></label
+            >
+            <div>
+              <strong>Buttons</strong>
+              <div class="button-row">
+                {#each [0, 1, 2] as button}<button
+                    onclick={() => simulator.controls.pressButton(button)}
+                    >{String.fromCharCode(65 + button)}</button
+                  >{/each}
+              </div>
             </div>
-          </div>
+          {:else}<p>
+              Distance: {snapshot?.observables.distanceMillimeters ?? "—"} mm. Use
+              the physical Board buttons.
+            </p>{/if}
           <div>
             <strong>Pixels</strong>
             <div class="button-row">
@@ -210,21 +268,19 @@
         </div>
         {#if lastEvent}<pre>{JSON.stringify(lastEvent, null, 2)}</pre>{/if}
       </section>
-    {:else}
-      <section class="panel">
-        <span class="eyebrow">GROWN-UPS</span>
-        <h2>Parent Settings</h2>
-        <p>
-          Board setup, recovery, privacy, and updates will live here—separate
-          from the Mission experience.
-        </p>
-        <ul>
-          <li>Simulator mode is active and requires no internet.</li>
-          <li>No credentials are stored by this scaffold.</li>
-          <li>UNO Q system updates will always require parent approval.</li>
-        </ul>
-      </section>
     {/if}
+    <ConnectionPanel
+      visible={active === "Parent Settings"}
+      onConnected={(client) => {
+        board = client;
+      }}
+      onSimulator={() => {
+        board = simulator;
+      }}
+      onState={(state) => {
+        connectionState = state;
+      }}
+    />
   </main>
 </div>
 
@@ -591,10 +647,6 @@
     padding: 2px 5px;
     border-radius: 4px;
     background: #e8e3d8;
-  }
-  li {
-    margin: 10px 0;
-    color: #60716b;
   }
   @media (max-width: 1050px) {
     main {

@@ -1,24 +1,31 @@
 from __future__ import annotations
 
+import time
+
 
 class MemoryHardware:
     """Deterministic adapter used by tests and the explicit simulator mode."""
 
-    def __init__(self):
+    def __init__(self, clock=time.monotonic):
         self.calls = []
+        self._clock = clock
+        self._deadlines = {}
         self._state = {"pixels": "off", "buzzer": "off", "matrix": "clear"}
 
     def set_pixels(self, color: str, brightness: float, duration_ms: int) -> None:
         self.calls.append(("pixels", color, brightness, duration_ms))
         self._state["pixels"] = {"color": color, "brightness": brightness, "duration_ms": duration_ms}
+        self._deadlines["pixels"] = self._clock() + duration_ms / 1000
 
     def play_buzzer(self, frequency_hz: int, duration_ms: int, volume: float) -> None:
         self.calls.append(("buzzer", frequency_hz, duration_ms, volume))
         self._state["buzzer"] = {"frequency_hz": frequency_hz, "duration_ms": duration_ms, "volume": volume}
+        self._deadlines["buzzer"] = self._clock() + duration_ms / 1000
 
     def draw_matrix(self, rows: list[str], duration_ms: int) -> None:
         self.calls.append(("matrix", tuple(rows), duration_ms))
         self._state["matrix"] = {"rows": rows, "duration_ms": duration_ms}
+        self._deadlines["matrix"] = self._clock() + duration_ms / 1000
 
     def renew_control_lease(self, lease_ms: int) -> None:
         self.calls.append(("lease", lease_ms))
@@ -26,11 +33,16 @@ class MemoryHardware:
     def safe_state(self) -> None:
         self.calls.append(("safe_state",))
         self._state = {"pixels": "off", "buzzer": "off", "matrix": "clear"}
+        self._deadlines.clear()
 
     def self_test(self) -> None:
         self.calls.append(("self_test",))
 
     def state(self) -> dict:
+        for capability, deadline in list(self._deadlines.items()):
+            if self._clock() >= deadline:
+                self._state[capability] = "clear" if capability == "matrix" else "off"
+                del self._deadlines[capability]
         return self._state.copy()
 
 

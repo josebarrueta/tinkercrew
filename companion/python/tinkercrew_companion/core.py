@@ -28,8 +28,9 @@ class Observable:
 class Companion:
     """Thread-safe mission-independent Board state and bounded command service."""
 
-    def __init__(self, hardware, clock: Callable[[], float] = time.monotonic, board_version: str = "unknown"):
+    def __init__(self, hardware, clock: Callable[[], float] = time.monotonic, board_version: str = "unknown", board_id: str = "unprovisioned"):
         self._hardware = hardware
+        self._board_id = board_id
         self._board_version = board_version
         self._clock = clock
         self._started_at = clock()
@@ -124,7 +125,7 @@ class Companion:
         with self._lock:
             return {
                 "protocol": PROTOCOL_VERSION,
-                "board": {"model": "arduino-uno-q", "version": self._board_version},
+                "board": {"board_id": self._board_id, "model": "arduino-uno-q", "version": self._board_version},
                 "versions": {
                     "companion": COMPANION_VERSION,
                     "firmware": FIRMWARE_VERSION,
@@ -151,7 +152,7 @@ class Companion:
             return {
                 "health": self.hello()["health"],
                 "observables": {
-                    name: {"value": item.value, "health": self._health(name)}
+                    name: {"value": item.value, "health": self._health(name), "age_ms": None if item.observed_at is None else max(0, (self._clock() - item.observed_at) * 1000)}
                     for name, item in self._observables.items()
                 },
                 "outputs": self._hardware.state(),

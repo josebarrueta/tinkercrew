@@ -41,7 +41,7 @@ Mission definitions are versioned, schema-validated local JSON in `src/lib/missi
 
 The native app stores progress in `crew-progress.sqlite` inside its macOS application-data directory. Saves are atomic and revision-checked so a stale window cannot overwrite newer progress. Mission/version validation refuses incompatible or corrupt saves rather than silently resetting them. Browser-only development uses localStorage for **non-secret progress only**, separate from native SQLite saves. Live hardware evidence is never restored as if newly observed after a restart.
 
-Credentials will use macOS Keychain and must never be stored in SQLite or frontend storage. No credentials are collected by the Mission engine.
+Connected Board records and credentials use macOS Keychain, never SQLite or frontend storage. The Mission engine never collects credentials. Parent Settings provides an explicit USB-verified provisioned-record import for development; full TBP Pairing remains integration work. See [`docs/architecture/board-connections.md`](../docs/architecture/board-connections.md) for transport, trust, diagnostics, and pending physical acceptance.
 
 ## Treasure Guardian
 
@@ -49,7 +49,7 @@ Open **Mission** to play the ten-stage adventure with three named Crew members a
 
 Inventor controls adjust thresholds, warning color, and alarm duration. The Hacker panel exposes the bounded six-field rule JSON and a rolling input event log; it never executes arbitrary code. A tested change from the default rules plus a description and reflection are required to complete the Mission. Saved configuration resumes on restart, but the guardian always restarts disarmed and live checks must collect new evidence.
 
-`GuardianRuntime` accepts only `BoardClient`, so the same Mission behavior runs over simulator and connected adapters. The shell currently selects the simulator; actual Board selection/transport arrives in #7. Physical connected-mode acceptance remains pending until tested on UNO Q.
+`GuardianRuntime` accepts only `BoardClient`, so the same Mission behavior runs over simulator and connected adapters. Select a provisioned Board in Parent Settings for connected play; otherwise the shell uses the simulator. Physical connected-mode acceptance remains pending until tested on UNO Q.
 
 The runtime rejects stale/implausible distance readings, clears outputs on failure or exit, and requires explicit rearming after recovery. The simulator models the 1.5-second control lease and bounded buzzer duration; use **Freeze distance readings** to explore recovery. The Companion's Linux/STM32 watchdogs are the physical safety authority, not frontend timers.
 

@@ -18,6 +18,20 @@ class CompanionTests(unittest.TestCase):
         self.hardware = MemoryHardware()
         self.companion = Companion(self.hardware, clock=self.clock)
 
+    def test_output_state_expires_when_a_bounded_command_ends(self):
+        hardware = MemoryHardware(clock=self.clock)
+        hardware.play_buzzer(880, 250, 0.25)
+        self.assertIsInstance(hardware.state()["buzzer"], dict)
+        self.clock.now += 0.3
+        self.assertEqual(hardware.state()["buzzer"], "off")
+
+    def test_reports_stable_board_identity_and_input_age_for_reconnection(self):
+        companion = Companion(self.hardware, clock=self.clock, board_id="board-12345678")
+        companion.record_distance(428)
+        self.clock.now += 0.8
+        self.assertEqual(companion.hello()["board"]["board_id"], "board-12345678")
+        self.assertAlmostEqual(companion.state()["observables"]["distance"]["age_ms"], 800)
+
     def test_reports_versions_capabilities_and_distinct_input_health(self):
         self.companion.record_distance(428)
         self.companion.record_buttons([True, False, False])

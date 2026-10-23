@@ -22,11 +22,16 @@ Before starting, provision owner-readable `data/companion.json` on the Board (do
 ```json
 {
   "api_token": "at-least-32-random-characters",
+  "board_id": "stable-random-uuid-created-once-during-provisioning",
   "board_version": "uno-q-hardware-revision-from-setup",
   "tls_cert": "data/board.crt",
   "tls_key": "data/board.key"
 }
 ```
+
+For native Mac connections, provision a unique stable `board_id` (`TC_BOARD_ID`); do not regenerate it on each startup. The Mac verifies it after TLS/authentication. The certificate must include the fixed hostname used as `tlsName` in its DNS SAN. See [`docs/architecture/board-connections.md`](../docs/architecture/board-connections.md) for the current USB-verified record/Keychain development bridge and remaining full TBP integration.
+
+Optional Bonjour announcements use `python/requirements.txt` (`zeroconf`) and `_tinkercrew._tcp.local.`. Discovery failure never blocks USB or manual IP. `TC_ADVERTISE_IPV4` can choose a local IPv4 address when automatic interface selection is unsuitable; `advertise_host` / `TC_ADVERTISE_HOST` can supply the `.local` service hostname. An unprovisioned simulator does not advertise a fake Board identity.
 
 Optional keys are `board_version` (defaults to the explicit value `unknown`), `bind` (default `0.0.0.0`), and `port` (default `7443`). Corresponding `TC_*` variables override the file for managed deployments.
 
@@ -37,7 +42,7 @@ The service refuses network startup without TLS. For local tests only, use loopb
 All routes except `GET /v1/health/public` require `Authorization: Bearer …`.
 
 - `GET /v1/hello` — versions, Board health, capabilities, limits.
-- `GET /v1/state` — latest input health/value and output state.
+- `GET /v1/state` — latest input health/value/sample age and bounded requested output state (expired commands are reported off; this is not a physical light/sound measurement).
 - `GET /v1/events?after=<sequence>` — ordered button edges and distance samples.
 - `POST /v1/control-lease` — renew the maximum two-second control lease.
 - `POST /v1/commands` — `pixels.set`, `buzzer.play`, `matrix.draw`, or `outputs.clear`.

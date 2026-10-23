@@ -31,12 +31,12 @@ def setting(config: dict, environment_name: str, key: str, default=None):
     return os.environ.get(environment_name, config.get(key, default))
 
 
-def build_companion(board_version: str = "unknown") -> Companion:
+def build_companion(board_version: str = "unknown", board_id: str = "unprovisioned") -> Companion:
     if os.environ.get("TC_SIMULATE_HARDWARE") == "1":
-        return Companion(MemoryHardware(), board_version=board_version)
+        return Companion(MemoryHardware(), board_version=board_version, board_id=board_id)
     from arduino.app_utils.bridge import Bridge
 
-    companion = Companion(BridgeHardware(Bridge), board_version=board_version)
+    companion = Companion(BridgeHardware(Bridge), board_version=board_version, board_id=board_id)
     Bridge.provide("tc_buttons", lambda a, b, c: companion.record_buttons([bool(a), bool(b), bool(c)]))
     Bridge.provide("tc_distance", lambda millimeters: companion.record_distance(int(millimeters)))
     Bridge.provide("tc_disconnected", lambda capability: companion.mark_disconnected(str(capability)))
@@ -141,7 +141,8 @@ def run() -> None:
         raise SystemExit("api_token/TC_API_TOKEN must contain at least 32 characters")
     host = setting(config, "TC_BIND", "bind", "0.0.0.0")
     port = int(setting(config, "TC_PORT", "port", 7443))
-    companion = build_companion(str(setting(config, "TC_BOARD_VERSION", "board_version", "unknown")))
+    board_id = str(setting(config, "TC_BOARD_ID", "board_id", "unprovisioned"))
+    companion = build_companion(str(setting(config, "TC_BOARD_VERSION", "board_version", "unknown")), board_id=board_id)
     server = ThreadingHTTPServer((host, port), make_handler(companion, token))
 
     certificate = setting(config, "TC_TLS_CERT", "tls_cert")
@@ -160,9 +161,13 @@ def run() -> None:
             companion.check_watchdog()
             time.sleep(0.05)
 
+    from .discovery import advertise
+    advertisement = advertise(board_id, port, str(setting(config, "TC_ADVERTISE_HOST", "advertise_host", "")))
     threading.Thread(target=watchdog, daemon=True).start()
     try:
         server.serve_forever(poll_interval=0.1)
     finally:
         companion.enter_safe_state("server_stopped")
         server.server_close()
+        if advertisement is not None:
+            advertisement.close()
