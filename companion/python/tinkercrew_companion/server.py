@@ -7,6 +7,7 @@ import ssl
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from collections import deque
 from urllib.parse import parse_qs, urlparse
 
 from .core import CommandError, Companion
@@ -45,6 +46,9 @@ def build_companion(board_version: str = "unknown", board_id: str = "unprovision
 
 
 def make_handler(companion: Companion, token: str):
+    command_times = deque()
+    rate_lock = threading.Lock()
+
     class Handler(BaseHTTPRequestHandler):
         server_version = "TinkerCrewCompanion/0.1"
 
@@ -71,15 +75,26 @@ def make_handler(companion: Companion, token: str):
             self._send(401, {"status": "error", "error": {"code": "authentication_required"}})
             return False
 
+        def setup(self):
+            super().setup()
+            self.connection.settimeout(2.0)
+
         def _json_body(self) -> dict:
+            if self.headers.get("Transfer-Encoding") or len(self.headers.get_all("Content-Length", [])) > 1:
+                raise CommandError("invalid_message: unsupported or ambiguous body framing")
             try:
                 length = int(self.headers.get("Content-Length", "0"))
             except ValueError as error:
                 raise CommandError("invalid_message: invalid content length") from error
+            if length < 0:
+                raise CommandError("invalid_message: content length must be nonnegative")
             if length > MAX_BODY_BYTES:
                 raise CommandError("message_too_large: maximum is 65536 bytes")
             try:
-                body = json.loads(self.rfile.read(length) or b"{}")
+                raw = self.rfile.read(length)
+                if len(raw) != length:
+                    raise CommandError("invalid_message: incomplete request body")
+                body = json.loads(raw or b"{}")
             except (json.JSONDecodeError, UnicodeDecodeError) as error:
                 raise CommandError("invalid_message: body must be JSON") from error
             if not isinstance(body, dict):
@@ -109,6 +124,14 @@ def make_handler(companion: Companion, token: str):
         def do_POST(self):
             if not self._require_auth():
                 return
+            with rate_lock:
+                now = time.monotonic()
+                while command_times and command_times[0] <= now - 1.0:
+                    command_times.popleft()
+                if len(command_times) >= 20:
+                    self._send(429, {"status": "error", "error": {"code": "rate_limited"}})
+                    return
+                command_times.append(now)
             try:
                 body = self._json_body()
                 if self.path == "/v1/commands":

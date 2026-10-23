@@ -7,6 +7,7 @@
   import { MissionSession, type MissionProgress } from "./session";
   import { ProgressRepository } from "./storage";
   import { GuardianRuntime } from "./guardian";
+  import HardwareSafety from "../board/HardwareSafety.svelte";
 
   let {
     board,
@@ -214,6 +215,7 @@
         <p>Stage {progress.stageIndex + 1} of {mission.stages.length}</p>
         <h3>{stage.title}</h3>
         <p>{stage.goal}</p>
+        {#if stage.id === "build"}<HardwareSafety />{/if}
         <p>
           Required: {mission.components.required.join(", ")}. Optional: {mission.components.optional.join(
             ", ",

@@ -9,6 +9,7 @@
   } from "./connection";
   import { ConnectedBoardClient } from "./connected";
   import type { BoardClient } from "./types";
+  import HardwareSafety from "./HardwareSafety.svelte";
 
   let {
     visible,
@@ -172,6 +173,7 @@
 
 <section hidden={!visible} class="connections">
   <h2>Parent Settings</h2>
+  <HardwareSafety />
   <p>
     Simulator mode needs no account or internet. Connected play uses a
     provisioned Companion, TLS verification, and a Board-specific credential
