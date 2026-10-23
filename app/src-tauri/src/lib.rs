@@ -1,6 +1,7 @@
 mod connection;
 mod discovery;
 mod progress;
+mod setup;
 
 use tauri::Manager;
 
@@ -14,6 +15,7 @@ pub fn run() {
                 .map_err(std::io::Error::other)?;
             app.manage(store);
             app.manage(connection::Connections::new(directory));
+            app.manage(setup::SetupStore::default());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -24,7 +26,11 @@ pub fn run() {
             connection::probe_board,
             connection::board_request,
             connection::disconnect_board,
-            discovery::board_candidates
+            discovery::board_candidates,
+            setup::load_setup,
+            setup::save_setup,
+            setup::inspect_setup_usb,
+            setup::open_official_setup
         ])
         .run(tauri::generate_context!())
         .expect("error while running TinkerCrew");

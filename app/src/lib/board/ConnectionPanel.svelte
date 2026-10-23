@@ -10,6 +10,7 @@
   import { ConnectedBoardClient } from "./connected";
   import type { BoardClient } from "./types";
   import HardwareSafety from "./HardwareSafety.svelte";
+  import SetupWizard from "../setup/SetupWizard.svelte";
 
   let {
     visible,
@@ -26,6 +27,7 @@
   let selected = $state("");
   let record = $state("");
   let usbConfirmed = $state(false);
+  let setupOpen = $state(false);
   let localConsent = $state(false);
   let manualHost = $state("");
   let manualPort = $state(7443);
@@ -174,6 +176,14 @@
 <section hidden={!visible} class="connections">
   <h2>Parent Settings</h2>
   <HardwareSafety />
+  <details bind:open={setupOpen}>
+    <summary>Set up a UNO Q — resumable official-tool handoff guide</summary>
+    {#if setupOpen}<SetupWizard
+        onUseProvisioned={() => {
+          setupOpen = false;
+        }}
+      />{/if}
+  </details>
   <p>
     Simulator mode needs no account or internet. Connected play uses a
     provisioned Companion, TLS verification, and a Board-specific credential

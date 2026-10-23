@@ -43,6 +43,10 @@ The native app stores progress in `crew-progress.sqlite` inside its macOS applic
 
 Connected Board records and credentials use macOS Keychain, never SQLite or frontend storage. The Mission engine never collects credentials. Parent Settings provides an explicit USB-verified provisioned-record import for development; full TBP Pairing remains integration work. See [`docs/architecture/board-connections.md`](../docs/architecture/board-connections.md) for transport, trust, diagnostics, and pending physical acceptance.
 
+## Parent setup guide
+
+Parent Settings includes a resumable USB identity/official-tool handoff guide, with checkpoint records in Keychain and explicit observed versus human confirmation. It stops honestly at unsupported full Pairing/deployment instead of allowing fake completion. Already provisioned connections remain separate. See [`docs/architecture/setup-checkpoints.md`](../docs/architecture/setup-checkpoints.md) for implemented behavior and missing integrations; factory-first provisioning is not complete.
+
 ## Treasure Guardian
 
 Open **Mission** to play the ten-stage adventure with three named Crew members and independently selectable tracks. Rotate roles any time. Use the live simulator controls to move through sleeping/curious/alert ranges and A/B/C to arm, silence, and disarm. The self-test requires distance movement, all three buttons, and human confirmation of the test light/tone. The fresh behavior challenge cannot be passed using evidence from previous stages.

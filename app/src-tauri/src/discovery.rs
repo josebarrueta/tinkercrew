@@ -25,7 +25,7 @@ fn adb_path() -> Result<PathBuf> {
     paths.into_iter().find(|path| path.is_absolute() && path.is_file()).ok_or_else(|| ConnectionError::new("adb_unavailable", "Install official Android Platform-Tools or set TC_ADB_PATH to its absolute adb path, then restart TinkerCrew."))
 }
 
-async fn adb(args: &[&str]) -> Result<String> {
+pub(crate) async fn adb(args: &[&str]) -> Result<String> {
     let output = tokio::time::timeout(
         Duration::from_secs(2),
         Command::new(adb_path()?)
