@@ -27,14 +27,14 @@ export const setupSteps = [
     title: "Choose a safe Board name",
     kind: "official",
     instruction:
-      "Use official Arduino App Lab to choose a name beginning with a letter or digit and containing only letters, digits, or hyphens. TinkerCrew does not run compatibility-sensitive hostname helpers yet.",
+      "Use official Arduino App Lab to choose a name beginning with a letter or digit and containing only letters, digits, or hyphens. Tinkeroo does not run compatibility-sensitive hostname helpers yet.",
   },
   {
     id: "credentials",
     title: "Create or confirm Linux credentials",
     kind: "official",
     instruction:
-      "Create/confirm credentials only in official Arduino setup. TinkerCrew does not ask for, store, log, or pass your Linux password here.",
+      "Create/confirm credentials only in official Arduino setup. Tinkeroo does not ask for, store, log, or pass your Linux password here.",
   },
   {
     id: "wifi",
@@ -197,7 +197,7 @@ export class SetupSession {
       );
     if (this.step.kind !== "usb" && !this.confirmed)
       throw new Error(
-        "Confirm this human/official-tool step explicitly first. It is not automatically verified by TinkerCrew.",
+        "Confirm this human/official-tool step explicitly first. It is not automatically verified by Tinkeroo.",
       );
     this.progress.checkpoints.push({
       stageId: this.step.id,

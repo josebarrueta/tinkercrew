@@ -149,52 +149,60 @@
   <p role="status">{status}</p>
   {#if error}<p class="error" role="alert">{error}</p>{/if}
   {#if progress && stage}
-    <fieldset disabled={busy}>
-      <legend>Your shared Crew</legend>
-      <div class="crew-grid">
-        {#each progress.crew as member, index}
-          <div>
-            <label
-              >Maker {index + 1}
-              <input
-                aria-label={`Maker ${index + 1} name`}
-                maxlength="60"
-                value={member.name}
-                onchange={(event) =>
-                  act(() =>
-                    updateMember(
-                      index,
-                      event.currentTarget.value,
-                      member.track,
-                    ),
-                  )}
-              />
-            </label>
-            <strong>{member.role}</strong>
-            <label
-              >Challenge track
-              <select
-                value={member.track}
-                onchange={(event) =>
-                  act(() =>
-                    updateMember(
-                      index,
-                      member.name,
-                      event.currentTarget.value as Track,
-                    ),
-                  )}
-              >
-                {#each tracks as track}<option>{track}</option>{/each}
-              </select>
-            </label>
-            <p>{mission.tracks[member.track]}</p>
-          </div>
-        {/each}
-      </div>
-      <button onclick={() => act(() => session.rotateRoles())}
-        >Rotate roles ↻</button
-      >
-    </fieldset>
+    <progress
+      aria-label="Mission progress"
+      max={mission.stages.length}
+      value={progress.completion ? mission.stages.length : progress.stageIndex}
+    ></progress>
+    <details class="crew-details" open={stage.id === "roles"}>
+      <summary>Crew roles & challenge tracks</summary>
+      <fieldset disabled={busy}>
+        <legend>Your shared Crew</legend>
+        <div class="crew-grid">
+          {#each progress.crew as member, index}
+            <div>
+              <label
+                >Maker {index + 1}
+                <input
+                  aria-label={`Maker ${index + 1} name`}
+                  maxlength="60"
+                  value={member.name}
+                  onchange={(event) =>
+                    act(() =>
+                      updateMember(
+                        index,
+                        event.currentTarget.value,
+                        member.track,
+                      ),
+                    )}
+                />
+              </label>
+              <strong>{member.role}</strong>
+              <label
+                >Challenge track
+                <select
+                  value={member.track}
+                  onchange={(event) =>
+                    act(() =>
+                      updateMember(
+                        index,
+                        member.name,
+                        event.currentTarget.value as Track,
+                      ),
+                    )}
+                >
+                  {#each tracks as track}<option>{track}</option>{/each}
+                </select>
+              </label>
+              <p>{mission.tracks[member.track]}</p>
+            </div>
+          {/each}
+        </div>
+        <button onclick={() => act(() => session.rotateRoles())}
+          >Rotate roles ↻</button
+        >
+      </fieldset>
+    </details>
     {#if progress.completion}
       <article>
         <h3>Mission complete — your invention, your rules!</h3>
@@ -457,20 +465,21 @@
     max-width: 1100px;
   }
   .eyebrow {
-    color: #8c531b;
+    color: var(--primary);
     font-weight: 800;
     letter-spacing: 0.1em;
   }
   h2 {
-    font-family: Georgia, serif;
-    font-size: 42px;
+    font-size: 38px;
+    line-height: 1.2;
+    letter-spacing: -1px;
     margin: 12px 0;
   }
   h3 {
     font-size: 24px;
   }
   fieldset {
-    border: 1px solid #d9d2c3;
+    border: 1px solid var(--border);
     border-radius: 14px;
     padding: 18px;
     margin: 16px 0;
@@ -496,7 +505,7 @@
     padding: 10px;
     margin: 6px 0 12px;
     font: inherit;
-    border: 1px solid #aaa;
+    border: 1px solid var(--border);
     border-radius: 6px;
   }
   .check {
@@ -514,26 +523,33 @@
   button {
     padding: 10px 15px;
     margin: 6px 8px 6px 0;
-    border: 1px solid #b5b7a5;
-    border-radius: 8px;
-    background: #fffdf5;
-    color: #18302b;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--surface);
+    color: var(--primary);
     font: inherit;
     cursor: pointer;
   }
   .primary {
-    background: #173b35;
+    background: var(--primary);
     color: white;
+    font-weight: 800;
+  }
+  .primary:hover {
+    background: var(--primary-hover);
   }
   article {
     padding: 24px;
-    background: #fffcf5;
-    border-radius: 16px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    box-shadow: var(--shadow);
   }
   .error {
-    color: #9d2121;
+    color: var(--danger);
     padding: 15px;
-    background: #ffe6df;
+    background: var(--danger-bg);
+    border-radius: 10px;
   }
   .outputs {
     display: flex;
@@ -545,7 +561,7 @@
     display: inline-block;
     width: 36px;
     height: 36px;
-    border: 2px solid #173b35;
+    border: 2px solid var(--ink);
     border-radius: 50%;
   }
   details {
@@ -559,8 +575,9 @@
     overflow: auto;
     max-height: 220px;
     font-size: 12px;
-    background: #173b35;
-    color: white;
+    background: var(--code-bg);
+    color: var(--code-ink);
+    border-radius: 10px;
     padding: 15px;
   }
 </style>

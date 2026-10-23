@@ -283,11 +283,11 @@
     max-width: 1000px;
   }
   h2 {
-    font-family: Georgia, serif;
+    letter-spacing: -1px;
     font-size: 42px;
   }
   fieldset {
-    border: 1px solid #d9d2c3;
+    border: 1px solid var(--border);
     border-radius: 12px;
     margin: 20px 0;
     padding: 20px;
@@ -304,7 +304,7 @@
     font: inherit;
     margin-top: 7px;
     padding: 10px;
-    border: 1px solid #aaa;
+    border: 1px solid var(--border);
     border-radius: 6px;
   }
   textarea {
@@ -322,9 +322,9 @@
     font: inherit;
     padding: 12px;
     margin: 6px 10px 6px 0;
-    background: #173b35;
-    color: white;
-    border: 0;
+    background: var(--surface);
+    color: var(--primary);
+    border: 1px solid var(--border);
     border-radius: 8px;
     cursor: pointer;
   }

@@ -1,10 +1,10 @@
-# TinkerCrew
+# Tinkeroo
 
 **Build. Code. Imagine. Together.**
 
 A local-first cooperative maker game for one family Crew: build LEGO creations, give them behavior with an Arduino UNO Q, and explore Missions together. The macOS app uses Tauri 2, Rust, and Svelte/TypeScript.
 
-> **Development preview:** the current implementation is on [`integration/mvp-foundation`](https://github.com/josebarrueta/tinkercrew/tree/integration/mvp-foundation), pending merge to `main`. Simulator play is available without hardware. Physical UNO Q/family acceptance, full first-time Pairing/deployment, and public release signing/notarization are not complete. No production installer has been validated yet.
+> **Development preview:** the current implementation is on `main`. Simulator play is available without hardware. Physical UNO Q/family acceptance, full first-time Pairing/deployment, and public release signing/notarization are not complete. No production installer has been validated yet.
 
 ## Try it without installing anything
 
@@ -16,13 +16,13 @@ For family feedback, use the [play-test guide](prototypes/treasure-guardian-play
 
 ### Public releases — not available/validated yet
 
-When an owner-approved signed/notarized release is published, download the appropriate `.dmg` from [GitHub Releases](https://github.com/josebarrueta/tinkercrew/releases), open it, and drag **TinkerCrew** to **Applications**. Public release preparation targets Universal 2 (Apple silicon and Intel), macOS 12+; actual Intel/clean-Mac acceptance remains pending.
+When an owner-approved signed/notarized release is published, download the appropriate `.dmg` from [GitHub Releases](https://github.com/josebarrueta/tinkercrew/releases), open it, and drag **Tinkeroo** to **Applications**. Public release preparation targets Universal 2 (Apple silicon and Intel), macOS 12+; actual Intel/clean-Mac acceptance remains pending.
 
 Do not disable Gatekeeper or remove quarantine to declare an installation successful. Current development/CI artifacts are **ad-hoc signed, not Developer-ID-signed or notarized**, and may be blocked when downloaded. They are for developer testing, not a production installer. Build locally using the instructions below if you need to try the native app now.
 
 ### CI development downloads
 
-After a successful run of [macOS CI](https://github.com/josebarrueta/tinkercrew/actions/workflows/ci-macos.yml), open the run's **Artifacts** section and download `tinkercrew-macos-ARCH-COMMIT` (GitHub sign-in may be required). Extract the Actions archive; it contains a DMG, an app ZIP that preserves bundle metadata/symlinks, and `SHA256SUMS.txt`.
+After a successful run of [macOS CI](https://github.com/josebarrueta/tinkercrew/actions/workflows/ci-macos.yml), open the run's **Artifacts** section and download `tinkeroo-macos-ARCH-COMMIT` (GitHub sign-in may be required). Extract the Actions archive; it contains a DMG, an app ZIP that preserves bundle metadata/symlinks, and `SHA256SUMS.txt`.
 
 CI builds the runner's **native architecture**, identified in the artifact name and DMG filename—not a validated Universal release. Check the workflow/ref/commit before downloading; PR artifacts are untrusted development outputs. Hashes detect corruption, not publisher authenticity. Production signature verification is a separate release gate.
 
@@ -40,7 +40,7 @@ Build downloads expire after **14 days**; QA reports and failed browser-test dia
 - Git. Internet is needed to obtain dependencies/browser binaries initially, not for installed simulator gameplay.
 
 ```sh
-git clone --branch integration/mvp-foundation https://github.com/josebarrueta/tinkercrew.git
+git clone https://github.com/josebarrueta/tinkercrew.git
 cd tinkercrew/app
 npm ci
 npm run dev:app
@@ -59,8 +59,8 @@ npm run build:dmg  # .app plus headless drag-to-Applications DMG
 
 Outputs:
 
-- `app/src-tauri/target/release/bundle/macos/TinkerCrew.app`
-- `app/src-tauri/target/release/bundle/dmg/TinkerCrew_VERSION_ARCH.dmg`
+- `app/src-tauri/target/release/bundle/macos/Tinkeroo.app`
+- `app/src-tauri/target/release/bundle/dmg/Tinkeroo_VERSION_ARCH.dmg`
 
 Open your local `.app`, or copy it to Applications for local testing. “Release mode” means an optimized build, **not** a production-signed/notarized release. The DMG script sets `CI=true` to avoid interactive Finder layout automation while preserving the Applications link.
 
@@ -87,12 +87,20 @@ Physical Board, actual ADB/Bonjour/VPN, electrical safe-off timing, family play-
 
 Simulator mode is the easiest first step. For hardware play:
 
-1. Complete supported first-time configuration in official Arduino App Lab; TinkerCrew's all-in-one factory provisioning is not complete.
+1. Complete supported first-time configuration in official Arduino App Lab; Tinkeroo's all-in-one factory provisioning is not complete.
 2. Install/start the reusable [UNO Q Companion](companion/README.md) on the Board and provision its TLS identity and credential outside source control.
 3. Follow the [USB-verified connection guide](docs/architecture/board-connections.md) and select the exact Board in Parent Settings. The current provisioned-record import is a development bridge, not full TBP Pairing.
-4. For USB fallback, separately install official [Android Platform-Tools](https://developer.android.com/tools/releases/platform-tools) (Arduino documents `brew install android-platform-tools`). TinkerCrew does **not** bundle Google's binaries or accept their license for you. `TC_ADB_PATH` may point to an absolute `adb` executable.
+4. For USB fallback, separately install official [Android Platform-Tools](https://developer.android.com/tools/releases/platform-tools) (Arduino documents `brew install android-platform-tools`). Tinkeroo does **not** bundle Google's binaries or accept their license for you. `TC_ADB_PATH` may point to an absolute `adb` executable.
 
 UNO Q maker GPIO is **3.3 V**; never apply 5 V to analog inputs. Disconnect power before changing wiring. Follow the in-app safety panel and pending [physical acceptance plan](docs/qa/recovery-safety.md).
+
+## Tinkeroo look and feel
+
+![Tinkeroo Home Base with a calm lilac workspace and one clear Mission action](docs/design/tinkeroo-home.png)
+
+Tinkeroo shares the playful “roo” family naming theme with Rallyroo. Its calm lilac/white workspace uses purple for the next action, teal for supportive cues, and small sunshine/coral accents. Hardware green/yellow/red signals and amber safety warnings keep their meaning. No flashing, autoplay, confetti, or external font downloads compete with building. See the [brand and accessibility guide](docs/design/tinkeroo-theme.md).
+
+The GitHub repository remains `josebarrueta/tinkercrew`. Existing bundle identity, Keychain entries, saved progress, Board discovery names, and protocol identifiers intentionally retain their legacy names so this visual rename does not reset a Crew or break a paired Board.
 
 ## Project guides
 
@@ -104,6 +112,6 @@ UNO Q maker GPIO is **3.3 V**; never apply 5 V to analog inputs. Disconnect powe
 
 ## License
 
-Original TinkerCrew code and documentation are licensed under the **[MIT License](LICENSE)**, consistent with the existing app package metadata. Third-party dependencies, libraries, tools, and assets retain their own licenses; this is not a claim that every distributed component is MIT-licensed. Preserve required upstream notices and complete the dependency/notice audit before public binary distribution.
+Original Tinkeroo code and documentation are licensed under the **[MIT License](LICENSE)**, consistent with the existing app package metadata. Third-party dependencies, libraries, tools, and assets retain their own licenses; this is not a claim that every distributed component is MIT-licensed. Preserve required upstream notices and complete the dependency/notice audit before public binary distribution.
 
 Google's Platform-Tools are separately installed, not redistributed; see the [ADB licensing assessment](docs/research/adb-distribution.md). LEGO, Arduino, Android, and other third-party names/trademarks are not licensed by this repository's MIT license; no affiliation or endorsement is implied.

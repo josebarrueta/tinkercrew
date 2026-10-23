@@ -22,7 +22,7 @@ fn adb_path() -> Result<PathBuf> {
         PathBuf::from("/opt/homebrew/bin/adb"),
         PathBuf::from("/usr/local/bin/adb"),
     ]);
-    paths.into_iter().find(|path| path.is_absolute() && path.is_file()).ok_or_else(|| ConnectionError::new("adb_unavailable", "Install official Android Platform-Tools or set TC_ADB_PATH to its absolute adb path, then restart TinkerCrew."))
+    paths.into_iter().find(|path| path.is_absolute() && path.is_file()).ok_or_else(|| ConnectionError::new("adb_unavailable", "Install official Android Platform-Tools or set TC_ADB_PATH to its absolute adb path, then restart Tinkeroo."))
 }
 
 pub(crate) async fn adb(args: &[&str]) -> Result<String> {

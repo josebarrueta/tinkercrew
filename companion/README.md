@@ -1,6 +1,6 @@
-# TinkerCrew UNO Q Companion
+# Tinkeroo UNO Q Companion
 
-This directory is one reusable Arduino App for every TinkerCrew Mission. The STM32 sketch owns time-sensitive Modulino I/O and output expiry. The Linux Python process uses Arduino Router Bridge and exposes a bounded authenticated API; it never opens `/dev/ttyHS1`, `Serial1`, or a shell endpoint.
+This directory is one reusable Arduino App for every Tinkeroo Mission. The STM32 sketch owns time-sensitive Modulino I/O and output expiry. The Linux Python process uses Arduino Router Bridge and exposes a bounded authenticated API; it never opens `/dev/ttyHS1`, `Serial1`, or a shell endpoint.
 
 ## Hardware
 
@@ -83,6 +83,6 @@ On an UNO Q, confirm rather than infer:
 5. Stop lease renewal or disconnect the client and verify all outputs enter Safe state within two seconds.
 6. Start self-test and have a human confirm visible light and audible sound before recording a pass.
 
-Use `python3 tools/test_client.py https://<board>:7443 <token> --watch` after trusting the provisioned certificate. `--insecure` exists only for an attended bring-up test and must not be used by the TinkerCrew app.
+Use `python3 tools/test_client.py https://<board>:7443 <token> --watch` after trusting the provisioned certificate. `--insecure` exists only for an attended bring-up test and must not be used by the Tinkeroo app.
 
 These checks have not been performed in this development environment.

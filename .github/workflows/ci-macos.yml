@@ -50,14 +50,14 @@ jobs:
           test "${#dmgs[@]}" = 1
           bash scripts/check-dmg-layout.sh "${dmgs[0]}"
           mkdir -p artifacts/build
-          ditto -c -k --sequesterRsrc --keepParent "$bundle/macos/TinkerCrew.app" artifacts/build/TinkerCrew.app.zip
+          ditto -c -k --sequesterRsrc --keepParent "$bundle/macos/Tinkeroo.app" artifacts/build/Tinkeroo.app.zip
           cp "${dmgs[0]}" artifacts/build/
           cd artifacts/build
-          shasum -a 256 ./*.dmg TinkerCrew.app.zip > SHA256SUMS.txt
+          shasum -a 256 ./*.dmg Tinkeroo.app.zip > SHA256SUMS.txt
       - name: Store development downloads (not production installers)
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: tinkercrew-macos-${{ runner.arch }}-${{ github.sha }}
+          name: tinkeroo-macos-${{ runner.arch }}-${{ github.sha }}
           path: artifacts/build/
           if-no-files-found: error
           retention-days: 14

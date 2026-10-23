@@ -17,6 +17,6 @@ cleanup() {
 trap cleanup EXIT
 hdiutil attach -nobrowse -readonly -mountpoint "$mount" "$1" >/dev/null
 attached=1
-[[ -d "$mount/TinkerCrew.app/Contents" ]] || { printf 'DMG lacks TinkerCrew.app.\n' >&2; exit 1; }
+[[ -d "$mount/Tinkeroo.app/Contents" ]] || { printf 'DMG lacks Tinkeroo.app.\n' >&2; exit 1; }
 [[ -L "$mount/Applications" && "$(readlink "$mount/Applications")" == /Applications ]] || { printf 'DMG lacks the drag-to-Applications link.\n' >&2; exit 1; }
 printf 'Read-only DMG app and Applications-link checks passed.\n'

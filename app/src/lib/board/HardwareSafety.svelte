@@ -23,10 +23,10 @@
 
 <style>
   aside {
-    border: 2px solid #d39832;
+    border: 2px solid var(--warning-border);
     border-radius: 12px;
-    background: #fff3d7;
-    color: #44351d;
+    background: var(--warning-bg);
+    color: var(--warning-ink);
     padding: 18px;
     margin: 20px 0;
   }

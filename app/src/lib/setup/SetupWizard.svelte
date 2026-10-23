@@ -220,11 +220,11 @@
 
 <style>
   .setup {
-    border: 1px solid #b4bdab;
+    border: 1px solid var(--border);
     border-radius: 12px;
     padding: 20px;
     margin: 16px 0;
-    background: #fffcf5;
+    background: var(--surface);
   }
   h3 {
     font-size: 24px;
@@ -235,7 +235,7 @@
   }
   fieldset {
     margin: 15px 0;
-    border: 1px solid #ccc;
+    border: 1px solid var(--border);
     border-radius: 8px;
     padding: 16px;
   }
@@ -259,9 +259,9 @@
     padding: 11px;
     margin: 6px 10px 6px 0;
     font: inherit;
-    color: white;
-    background: #173b35;
-    border: 0;
+    color: var(--primary);
+    background: var(--surface);
+    border: 1px solid var(--border);
     border-radius: 8px;
     cursor: pointer;
   }
@@ -271,8 +271,8 @@
   }
   .error {
     padding: 12px;
-    color: #84221b;
-    background: #ffe8df;
+    color: var(--danger);
+    background: var(--danger-bg);
     border-radius: 8px;
   }
   summary {
