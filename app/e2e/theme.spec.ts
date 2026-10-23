@@ -81,7 +81,7 @@ test("Tinkeroo keeps a clear next action, keyboard focus, and calm reduced-motio
     path: testInfo.outputPath("tinkeroo-mission.png"),
     fullPage: true,
   });
-  for (const name of ["✦ World Map", "⚙ Hardware Lab", "☰ Parent Settings"]) {
+  for (const name of ["✦ World Map", "⚙ Hardware Lab", "☰ Board Setup"]) {
     await page.getByRole("button", { name, exact: true }).click();
     await page.screenshot({
       path: testInfo.outputPath(`${name.slice(2).replaceAll(" ", "-")}.png`),

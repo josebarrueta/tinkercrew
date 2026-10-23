@@ -4,17 +4,19 @@ Status: **guarded checkpoint/handoff foundation implemented, full provisioning s
 
 ## Available now
 
-Open Parent Settings → **Set up a UNO Q — resumable official-tool handoff guide** in the native Mac app.
+Open Board Setup → **Set up a UNO Q — resumable official-tool handoff guide** in the native Mac app.
 
 - Enumerate USB/ADB identities through a fixed, bounded local `adb devices -l` operation.
 - Explicitly select the physically identified UNO Q serial; never assume the first ADB device is the Board.
 - Record observed USB availability separately from human identity/boot/official-tool confirmations.
 - Open the fixed official Arduino App Lab configuration guide for naming, Linux credentials, Wi-Fi, and network/SSH mode. Compatibility-sensitive Linux helpers are not automated speculatively.
-- Correct Wi-Fi credentials in official tooling and return to the same checkpoint; no Linux/Wi-Fi password is collected by TinkerCrew.
+- Correct Wi-Fi credentials in official tooling and return to the same checkpoint; this checkpoint guide never collects Linux/Wi-Fi passwords. The separate [Board Setup management controls](board-setup.md) can use request-only passwords for existing-Board configuration.
 - Resume checkpoint progress from macOS Keychain after app restart. Reopening requires fresh USB inspection, and continuing refreshes USB evidence again.
 - Changing Board identity requires an explicit new-setup action. It clears only guide checkpoints, not keys, apps, networks, Pairings, or Board configuration. Repeated confirmations do not append duplicate completed checkpoints.
 - Native and frontend validators reject unknown/secret fields, incompatible state, incorrect proof-source labels, and impossible success beyond the implemented handoff frontier.
 - Browser previews show the guide but cannot record actual Board setup success.
+
+These claims describe the checkpoint guide, not the separate #19 management/recovery controls. Those controls add existing-Board configuration, scheduled restart, and guarded destructive restore, but do not complete the Pairing/deployment frontier below.
 
 The guide performs no remote shell commands, OS updates, flashing, bootloader changes, password operations, SSH-key modification, or deployment. An `adb`-ready transport is **not** represented as proof of Linux boot completion, power stability, image compatibility, or UNO Q model; those steps are explicitly human/official-tool confirmations.
 

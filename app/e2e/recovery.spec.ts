@@ -15,7 +15,7 @@ test("stale input enters Safe state and recovery never silently rearms", async (
     .uncheck();
   await expect(page.getByTestId("guardian-state")).toHaveText("disarmed");
   await page
-    .getByRole("button", { name: "☰ Parent Settings", exact: true })
+    .getByRole("button", { name: "☰ Board Setup", exact: true })
     .click();
   await expect(
     page.getByText("The RexQualis breadboard power module", { exact: false }),

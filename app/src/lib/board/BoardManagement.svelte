@@ -1,0 +1,762 @@
+<script lang="ts">
+  import { invoke, isTauri } from "@tauri-apps/api/core";
+  import { onMount, onDestroy } from "svelte";
+  import type { UsbDevice } from "../setup/session";
+
+  type Identity = {
+    adbSerial: string;
+    serial: string;
+    username: string;
+    hostname: string;
+    os: string;
+    osVersion: string;
+    imageVersion: string;
+  };
+  type Image = { version: string; os: string; url: string; sha256: string };
+  type Plan = { planId: number; board: Identity; image: Image };
+  type RestoreStatus = { phase: string; bytes: number; message: string };
+  let {
+    visible,
+    beforeChange,
+    pairedBoardId,
+    onForgot,
+    onBusyChange,
+  }: {
+    visible: boolean;
+    beforeChange: () => Promise<void>;
+    pairedBoardId: string;
+    onForgot: () => Promise<void>;
+    onBusyChange: (busy: boolean) => void;
+  } = $props();
+  const native = isTauri();
+  let devices = $state<UsbDevice[]>([]);
+  let serial = $state("");
+  let board = $state<Identity | null>(null);
+  let authenticated = $state(false);
+  let username = $state("arduino");
+  let password = $state("");
+  let usbConfirmed = $state(false);
+  let enableConfirmation = $state("");
+  let hostname = $state("");
+  let ssids = $state<string[]>([]);
+  let ssid = $state("");
+  let wifiPassword = $state("");
+  let restartConfirmation = $state("");
+  let forgetConfirmation = $state("");
+  let trustConfirmation = $state("");
+  let tool = $state("");
+  let images = $state<Image[]>([]);
+  let imageIndex = $state("");
+  let plan = $state<Plan | null>(null);
+  let eraseConfirmation = $state("");
+  let backup = $state(false);
+  let edl = $state(false);
+  let onlyTarget = $state(false);
+  let power = $state(false);
+  let verifyConfirmation = $state("");
+  let officialRecoveryConfirmed = $state(false);
+  let restore = $state<RestoreStatus>({
+    phase: "idle",
+    bytes: 0,
+    message: "No factory restore is running.",
+  });
+  let busy = $state(false);
+  let error = $state("");
+  let message = $state("");
+  const restorePending = $derived(!["idle", "failed"].includes(restore.phase));
+  const canErase = $derived(
+    native &&
+      !busy &&
+      !restorePending &&
+      plan !== null &&
+      eraseConfirmation === `ERASE ${plan.board.serial}` &&
+      backup &&
+      edl &&
+      onlyTarget &&
+      power,
+  );
+  const chosenImage = $derived(images[Number(imageIndex)]);
+
+  $effect(() => {
+    onBusyChange(busy || restorePending);
+  });
+  $effect(() => {
+    if (!visible) {
+      password = "";
+      wifiPassword = "";
+      authenticated = false;
+      if (native) void invoke("admin_logout").catch(() => {});
+    }
+  });
+  async function task(action: () => Promise<void>, changing = false) {
+    if (!native || busy) return;
+    busy = true;
+    error = "";
+    message = "";
+    try {
+      if (changing) await beforeChange();
+      await action();
+    } catch (cause) {
+      error =
+        typeof cause === "string"
+          ? cause
+          : cause instanceof Error
+            ? cause.message
+            : "Board operation failed. Check identity, credentials, and supported tooling; success has not been assumed.";
+    } finally {
+      password = "";
+      wifiPassword = "";
+      busy = false;
+    }
+  }
+  async function inspect() {
+    board = await invoke("admin_inspect_usb", { serial });
+    hostname = board!.hostname;
+    message = `Physically inspected UNO Q: hardware serial ${board!.serial}. This read-only check does not authenticate your Linux password.`;
+  }
+  async function action(operation: Record<string, unknown>) {
+    const result = await invoke<Record<string, unknown>>("admin_action", {
+      serial,
+      action: operation,
+    });
+    message =
+      operation.operation === "reboot"
+        ? "Restart scheduled for about one minute from now. Wait for boot and reconnect; scheduling is not verified restart completion."
+        : operation.operation === "wifi_join"
+          ? "NetworkManager reported a successful Wi-Fi connection. Recheck LAN connectivity before depending on it."
+          : operation.operation === "hostname"
+            ? "Hostname updated. The LAN address/discovery name may change; USB remains available."
+            : "Board operation completed.";
+    if (operation.operation === "wifi_scan") ssids = result.ssids as string[];
+    if (operation.operation === "status") board = result as unknown as Identity;
+    if (operation.operation === "reboot") {
+      authenticated = false;
+      restartConfirmation = "";
+    }
+  }
+  async function openResource(resource: "recovery" | "flasher_download") {
+    const urls = {
+      recovery: "https://docs.arduino.cc/software/app-lab/configure/flash/",
+      flasher_download: "https://www.arduino.cc/en/software/#flasher-tool",
+    };
+    try {
+      if (native) await invoke("open_board_resource", { resource });
+      else window.open(urls[resource], "_blank", "noopener,noreferrer");
+    } catch {
+      error = `Open the official resource in your browser: ${urls[resource]}`;
+    }
+  }
+  async function pollRestore() {
+    if (!native || busy) return;
+    try {
+      restore = await invoke("factory_restore_status");
+    } catch {
+      error =
+        "Recovery status could not be read. Do not unplug or start another flash while the outcome is unknown.";
+    }
+  }
+  onMount(() => {
+    void pollRestore();
+    const timer = setInterval(() => {
+      if (restore.phase !== "idle") void pollRestore();
+    }, 1000);
+    return () => clearInterval(timer);
+  });
+  onDestroy(() => {
+    password = "";
+    wifiPassword = "";
+  });
+</script>
+
+<section class="management" aria-label="Board configuration and recovery">
+  <h3>Configure an existing UNO Q</h3>
+  <p>
+    Use your Linux username/password over a serial-targeted USB → SSH
+    connection. Wi-Fi is not required for management. Passwords are used for the
+    current request, then cleared; they are never saved to progress or browser
+    storage. Management pauses gameplay.
+  </p>
+  {#if !native}<p class="notice">
+      Browser preview only. Configuration, restart, and factory restore are
+      disabled; use the native macOS app.
+    </p>{/if}
+  {#if error}<p role="alert" class="error">{error}</p>{/if}
+  {#if message}<p role="status">{message}</p>{/if}
+  <fieldset disabled={!native || busy || restorePending}>
+    <legend>1. Select and inspect the exact USB Board</legend>
+    <button
+      onclick={() =>
+        task(async () => {
+          devices = await invoke("inspect_setup_usb");
+        })}>Refresh USB Boards</button
+    >
+    <label
+      >USB Board serial
+      <select
+        value={serial}
+        onchange={(event) => {
+          serial = event.currentTarget.value;
+          board = null;
+          authenticated = false;
+          usbConfirmed = false;
+          plan = null;
+          password = "";
+          wifiPassword = "";
+          enableConfirmation = "";
+          restartConfirmation = "";
+        }}
+      >
+        <option value=""
+          >Choose explicitly — never the first device automatically</option
+        >
+        {#each devices as device}<option value={device.serial}
+            >{device.serial} — {device.state}</option
+          >{/each}
+      </select>
+    </label>
+    <button disabled={!serial} onclick={() => task(inspect)}
+      >Inspect selected UNO Q</button
+    >
+    {#if board}<p>
+        UNO Q {board.serial} · {board.hostname} · {board.os}
+        {board.osVersion} · image {board.imageVersion}
+      </p>{/if}
+    <label class="check"
+      ><input type="checkbox" bind:checked={usbConfirmed} />I physically
+      verified this USB Board and its displayed serial</label
+    >
+  </fieldset>
+  <fieldset
+    disabled={!native || busy || restorePending || !board || !usbConfirmed}
+  >
+    <legend>2. Sign in with existing Linux credentials</legend>
+    <label
+      >Linux username<input
+        autocomplete="off"
+        maxlength="32"
+        bind:value={username}
+      /></label
+    >
+    <label
+      >Linux password (this request only)<input
+        type="password"
+        autocomplete="off"
+        maxlength="512"
+        bind:value={password}
+      /></label
+    >
+    <button
+      class="primary"
+      disabled={!password || !username}
+      onclick={() =>
+        task(async () => {
+          board = await invoke("admin_login", {
+            serial,
+            username,
+            password,
+            usbConfirmed,
+          });
+          authenticated = true;
+          message =
+            "Linux authentication and physical Board identity verified. Actions are authorized for five minutes; the password was not stored. Re-enter it for privileged changes.";
+        }, true)}>Authenticate selected Board</button
+    >
+    <button
+      disabled={!authenticated}
+      onclick={() =>
+        task(async () => {
+          await invoke("admin_logout");
+          authenticated = false;
+          message = "Management session closed.";
+        })}>Sign out of management</button
+    >
+    <details>
+      <summary>SSH is not enabled yet</summary>
+      <p>
+        This explicitly enables the Board's SSH service using your supplied
+        Linux password. It changes network exposure; set a strong Linux password
+        in official setup first. This app never guesses a default password.
+      </p>
+      <label
+        >Type ENABLE SSH {serial}<input
+          autocomplete="off"
+          bind:value={enableConfirmation}
+        /></label
+      >
+      <button
+        disabled={!password || enableConfirmation !== `ENABLE SSH ${serial}`}
+        onclick={() =>
+          task(async () => {
+            await invoke("admin_enable_ssh", {
+              serial,
+              username,
+              password,
+              confirmation: enableConfirmation,
+            });
+            enableConfirmation = "";
+            message =
+              "SSH service enabled. Authenticate above to verify your Linux credentials.";
+          }, true)}>Enable SSH over this USB connection</button
+      >
+    </details>
+  </fieldset>
+  <fieldset disabled={!native || busy || restorePending || !authenticated}>
+    <legend>3. Board configuration</legend>
+    <button onclick={() => task(() => action({ operation: "status" }))}
+      >Refresh Board status</button
+    >
+    <label>Board hostname<input maxlength="63" bind:value={hostname} /></label>
+    <button
+      disabled={!hostname || !password}
+      onclick={() =>
+        task(() => action({ operation: "hostname", hostname, password }), true)}
+      >Set hostname using the password above</button
+    >
+    <button onclick={() => task(() => action({ operation: "wifi_scan" }))}
+      >Scan Wi-Fi networks</button
+    >
+    {#if ssids.length}<label
+        >Visible networks<select bind:value={ssid}
+          ><option value=""
+            >Choose a network or enter a hidden name below</option
+          >{#each ssids as name}<option value={name}>{name}</option
+            >{/each}</select
+        ></label
+      >{/if}
+    <label
+      >Wi-Fi name / hidden SSID<input maxlength="32" bind:value={ssid} /></label
+    >
+    <label
+      >Wi-Fi password (this request only)<input
+        type="password"
+        autocomplete="off"
+        maxlength="128"
+        bind:value={wifiPassword}
+      /></label
+    >
+    <button
+      disabled={!ssid}
+      onclick={() =>
+        task(
+          () =>
+            action({ operation: "wifi_join", ssid, password: wifiPassword }),
+          true,
+        )}>Join this Wi-Fi network</button
+    >
+  </fieldset>
+  <details class="recovery">
+    <summary>Restart, pairing cleanup, and factory recovery</summary>
+    <h3>Restart the UNO Q — keeps its data</h3>
+    <p>
+      Requires a verified Linux management session and its password. Requests a
+      clean reboot in about one minute. It does not factory-reset the Board.
+    </p>
+    <fieldset disabled={!native || busy || restorePending || !authenticated}>
+      <label
+        >Type RESTART {board?.serial ?? "hardware-serial"}<input
+          autocomplete="off"
+          bind:value={restartConfirmation}
+        /></label
+      >
+      <button
+        disabled={!password ||
+          restartConfirmation !== `RESTART ${board?.serial}`}
+        onclick={() =>
+          task(
+            () =>
+              action({
+                operation: "reboot",
+                password,
+                confirmation: restartConfirmation,
+              }),
+            true,
+          )}>Schedule Board restart</button
+      >
+    </fieldset>
+    <h3>Forget Tinkeroo records — this Mac only</h3>
+    <p>
+      Removes this Mac's saved gameplay credential, not Board apps, Wi-Fi, Linux
+      credentials, another installation, or remote authorized_keys. This
+      development bearer-record cleanup does not revoke a copied token on the
+      Board; full remote revocation remains integration work. Mission progress
+      is retained.
+    </p>
+    <fieldset disabled={!native || busy || restorePending || !pairedBoardId}>
+      <label
+        >Type FORGET {pairedBoardId || "selected-board-id"}<input
+          autocomplete="off"
+          bind:value={forgetConfirmation}
+        /></label
+      >
+      <button
+        disabled={forgetConfirmation !== `FORGET ${pairedBoardId}`}
+        onclick={() =>
+          task(async () => {
+            await invoke("forget_board", {
+              boardId: pairedBoardId,
+              confirmation: forgetConfirmation,
+            });
+            forgetConfirmation = "";
+            await onForgot();
+            message =
+              "This Mac's gameplay record was removed. Board data and Mission progress were not erased.";
+          }, true)}>Forget selected Tinkeroo pairing on this Mac</button
+      >
+    </fieldset>
+    <p>
+      After an intentional factory restore, the Board's SSH key changes. Clear
+      only this app's SSH fingerprint after physical USB inspection; never
+      accept an unexplained key change.
+    </p>
+    <fieldset disabled={!native || busy || restorePending || !serial}>
+      <label
+        >Type FORGET SSH {serial || "usb-serial"}<input
+          autocomplete="off"
+          bind:value={trustConfirmation}
+        /></label
+      >
+      <button
+        disabled={trustConfirmation !== `FORGET SSH ${serial}`}
+        onclick={() =>
+          task(async () => {
+            await invoke("admin_forget_ssh_trust", {
+              serial,
+              confirmation: trustConfirmation,
+            });
+            trustConfirmation = "";
+            authenticated = false;
+            message =
+              "Only this app's SSH fingerprint was removed after physical inspection. Authenticate again to establish new USB-verified trust.";
+          }, true)}>Clear this Mac's SSH trust for the inspected Board</button
+      >
+    </fieldset>
+    <div class="danger-zone">
+      <h3>Factory restore — erases the UNO Q Linux system and data</h3>
+      <p>
+        <strong
+          >This is a destructive OS reflash, not a restart or local checkpoint
+          reset.</strong
+        > Apps, Linux credentials, Wi-Fi configuration, keys, and Board-side Companion
+        data are lost. Mac Mission progress is not deleted. Back up/export Board files
+        first. This is not a forensic secure-erase guarantee. STM32 sketch/bootloader
+        recovery is not verified here; keep maker loads disconnected until known Companion
+        firmware and its hardware self-test are installed and checked.
+      </p>
+      <p>
+        Requires the separately installed official <strong
+          >Arduino Flasher CLI 0.5.4</strong
+        >, internet for the exact approved image, at least 10 GiB free disk
+        space, and physical EDL preparation. No Google/Arduino flasher binary is
+        bundled or downloaded automatically. Physical restore acceptance is
+        still pending; do not try this casually with valuable data.
+      </p>
+      <p>
+        <button onclick={() => openResource("recovery")}
+          >Official UNO Q EDL/restore instructions</button
+        ><button onclick={() => openResource("flasher_download")}
+          >Official flasher download</button
+        >
+      </p>
+      <fieldset disabled={!native || busy || restorePending}>
+        <label
+          >Absolute path to official arduino-flasher-cli<input
+            autocomplete="off"
+            placeholder="/Users/you/tools/arduino-flasher-cli"
+            bind:value={tool}
+            onchange={() => {
+              images = [];
+              imageIndex = "";
+              plan = null;
+            }}
+          /></label
+        >
+        <button
+          disabled={!tool}
+          onclick={() =>
+            task(async () => {
+              images = await invoke("recovery_images", { tool });
+              imageIndex = "";
+              plan = null;
+            })}>Read supported official UNO Q image catalog</button
+        >
+        <label
+          >Exact official image version<select
+            bind:value={imageIndex}
+            onchange={() => {
+              plan = null;
+            }}
+            ><option value=""
+              >Choose explicitly — not an implicit latest image</option
+            >{#each images as image, index}<option value={String(index)}
+                >{image.version} — {image.os}</option
+              >{/each}</select
+          ></label
+        >
+        <button
+          disabled={!serial || !board || imageIndex === "" || !chosenImage}
+          onclick={() =>
+            task(async () => {
+              plan = await invoke("prepare_factory_restore", {
+                serial,
+                tool,
+                version: chosenImage.version,
+                os: chosenImage.os,
+              });
+              eraseConfirmation = "";
+              backup = false;
+              edl = false;
+              onlyTarget = false;
+              power = false;
+            }, true)}>Prepare exact-Board restore plan (does not erase)</button
+        >
+      </fieldset>
+      {#if plan}
+        <p>
+          Target: USB {plan.board.adbSerial},
+          <strong>hardware serial {plan.board.serial}</strong>
+          · image {plan.image.version}
+        </p>
+        <p class="digest">Image SHA-256: {plan.image.sha256}</p>
+        <p>
+          Prepare the plan while the Board is still booted. Then disconnect all
+          power, follow Arduino's UNO Q JCTL GND/USB_BOOT jumper instructions,
+          and reconnect only that Board over a direct USB data cable. Never move
+          the jumper while powered. The explicit hardware serial—not whichever
+          EDL device appears first—is passed to the flasher. Plans expire after
+          ten minutes; preparation itself never erases anything.
+        </p>
+        <fieldset disabled={!native || busy || restorePending}>
+          <label class="check"
+            ><input type="checkbox" bind:checked={backup} />I backed up needed
+            Board files and understand that the Board's Linux system and data
+            will be erased</label
+          >
+          <label class="check"
+            ><input type="checkbox" bind:checked={edl} />I followed the official
+            UNO Q EDL preparation with power disconnected</label
+          >
+          <label class="check"
+            ><input type="checkbox" bind:checked={onlyTarget} />Only the exact
+            target Board is connected; other Boards are unplugged</label
+          >
+          <label class="check"
+            ><input type="checkbox" bind:checked={power} />Loads/accessories are
+            disconnected and the Board has stable power and a good direct data
+            cable</label
+          >
+          <label
+            >Type ERASE {plan.board.serial}<input
+              autocomplete="off"
+              bind:value={eraseConfirmation}
+            /></label
+          >
+          <button
+            class="destructive"
+            disabled={!canErase}
+            onclick={() =>
+              task(async () => {
+                restore = await invoke("start_factory_restore", {
+                  planId: plan!.planId,
+                  confirmation: {
+                    phrase: eraseConfirmation,
+                    backup,
+                    edl,
+                    onlyTarget,
+                    power,
+                  },
+                });
+                authenticated = false;
+                eraseConfirmation = "";
+                backup = false;
+                edl = false;
+                onlyTarget = false;
+                power = false;
+              }, true)}>Erase this UNO Q and restore the approved image</button
+          >
+        </fieldset>
+      {/if}
+      <p role="status">
+        <strong>Recovery: {restore.phase}</strong> — {restore.message}{restore.bytes
+          ? ` (${Math.round(restore.bytes / 1024 / 1024)} MiB downloaded)`
+          : ""}
+      </p>
+      {#if restorePending}<p class="notice">
+          Do not close the app, unplug, cancel, or start another flasher once
+          writing starts. The native flasher continues if the app closes; a
+          previous unknown outcome blocks a new automatic erase.
+        </p>{/if}
+      {#if ["awaiting_boot", "outcome_unknown", "flash_failed", "download_interrupted"].includes(restore.phase)}
+        <fieldset disabled={!native || busy}>
+          <p>
+            After confirmed flasher completion: unplug, remove the EDL jumper,
+            reconnect, and wait for boot. Verification requires the same
+            hardware serial and exact approved image build (the USB identifier
+            can change). An unknown/failed flasher outcome is not accepted as
+            success merely because an old image boots. An interrupted download
+            that never started flashing can be discarded after identity
+            verification, without claiming a restore.
+          </p>
+          <button
+            onclick={() =>
+              task(async () => {
+                devices = await invoke("inspect_setup_usb");
+              })}>Refresh USB Boards for recovery verification</button
+          >
+          <label
+            >USB serial to verify<select bind:value={serial}
+              ><option value="">Choose the reconnected Board explicitly</option
+              >{#each devices as device}<option value={device.serial}
+                  >{device.serial} — {device.state}</option
+                >{/each}</select
+            ></label
+          >
+          {#if ["outcome_unknown", "flash_failed"].includes(restore.phase)}
+            <label class="check"
+              ><input
+                type="checkbox"
+                bind:checked={officialRecoveryConfirmed}
+                onchange={() => {
+                  verifyConfirmation = "";
+                }}
+              />The official Arduino tool reported a successful destructive
+              restore of this exact Board with user-data preservation disabled,
+              and no flasher is still running. Record this as my confirmation,
+              not an app-observed restore.</label
+            >
+            <p>
+              If an interrupted process has no recorded PID, ownership remains
+              uncertain on this Mac boot. Never restart the Mac during active
+              flashing; after all flashing has stopped, a Mac restart and
+              successful official recovery allow this explicit confirmation.
+            </p>
+          {/if}
+          <label
+            >Type {officialRecoveryConfirmed ? "RECOVERED" : "VERIFY"} followed by
+            the hardware serial<input
+              autocomplete="off"
+              bind:value={verifyConfirmation}
+            /></label
+          >
+          <button
+            disabled={!serial ||
+              !verifyConfirmation ||
+              (["outcome_unknown", "flash_failed"].includes(restore.phase) &&
+                !officialRecoveryConfirmed)}
+            onclick={() =>
+              task(async () => {
+                const verified = await invoke<{
+                  board: Identity;
+                  source:
+                    | "tinkeroo_flasher"
+                    | "human_official_recovery"
+                    | "no_flash_started";
+                }>("verify_factory_boot", {
+                  serial,
+                  confirmation: verifyConfirmation,
+                  officialRecoveryConfirmed,
+                });
+                board = verified.board;
+                plan = null;
+                officialRecoveryConfirmed = false;
+                verifyConfirmation = "";
+                restore = await invoke("factory_restore_status");
+                message =
+                  verified.source === "no_flash_started"
+                    ? "The same physical Board was verified and the interrupted download/plan was discarded. This app never started flashing and no factory restore is claimed. Prepare a fresh plan if you still want to erase."
+                    : `${verified.source === "human_official_recovery" ? "Official-tool restore completion was confirmed by you, not observed by this app." : "This app observed flasher success."} The same Board and exact approved image build were verified. Reconfigure Linux/Wi-Fi, clear old SSH trust explicitly, and establish new Companion Pairing.`;
+              })}>Verify Board boot and recovery evidence</button
+          >
+        </fieldset>
+      {/if}
+    </div>
+  </details>
+</section>
+
+<style>
+  .management {
+    margin: 26px 0;
+    padding: 24px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+  }
+  h3 {
+    font-size: 22px;
+  }
+  fieldset {
+    margin: 18px 0;
+    padding: 18px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+  }
+  label {
+    display: block;
+    margin: 12px 0;
+  }
+  input,
+  select {
+    width: 100%;
+    display: block;
+    font: inherit;
+    padding: 10px;
+    margin-top: 6px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+  }
+  .check {
+    display: flex;
+    gap: 12px;
+    align-items: start;
+  }
+  .check input {
+    width: 22px;
+    margin-top: 2px;
+  }
+  button {
+    font: inherit;
+    padding: 10px 15px;
+    margin: 6px 10px 6px 0;
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    color: var(--primary);
+    background: var(--surface);
+  }
+  .primary {
+    color: white;
+    background: var(--primary);
+  }
+  .destructive {
+    color: white;
+    background: var(--danger);
+  }
+  button:disabled {
+    opacity: 0.5;
+  }
+  .error {
+    padding: 14px;
+    border-radius: 10px;
+    color: var(--danger);
+    background: var(--danger-bg);
+  }
+  .notice {
+    padding: 14px;
+    border-radius: 10px;
+    color: var(--warning-ink);
+    background: var(--warning-bg);
+  }
+  .recovery {
+    margin-top: 24px;
+  }
+  .danger-zone {
+    margin-top: 28px;
+    padding: 22px;
+    border: 2px solid var(--danger);
+    border-radius: 14px;
+  }
+  .digest {
+    overflow-wrap: anywhere;
+    font:
+      12px ui-monospace,
+      monospace;
+  }
+</style>

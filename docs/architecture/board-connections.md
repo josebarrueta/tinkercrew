@@ -10,15 +10,15 @@ Implemented for #7 before physical acceptance, at the owner's request. The nativ
 2. Bonjour `_tinkercrew._tcp.local.` announcements, bounded to 1.8 seconds and eight candidates. TXT identity is only a discovery hint, never authorization.
 3. With explicit parent consent, up to eight private addresses from the Mac's existing ARP neighbor cache. There is no subnet or port sweep.
 4. USB/ADB forward to port 7443, after exact-match selection of the provisioned ADB serial. Offline and unauthorized USB states have separate next actions. Other ADB devices are never selected implicitly.
-5. Optional manual local IP or hostname in Parent Settings.
+5. Optional manual local IP or hostname in Board Setup.
 
 Discovery and probes run asynchronously; DNS lookup, HTTP, mDNS, and subprocess waits are bounded. Only private, loopback, or link-local resolved IP addresses are eligible. Redirects and HTTP proxies are disabled, and no internet endpoint is required. VPN/local-network permission failures suggest allowing local routes or using USB; the app does not claim to detect the cause of an unreachable route with certainty.
 
-ADB comes from official external Platform-Tools: `TC_ADB_PATH` (absolute executable path), `~/Library/Android/sdk/platform-tools/adb`, `/opt/homebrew/bin/adb`, or `/usr/local/bin/adb`. The app does not bundle Google binaries. The adapter runs only fixed local `devices`/serial-targeted `forward` operations, never remote shell commands. It removes only forwards created by this app when disconnecting/retrying. Ephemeral USB loopback addresses do not replace a last-known LAN address.
+ADB comes from official external Platform-Tools: `TC_ADB_PATH` (absolute executable path), `~/Library/Android/sdk/platform-tools/adb`, `/opt/homebrew/bin/adb`, or `/usr/local/bin/adb`. The app does not bundle Google binaries. The gameplay adapter runs only fixed local `devices`/serial-targeted `forward` operations, never remote shell commands. It requires physical `usb:` evidence on this Mac's loopback ADB server (port 5037); server-redirection environment variables and wireless ADB are not USB proof. The separate [Board Setup management adapter](board-setup.md) owns its restricted SSH/USB helper and recovery operations. It removes only forwards created by this app when disconnecting/retrying. Ephemeral USB loopback addresses do not replace a last-known LAN address.
 
 ## Trust and the current development bridge
 
-The current #6 Companion uses a provisioned bearer credential, not the full proposed TBP Ed25519 challenge/session flow. To exercise connected play now, Parent Settings can import an **already provisioned, USB-verified** record:
+The current #6 Companion uses a provisioned bearer credential, not the full proposed TBP Ed25519 challenge/session flow. To exercise connected play now, Board Setup can import an **already provisioned, USB-verified** record:
 
 ```json
 {
@@ -32,7 +32,7 @@ The current #6 Companion uses a provisioned bearer credential, not the full prop
 }
 ```
 
-Do not commit a real record, paste it into an issue, or accept it solely from Wi-Fi discovery. The parent must obtain/verify the serial, ID, certificate, and credential directly through physical USB. The Companion's `board_id` / `TC_BOARD_ID` must match `boardId`. Its certificate must include the fixed `tlsName` as a DNS SAN. A fixed DNS identity lets the native client validate the certificate even when routing to a changed LAN IP or ADB loopback port.
+Do not commit a real record, paste it into an issue, or accept it solely from Wi-Fi discovery. The parent must obtain/verify the serial, ID, certificate, and credential directly through physical USB. Import also requires fresh ready physical-USB evidence for the record's exact ADB serial; this is not full cryptographic TBP bootstrap. The Companion's `board_id` / `TC_BOARD_ID` must match `boardId`. Its certificate must include the fixed `tlsName` as a DNS SAN. A fixed DNS identity lets the native client validate the certificate even when routing to a changed LAN IP or ADB loopback port.
 
 The entire sensitive record is stored in macOS Keychain; a separate ordinary file contains only opaque Board lookup handles. Certificate roots are restricted to the USB-provisioned certificate, normal TLS hostname/validity checks remain enabled, and HTTPS is required on **all** paths. The authenticated hello must match the selected stable Board ID and protocol before a connection can accept gameplay Commands. Native connection handles prevent stale frontend clients from sending Commands through a replacement connection.
 
@@ -40,7 +40,7 @@ This is a deliberately explicit development bridge, **not completion of full TBP
 
 ## Connected Mission behavior
 
-`ConnectedBoardClient` maps real Companion snapshots/events into the same `BoardClient` interface as the simulator. Inputs include sample age plus a conservative bound for request/IPC/transit time; monotonic client timing prevents wall-clock changes from making old readings appear fresh. Stale/implausible readings fail closed. It primes its event cursor on connect so historical arm-button presses are never replayed. Event gaps, delayed button edges, restart detection, and transport/authentication failures disconnect the adapter and expose a next action. Reconnection is retried at five-second intervals, except for trust/authentication/protocol problems that require parent intervention. Retrying remains bound to the same Board identity even if the parent changes the dropdown without pressing Connect.
+`ConnectedBoardClient` maps real Companion snapshots/events into the same `BoardClient` interface as the simulator. Inputs include sample age plus a conservative bound for request/IPC/transit time; monotonic client timing prevents wall-clock changes from making old readings appear fresh. Stale/implausible readings fail closed. It primes its event cursor on connect so historical arm-button presses are never replayed. Event gaps, delayed button edges, restart detection, and transport/authentication failures disconnect the adapter and expose a next action. Reconnection is retried at five-second intervals, except for trust/authentication/protocol problems or active maintenance that require parent intervention. Board Setup management stops reconnection, closes gameplay leases, and holds a native maintenance guard; ending it never silently resumes/rearms gameplay. Retrying remains bound to the same Board identity even if the parent changes the dropdown without pressing Connect.
 
 A new connection recreates the Mission runtime from saved progress, discards live validation evidence, and starts disarmed. Only bounded native gameplay operations are exposed to the UI; Mission/domain code cannot choose request URLs, invoke a shell, or manage Linux. Independent Companion/STM32 watchdogs remain the physical safety authority.
 

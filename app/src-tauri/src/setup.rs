@@ -142,6 +142,7 @@ pub async fn inspect_setup_usb() -> Result<Vec<UsbDevice>, String> {
                 || !serial
                     .bytes()
                     .all(|c| c.is_ascii_alphanumeric() || b"-_.:".contains(&c))
+                || !fields.any(|field| field.starts_with("usb:") && field.len() > 4)
             {
                 return None;
             }
@@ -155,12 +156,30 @@ pub async fn inspect_setup_usb() -> Result<Vec<UsbDevice>, String> {
     Ok(devices)
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum BoardResource {
+    Configure,
+    Recovery,
+    FlasherDownload,
+}
+
 #[tauri::command]
 pub async fn open_official_setup() -> Result<(), String> {
+    open_board_resource(BoardResource::Configure).await
+}
+
+#[tauri::command]
+pub async fn open_board_resource(resource: BoardResource) -> Result<(), String> {
+    let url = match resource {
+        BoardResource::Configure => "https://docs.arduino.cc/software/app-lab/configure/config/",
+        BoardResource::Recovery => "https://docs.arduino.cc/software/app-lab/configure/flash/",
+        BoardResource::FlasherDownload => "https://www.arduino.cc/en/software/#flasher-tool",
+    };
     let status = tokio::time::timeout(
         std::time::Duration::from_secs(2),
         tokio::process::Command::new("/usr/bin/open")
-            .arg("https://docs.arduino.cc/software/app-lab/configure/config/")
+            .arg(url)
             .kill_on_drop(true)
             .status(),
     )

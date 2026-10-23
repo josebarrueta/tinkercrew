@@ -11,6 +11,7 @@
   import type { BoardClient } from "./types";
   import HardwareSafety from "./HardwareSafety.svelte";
   import SetupWizard from "../setup/SetupWizard.svelte";
+  import BoardManagement from "./BoardManagement.svelte";
 
   let {
     visible,
@@ -32,6 +33,7 @@
   let manualHost = $state("");
   let manualPort = $state(7443);
   let busy = $state(false);
+  let managementBusy = $state(false);
   let connection = $state<ConnectionState>({ phase: "simulator" });
   let message = $state("");
   let client: ConnectedBoardClient | undefined;
@@ -62,7 +64,7 @@
 
   async function connect(retrying = false) {
     const boardId = retrying ? reconnectBoardId : selected;
-    if (!native || !boardId || busy || disposed) return;
+    if (!native || !boardId || busy || managementBusy || disposed) return;
     reconnectBoardId = boardId;
     busy = true;
     reconnect = true;
@@ -98,6 +100,7 @@
               "pairing_required",
               "identity_mismatch",
               "protocol_incompatible",
+              "maintenance_active",
             ].includes(error.code)
           )
             reconnect = false;
@@ -115,6 +118,7 @@
           "authentication_failed",
           "pairing_required",
           "protocol_incompatible",
+          "maintenance_active",
         ].includes(error.code)
       )
         reconnect = false;
@@ -134,7 +138,7 @@
   }
 
   async function importRecord() {
-    if (!native || busy) return;
+    if (!native || busy || managementBusy) return;
     busy = true;
     try {
       await invoke("register_board", { record, usbConfirmed });
@@ -174,8 +178,25 @@
 </script>
 
 <section hidden={!visible} class="connections">
-  <h2>Parent Settings</h2>
+  <h2>Board Setup</h2>
+  <p>
+    One place for Board connections, Linux configuration, restart, and explicit
+    recovery. Destructive actions are for an adult and are separate from Mission
+    play.
+  </p>
   <HardwareSafety />
+  <BoardManagement
+    {visible}
+    pairedBoardId={selected}
+    beforeChange={useSimulator}
+    onForgot={async () => {
+      boards = await invoke("list_boards");
+      selected = "";
+    }}
+    onBusyChange={(value) => {
+      managementBusy = value;
+    }}
+  />
   <details bind:open={setupOpen}>
     <summary>Set up a UNO Q — resumable official-tool handoff guide</summary>
     {#if setupOpen}<SetupWizard
@@ -202,8 +223,8 @@
     {:else}Simulator mode is active.{/if}
   </p>
   {#if message}<p role="status">{message}</p>{/if}
-  <fieldset disabled={!native || busy}>
-    <legend>Choose the exact Board</legend>
+  <fieldset disabled={!native || busy || managementBusy}>
+    <legend>Companion gameplay connection — choose the exact Board</legend>
     <label
       >Paired Board
       <select bind:value={selected}>
@@ -253,7 +274,7 @@
       remains the fallback. Full TBP USB key registration and short-lived
       sessions remain integration work.
     </p>
-    <fieldset disabled={!native || busy}>
+    <fieldset disabled={!native || busy || managementBusy}>
       <label
         >USB-verified Board record (contains a secret)<textarea
           autocomplete="off"

@@ -10,7 +10,7 @@ use tokio::process::Command;
 
 type Result<T> = std::result::Result<T, ConnectionError>;
 
-fn adb_path() -> Result<PathBuf> {
+pub(crate) fn adb_path() -> Result<PathBuf> {
     let mut paths = vec![];
     if let Some(path) = std::env::var_os("TC_ADB_PATH") {
         paths.push(PathBuf::from(path));
@@ -29,7 +29,11 @@ pub(crate) async fn adb(args: &[&str]) -> Result<String> {
     let output = tokio::time::timeout(
         Duration::from_secs(2),
         Command::new(adb_path()?)
+            .args(["-H", "127.0.0.1", "-P", "5037"])
             .args(args)
+            .env_remove("ADB_SERVER_SOCKET")
+            .env_remove("ANDROID_ADB_SERVER_ADDRESS")
+            .env_remove("ANDROID_ADB_SERVER_PORT")
             .kill_on_drop(true)
             .output(),
     )
@@ -71,7 +75,7 @@ async fn usb(state: &Connections, board_id: &str) -> Result<Vec<Candidate>> {
     let profile = state.profile(board_id)?;
     let devices = adb(&["devices", "-l"]).await?;
     match adb_status(&devices, &profile.adb_serial) {
-        Some("device") => {}
+        Some("device") if crate::management::physical_usb_ready(&devices, &profile.adb_serial) => {}
         Some("offline") => {
             return Err(ConnectionError::new(
                 "board_booting",
@@ -211,6 +215,12 @@ pub async fn board_candidates(
     stage: DiscoveryStage,
     local_consent: bool,
 ) -> Result<Vec<Candidate>> {
+    if state.maintenance_active() {
+        return Err(ConnectionError::new(
+            "maintenance_active",
+            "Board maintenance is active; connection discovery and gameplay remain paused.",
+        ));
+    }
     let profile = state.profile(&board_id)?;
     match stage {
         DiscoveryStage::Known => Ok(profile.last_address.into_iter().collect()),
