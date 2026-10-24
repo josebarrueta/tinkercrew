@@ -4178,6 +4178,7 @@ dependencies = [
  "mdns-sd",
  "rcgen",
  "reqwest",
+ "ring",
  "rusqlite",
  "security-framework",
  "serde",

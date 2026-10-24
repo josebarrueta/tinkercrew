@@ -24,7 +24,7 @@ The guide performs no remote shell commands, OS updates, flashing, bootloader ch
 
 Checkpoint 8, **Establish full USB Pairing**, is a hard implementation gate. A checkbox cannot claim this succeeded. The remaining steps stay visibly pending:
 
-1. Physical USB trust bootstrap and dedicated SSH/gameplay key registration; revocation/removal and USB recovery.
+1. Integrate the separate [installed-Companion key registration/session/revocation slice](installation-pairing.md) into full first-run setup, including Board TLS identity provisioning, dedicated-key SSH login verification, and recovery. Registration alone cannot satisfy this checkpoint.
 2. Supported-version probing of image-specific setup helpers and safe password/Wi-Fi stdin operations before considering direct first-run automation.
 3. Atomic Companion install/upgrade, integrity/version verification, interrupted-transfer rollback, and preservation of a known-good deployment.
 4. Reboot followed by actual stable-identity LAN **and** USB verification, not treating transport disappearance as success.
@@ -42,4 +42,4 @@ Official documentation opens only through a fixed native URL; Mission code recei
 
 Automated tests exercise explicit identity selection, unrelated-device rejection, fresh evidence on resume, distinct human/observed records, blocked fake Pairing/deployment success, secret-field rejection, checkpoint reset behavior, native payload validation, and the browser preview's inability to claim completion.
 
-Actual Keychain/reinstall behavior, USB disconnection and boot behavior on reset/configured UNO Q images, and the complete physical setup matrix remain untested. The full reset-Board flow cannot be accepted until the missing integrations above are implemented and the matrix in `docs/qa/recovery-safety.md` passes. #11 must remain open and blocked, not merely labeled as awaiting validation.
+Actual Keychain/reinstall behavior, USB disconnection and boot behavior on reset/configured UNO Q images, and the complete physical setup matrix remain untested. The full reset-Board flow cannot be accepted until the missing integrations above are implemented and the matrix in `docs/qa/recovery-safety.md` passes. #11 remains open engineering work, not merely a task awaiting validation. Physical acceptance formerly referenced through #10 is now consolidated in #21.

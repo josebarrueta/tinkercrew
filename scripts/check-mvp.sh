@@ -3,6 +3,8 @@
 set -uo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$root"
+# Reuse explicitly installed project dependencies; this script never installs packages.
+if [[ -x "$root/.venv/bin/python3" ]]; then export PATH="$root/.venv/bin:$PATH"; fi
 build=0
 case "${1:-}" in
   "") ;;
@@ -37,6 +39,7 @@ run_check() {
     failed=$((failed + 1))
   fi
 }
+run_check 'Python Ed25519 dependency' python3 -c 'from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey'
 run_check 'Frontend quality and Rust lint' bash -c 'cd app && npm run quality'
 run_check 'Native persistence, TLS Companion, management and restore guards' cargo test --manifest-path app/src-tauri/Cargo.toml
 run_check 'Companion core and HTTP' env PYTHONPATH=companion/python python3 -m unittest discover -s companion/tests

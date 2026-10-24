@@ -34,6 +34,7 @@ sha2 = "0.11.1"
 wait-timeout = "0.2.1"
 fs2 = "0.4.3"
 libc = "0.2.191"
+ring = "0.17.14"
 
 
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration

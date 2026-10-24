@@ -1,2 +1,4 @@
+-r requirements-auth.txt
+
 # Bonjour is a convenience only; the Companion retains USB/manual fallback if unavailable.
 zeroconf>=0.148,<1

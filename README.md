@@ -71,11 +71,15 @@ For Universal builds, production signing/notarization, owner-provided secrets, d
 After `npm ci`, install the test browser once and run from the repository root:
 
 ```sh
+python3 -m venv .venv
+.venv/bin/python -m pip install -r companion/python/requirements-auth.txt
 cd app
 npx playwright install chromium
 cd ..
 bash scripts/check-mvp.sh --build
 ```
+
+The check script reuses `.venv` when present; it never installs packages itself. Activate it (`source .venv/bin/activate`) before running native/Python authentication tests directly. The new tests use real loopback TLS and temporary keys/registries, not actual hardware or user Keychain.
 
 This runs frontend/type/format/lint checks, Rust persistence and real loopback TLS tests, Python Companion tests, browser Mission/recovery tests, release metadata/signature checks, and an app build. Reports go to ignored `artifacts/qa/` and record toolchain versions and pass/fail results. To skip the app build, omit `--build`.
 
@@ -89,7 +93,7 @@ Simulator mode is the easiest first step. For hardware play:
 
 1. Complete supported first-time configuration in official Arduino App Lab; Tinkeroo's all-in-one factory provisioning is not complete.
 2. Install/start the reusable [UNO Q Companion](companion/README.md) on the Board and provision its TLS identity and credential outside source control.
-3. Follow the [USB-verified connection guide](docs/architecture/board-connections.md) and select the exact Board in Board Setup. The current provisioned-record import is a development bridge, not full TBP Pairing.
+3. Follow the [USB-verified connection guide](docs/architecture/board-connections.md) and select the exact Board in Board Setup. The provisioned-record import remains a development bridge. Updated TBP-configured Companions can instead use installation-key registration and short-lived sessions; see the [authentication slice and remaining provisioning frontier](docs/architecture/installation-pairing.md). Neither path completes all-in-one first-run setup.
 4. For USB fallback, separately install official [Android Platform-Tools](https://developer.android.com/tools/releases/platform-tools) (Arduino documents `brew install android-platform-tools`). Tinkeroo does **not** bundle Google's binaries or accept their license for you. `TC_ADB_PATH` may point to an absolute `adb` executable.
 
 UNO Q maker GPIO is **3.3 V**; never apply 5 V to analog inputs. Disconnect power before changing wiring. Follow the in-app safety panel and pending [physical acceptance plan](docs/qa/recovery-safety.md).

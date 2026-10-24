@@ -24,7 +24,17 @@ The initial app starts in Simulator mode and needs no UNO Q, cloud account, cred
 
 ## Checks and build
 
+Install the pinned authentication test dependencies once from the repository root:
+
 ```sh
+python3 -m venv .venv
+.venv/bin/python -m pip install -r companion/python/requirements-auth.txt
+```
+
+Then, from `app/` (or use `bash scripts/check-mvp.sh --build` at the root):
+
+```sh
+source ../.venv/bin/activate
 npm run quality
 cargo test --manifest-path src-tauri/Cargo.toml
 npx playwright install chromium # once per development machine
@@ -54,7 +64,7 @@ Mission definitions are versioned, schema-validated local JSON in `src/lib/missi
 
 The native app stores progress in `crew-progress.sqlite` inside its macOS application-data directory. Saves are atomic and revision-checked so a stale window cannot overwrite newer progress. Mission/version validation refuses incompatible or corrupt saves rather than silently resetting them. Browser-only development uses localStorage for **non-secret progress only**, separate from native SQLite saves. Live hardware evidence is never restored as if newly observed after a restart.
 
-Connected Board records and credentials use macOS Keychain, never SQLite or frontend storage. The Mission engine never collects credentials. Board Setup provides an explicit USB-verified provisioned-record import for development; full TBP Pairing remains integration work. See [`docs/architecture/board-connections.md`](../docs/architecture/board-connections.md) for transport, trust, diagnostics, and pending physical acceptance.
+Connected Board records and credentials use macOS Keychain, never SQLite or frontend storage. The Mission engine never collects credentials. Board Setup retains the explicit USB-verified provisioned-record import for legacy development and adds installation-key registration/signed sessions for an already installed TBP-configured Companion. Global gameplay/SSH seeds live only in Keychain; temporary session tokens stay native-memory-only. Complete wizard/SSH/deployment integration remains unfinished. See [`installation-pairing.md`](../docs/architecture/installation-pairing.md). See [`docs/architecture/board-connections.md`](../docs/architecture/board-connections.md) for transport, trust, diagnostics, and pending physical acceptance.
 
 ## Board Setup
 

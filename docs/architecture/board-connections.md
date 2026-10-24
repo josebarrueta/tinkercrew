@@ -18,7 +18,7 @@ ADB comes from official external Platform-Tools: `TC_ADB_PATH` (absolute executa
 
 ## Trust and the current development bridge
 
-The current #6 Companion uses a provisioned bearer credential, not the full proposed TBP Ed25519 challenge/session flow. To exercise connected play now, Board Setup can import an **already provisioned, USB-verified** record:
+The original Companion credential bridge uses a provisioned bearer token. The [installation authentication slice](installation-pairing.md) now adds separate opt-in TBP key registration, signed challenges/short-lived sessions, and physical revocation for an already installed/configured Companion; full first-run setup is still incomplete. To exercise connected play now, Board Setup can import an **already provisioned, USB-verified** record:
 
 ```json
 {
@@ -36,7 +36,7 @@ Do not commit a real record, paste it into an issue, or accept it solely from Wi
 
 The entire sensitive record is stored in macOS Keychain; a separate ordinary file contains only opaque Board lookup handles. Certificate roots are restricted to the USB-provisioned certificate, normal TLS hostname/validity checks remain enabled, and HTTPS is required on **all** paths. The authenticated hello must match the selected stable Board ID and protocol before a connection can accept gameplay Commands. Native connection handles prevent stale frontend clients from sending Commands through a replacement connection.
 
-This is a deliberately explicit development bridge, **not completion of full TBP Pairing**. Automated physical USB bootstrap, Ed25519 installation keys/short-lived sessions, SPKI-preserving certificate renewal, revocation UX, and WSS remain integration work. The current certificate-scoped trust bridge requires re-import after certificate renewal; it does not silently tolerate clock/certificate errors. Do not present the import form as production one-click first-time setup.
+This is a deliberately explicit development bridge, **not completion of full TBP Pairing**. The separate installed-Companion registration path implements USB-bound installation keys/short-lived sessions and physical revocation. First-run identity/bootstrap/deployment integration, dedicated-key SSH login verification, SPKI-preserving certificate renewal, and WSS remain unfinished. The current certificate-scoped trust bridge requires re-import after certificate renewal; it does not silently tolerate clock/certificate errors. Do not present the import form as production one-click first-time setup.
 
 ## Connected Mission behavior
 
