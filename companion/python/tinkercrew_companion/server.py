@@ -94,7 +94,7 @@ def runtime_maintenance(directory):
         return True
 
 
-def make_handler(companion: Companion, token: str | None = None, *, auth=None, rate_clock=time.monotonic, maintenance=None):
+def make_handler(companion: Companion, token: str | None = None, *, auth=None, rate_clock=time.monotonic, maintenance=None, control_clock=time.monotonic):
     if (auth is None) == (token is None):
         raise ValueError("Select exactly one authentication mode")
     if auth is not None:
@@ -112,7 +112,7 @@ def make_handler(companion: Companion, token: str | None = None, *, auth=None, r
                 if not companion.hello()["health"]["safe_state"]:
                     companion.enter_safe_state("maintenance_active")
                 control_token = None
-            if control_token and (time.monotonic() >= control_until or not auth.authenticate(control_token, touch=False)):
+            if control_token and (control_clock() >= control_until or not auth.authenticate(control_token, touch=False)):
                 companion.enter_safe_state("control_session_ended")
                 control_token = None
         companion.check_watchdog()
@@ -249,7 +249,7 @@ def make_handler(companion: Companion, token: str | None = None, *, auth=None, r
                             if self.path == "/v1/control-lease":
                                 result = companion.renew_control_lease(body.get("lease_ms", 1500))
                                 control_token = current
-                                control_until = time.monotonic() + min(body.get("lease_ms", 1500), 2000) / 1000
+                                control_until = control_clock() + min(body.get("lease_ms", 1500), 2000) / 1000
                                 self._send(200, result)
                                 return
                             if control_token != current:
