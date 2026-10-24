@@ -43,6 +43,8 @@ async function mockManagement(
             return registered
               ? [{ boardId: "known-board", name: "Registered test UNO Q" }]
               : [];
+          if (command === "app_update_info") return { version: "0.1.0" };
+          if (command === "open_app_releases") return null;
           if (command === "runtime_bundle_info")
             return {
               release: "b".repeat(64),
@@ -153,6 +155,39 @@ async function managementCalls(page: Page) {
       ).__managementCalls,
   );
 }
+
+test("Mac app upgrades are parent-approved manual replacements, separate from Board updates", async ({
+  page,
+}) => {
+  const management = await mockManagement(page);
+  await management.getByText("Upgrade the Mac app", { exact: true }).click();
+  await expect(management.getByText(/Installed Mac app: 0.1.0/)).toBeVisible();
+  await expect(
+    management.getByText(/Quit Tinkeroo before replacing/),
+  ).toBeVisible();
+  await management
+    .getByRole("button", {
+      name: "Open official Mac app releases",
+      exact: true,
+    })
+    .click();
+  const calls = await managementCalls(page);
+  expect(
+    calls.filter((call) => call.command === "open_app_releases"),
+  ).toHaveLength(1);
+  expect(
+    calls.some((call) =>
+      [
+        "update_companion_runtime",
+        "start_factory_restore",
+        "probe_board",
+      ].includes(call.command),
+    ),
+  ).toBe(false);
+  await expect(
+    management.getByText(/No app was downloaded or installed/),
+  ).toBeVisible();
+});
 
 test("runtime updates require an inspected registered Board and distinct typed update/recovery consent", async ({
   page,

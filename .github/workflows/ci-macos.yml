@@ -51,13 +51,14 @@ jobs:
         working-directory: app
         env:
           CI: 'true'
-        run: npm exec --offline -- tauri bundle --bundles app,dmg --ci
+        run: npm exec --offline -- tauri bundle --bundles app,dmg --ci --config src-tauri/tauri.development.conf.json
       - name: Verify DMG layout and prepare downloadable artifacts
         run: |
           set -euo pipefail
           bundle=app/src-tauri/target/release/bundle
           dmgs=("$bundle"/dmg/*.dmg)
           test "${#dmgs[@]}" = 1
+          codesign --verify --deep --strict "$bundle/macos/Tinkeroo.app"
           bash scripts/check-dmg-layout.sh "${dmgs[0]}"
           mkdir -p artifacts/build
           ditto -c -k --sequesterRsrc --keepParent "$bundle/macos/Tinkeroo.app" artifacts/build/Tinkeroo.app.zip

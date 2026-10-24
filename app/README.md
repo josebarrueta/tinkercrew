@@ -42,7 +42,11 @@ npm run test:e2e
 npm run build:app
 ```
 
-The app command creates `src-tauri/target/release/bundle/macos/Tinkeroo.app`. `npm run build:dmg` also creates a headless drag-to-Applications DMG under `src-tauri/target/release/bundle/dmg/`. Development artifacts use ad-hoc signing, not a public Developer ID identity. Hardened Runtime is enabled. The manual protected release workflow prepares Universal signed/notarized candidates only when owner-provided credentials exist; actual notarization and clean-Mac acceptance remain pending. See [`docs/release/macos.md`](../docs/release/macos.md).
+The app command creates `src-tauri/target/release/bundle/macos/Tinkeroo.app`. `npm run build:dmg` also creates a headless drag-to-Applications DMG under `src-tauri/target/release/bundle/dmg/`. Development artifacts use ad-hoc signing, not a public Developer ID identity. Hardened Runtime is enabled. The development scripts use a separate explicit ad-hoc signing config and CI checks the strict bundle/resource seal; the production signing config is not overridden. The manual protected release workflow prepares Universal signed/notarized candidates only when owner-provided credentials exist; actual notarization and clean-Mac acceptance remain pending. See [`docs/release/macos.md`](../docs/release/macos.md).
+
+## Upgrade the installed app
+
+Use **Board Setup → Upgrade the Mac app** to see the installed version, read the replacement checklist and open the fixed official Releases page. It disconnects local gameplay, refuses unresolved maintenance and never downloads/installs code or updates a Board automatically. Quit Tinkeroo, replace only the app bundle from a newer trusted DMG, and keep app data/Keychain. Public signed/notarized installers remain unavailable/unvalidated; development users can pull `main`, run `npm ci` and `npm run build:dmg`, then replace their locally built app. See the [full user instructions](../README.md#upgrade-the-mac-app).
 
 ## CI downloads and licensing
 

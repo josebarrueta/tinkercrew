@@ -44,6 +44,7 @@
   let restartConfirmation = $state("");
   let forgetConfirmation = $state("");
   let trustConfirmation = $state("");
+  let appVersion = $state("native app required");
   let runtimeConfirmation = $state("");
   let runtimeAbortConfirmation = $state("");
   let runtimeStatus = $state("");
@@ -170,6 +171,14 @@
   onMount(() => {
     void pollRestore();
     if (native)
+      void invoke<{ version: string }>("app_update_info")
+        .then((value) => {
+          appVersion = value.version;
+        })
+        .catch(() => {
+          appVersion = "unavailable";
+        });
+    if (native)
       void invoke<{ release: string }>("runtime_bundle_info")
         .then((value) => {
           runtimeRelease = value.release;
@@ -190,6 +199,49 @@
 </script>
 
 <section class="management" aria-label="Board configuration and recovery">
+  <details>
+    <summary>Upgrade the Mac app</summary>
+    <p>
+      Installed Mac app: {appVersion}. App upgrades are manual and
+      parent-approved, separate from the UNO Q runtime updater below. There is
+      no background updater or automatic download.
+    </p>
+    <ol>
+      <li>
+        Finish any Board maintenance, stop the Mission, and disconnect gameplay.
+        The button below returns this Mac to Simulator mode.
+      </li>
+      <li>
+        Choose a newer supported release from the official GitHub Releases page.
+        Public signed/notarized installers are not available/validated yet;
+        development builds may share a version number, so check their commit and
+        architecture.
+      </li>
+      <li>
+        Quit Tinkeroo before replacing Tinkeroo.app in Applications from the new
+        DMG. Keep this Mac's app data and Keychain entries; do not use Forget,
+        delete progress, or factory-reset the Board to upgrade.
+      </li>
+      <li>
+        Reopen Tinkeroo, check your Crew/progress, and explicitly reconnect and
+        rearm only when ready. Never bypass Gatekeeper. If blocked, stop and use
+        a trusted local build or wait for an approved release.
+      </li>
+    </ol>
+    <button
+      disabled={!native || busy || restorePending}
+      onclick={() =>
+        task(async () => {
+          await invoke("open_app_releases");
+          message =
+            "Requested the official Mac app releases page. No app was downloaded or installed, and the Board was not updated. Quit Tinkeroo before replacing the app.";
+        }, true)}>Open official Mac app releases</button
+    >
+    <p>
+      The README includes source-build upgrade commands. Replacing the Mac app
+      never automatically upgrades Board firmware or the Companion.
+    </p>
+  </details>
   <h3>Configure an existing UNO Q</h3>
   <p>
     Use your Linux username/password over a serial-targeted USB → SSH
