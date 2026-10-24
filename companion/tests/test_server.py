@@ -76,6 +76,23 @@ class ServerTests(unittest.TestCase):
                 server.server_close()
                 worker.join(timeout=2)
 
+    def test_numeric_listener_starts_and_serves_when_reverse_dns_is_unavailable(self):
+        from unittest.mock import patch
+        from tinkercrew_companion.server import CompanionHTTPServer
+        with patch("socket.getfqdn", side_effect=OSError("fixture reverse DNS unavailable")):
+            server = CompanionHTTPServer(("127.0.0.1", 0), make_handler(Companion(MemoryHardware()), self.token))
+            worker = threading.Thread(target=server.serve_forever, daemon=True)
+            worker.start()
+            try:
+                request = urllib.request.Request(f"http://127.0.0.1:{server.server_port}/v1/hello", headers={"Authorization": "Bearer " + self.token})
+                with urllib.request.urlopen(request, timeout=2) as response:
+                    self.assertEqual(response.status, 200)
+                    self.assertEqual(json.load(response)["protocol"], "1.0")
+            finally:
+                server.shutdown()
+                server.server_close()
+                worker.join(timeout=2)
+
     def test_body_framing_limits_are_rejected_before_reading(self):
         for framing, expected in [
             ([("Content-Length", "65537")], "message_too_large"),

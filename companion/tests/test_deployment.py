@@ -142,9 +142,6 @@ class DeploymentTests(unittest.TestCase):
             reservation.bind(("127.0.0.1", 0))
             port = reservation.getsockname()[1]
         (self.root / "data/companion.json").write_text(json.dumps({"auth_mode": "tbp", "board_id": board_id, "tls_name": "localhost", "tls_cert": "data/board.crt", "tls_key": "data/board.key", "bind": "127.0.0.1", "port": port}))
-        initializer = self.candidate / "python/tinkercrew_companion/__init__.py"
-        initializer.write_text(initializer.read_text() + '\nimport faulthandler\n_fixture_stack = open("data/fixture-stack.txt", "w")\nfaulthandler.dump_traceback_later(4, repeat=True, file=_fixture_stack)\n')
-        self.bundle = build_bundle(self.candidate)
         environment = {key: value for key, value in os.environ.items() if not key.startswith("TC_")}
         environment["TC_SIMULATE_HARDWARE"] = "1"
         process = subprocess.Popen([sys.executable, "-m", "tinkercrew_companion.supervisor", str(self.root)], env=environment, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -198,8 +195,6 @@ class DeploymentTests(unittest.TestCase):
             except AssertionError:
                 status = store.dispatch("status", {})
                 observed = status.get("observed") or {}
-                stack = self.root / "data/fixture-stack.txt"
-                print(stack.read_text()[-8192:] if stack.exists() else "fixture stack unavailable")
                 self.fail(f'authenticated trial health unavailable: phase={status["phase"]}, reason={status.get("reason", "none")}, child={observed.get("state", "unobserved")}, request={diagnostic}')
             self.assertTrue(hello["health"]["safe_state"])
             self.assertEqual(hello["board"]["board_id"], board_id)

@@ -8,6 +8,7 @@ import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from socketserver import TCPServer
 from collections import deque
 from urllib.parse import parse_qs, urlparse
 
@@ -47,6 +48,12 @@ def build_companion(board_version: str = "unknown", board_id: str = "unprovision
 
 
 class CompanionHTTPServer(ThreadingHTTPServer):
+    def server_bind(self):
+        # HTTPServer's diagnostic server_name lookup performs blocking reverse DNS.
+        # The configured TLS identity is independent; bind/listen must work offline.
+        TCPServer.server_bind(self)
+        self.server_name, self.server_port = self.server_address[:2]
+
     def serve_forever(self, poll_interval=0.1):
         stopped = threading.Event()
         def watchdog():
