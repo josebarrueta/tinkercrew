@@ -6,9 +6,19 @@ A local-first cooperative maker game for one family Crew: build LEGO creations, 
 
 > **Development preview:** the current implementation is on `main`. Simulator play is available without hardware. Physical UNO Q/family acceptance, full first-time Pairing/deployment, and public release signing/notarization are not complete. No production installer has been validated yet.
 
+## Start here
+
+| You want to… | Use this path |
+| --- | --- |
+| Try a Mission immediately, without hardware | [Open the browser prototype](#try-it-without-installing-anything) |
+| Run the native Mac app today | [Build locally](#build-and-run-from-source); public installers are not ready |
+| Replace an older Mac app | [Upgrade the Mac app](#upgrade-the-mac-app) — manual, parent-approved |
+| Use a real UNO Q | [Connect the Board](#connect-an-arduino-uno-q); official first-time setup is still required |
+| Update an installed Board's Linux runtime | [Board runtime updates](#upgrade-the-boards-companion-runtime) — **not** a Mac app upgrade |
+
 ## Try it without installing anything
 
-Clone/download the development branch and open [`prototypes/treasure-guardian.html`](prototypes/treasure-guardian.html) directly in a browser. This throwaway prototype is one self-contained file: no account, backend, installation, or Board is required.
+Clone/download `main` and open [`prototypes/treasure-guardian.html`](prototypes/treasure-guardian.html) directly in a browser. This throwaway prototype is one self-contained file: no account, backend, installation, or Board is required.
 
 For family feedback, use the [play-test guide](prototypes/treasure-guardian-playtest.md) and [findings template](prototypes/treasure-guardian-findings.md). Automated checks are not a substitute for a real family play test.
 
@@ -27,6 +37,32 @@ After a successful run of [macOS CI](https://github.com/josebarrueta/tinkercrew/
 CI builds the runner's **native architecture**, identified in the artifact name and DMG filename—not a validated Universal release. Check the workflow/ref/commit before downloading; PR artifacts are untrusted development outputs. Hashes detect corruption, not publisher authenticity. Production signature verification is a separate release gate.
 
 Build downloads expire after **14 days**; QA reports and failed browser-test diagnostics after **7 days**. Re-run CI or build locally after expiry. GitHub Actions artifacts are temporary storage; approved public installers belong in GitHub Releases, not git or Git LFS.
+
+## Upgrade the Mac app
+
+**A working manual upgrade path is provided; there is no automatic/in-app installer.** In the native app, open **Board Setup → Upgrade the Mac app → Open official Mac app releases**. This pauses/disconnects this Mac's gameplay and opens only the [official Releases page](https://github.com/josebarrueta/tinkercrew/releases); it does not download/install anything or change the Board. Resolve pending Board maintenance before upgrading.
+
+1. Choose a **newer, owner-approved** release for your Mac's architecture/macOS, read its release notes, and follow the [release trust/verification guidance](docs/release/macos.md#signed-application-update-design). No public signed/notarized installer is available/validated yet. Development/PR artifacts are not a substitute for an approved release.
+2. Stop the Mission, disconnect the Board, and **quit Tinkeroo completely**. Never quit or upgrade during an active factory restore.
+3. Back up needed progress using your normal Mac backup. Native data is under `~/Library/Application Support/com.tinkercrew.desktop/`; copy it only while the app is quit. Keep existing macOS Keychain entries; do not export credentials to shareable files.
+4. Open the new DMG and drag **Tinkeroo.app** to **Applications**, choosing **Replace** for the old app. Replace only the application bundle: do **not** delete app data, use Forget, clear Keychain, or reset/reflash the Board. Never disable Gatekeeper or remove quarantine; stop if macOS rejects the download.
+5. Reopen the app, check the displayed version and your Crew/progress, and reconnect/rearm explicitly when ready. Existing storage/Keychain identifiers are retained; real upgrade/reinstall acceptance remains pending. If progress is unreadable, preserve the backup and report the error rather than resetting it or blindly downgrading.
+
+### Upgrade a locally built development app now
+
+With the [prerequisites below](#prerequisites) installed, quit the old app and run from your existing checkout:
+
+```sh
+git status --short       # STOP if this lists changes; preserve/commit them first
+# The && chain stops if checkout, pull, install, or build fails.
+git switch main &&
+git pull --ff-only &&
+npm --prefix app ci &&
+npm --prefix app run build:dmg &&
+codesign --verify --deep --strict app/src-tauri/target/release/bundle/macos/Tinkeroo.app
+```
+
+Install the newly built app/DMG by replacing the old bundle as above. Development builds may share the version `0.1.0`; record the source commit (`git rev-parse --short HEAD`) or CI artifact commit, not just the version. A local development build is ad-hoc signed, **not** notarized or approved for general distribution. [CI downloads](#ci-development-downloads) remain developer-only and can be blocked by Gatekeeper; a trusted local build or an approved release is the supported alternative, not a bypass.
 
 ## Build and run from source
 
@@ -62,7 +98,7 @@ Outputs:
 - `app/src-tauri/target/release/bundle/macos/Tinkeroo.app`
 - `app/src-tauri/target/release/bundle/dmg/Tinkeroo_VERSION_ARCH.dmg`
 
-Open your local `.app`, or copy it to Applications for local testing. “Release mode” means an optimized build, **not** a production-signed/notarized release. The DMG script sets `CI=true` to avoid interactive Finder layout automation while preserving the Applications link.
+Open your local `.app`, or copy it to Applications for local testing. “Release mode” means an optimized build, **not** a production-signed/notarized release. Both development build scripts explicitly seal/sign the bundle ad-hoc using `tauri.development.conf.json`; CI verifies the strict resource seal. This separate configuration is not used by the protected Developer ID release workflow. The DMG script sets `CI=true` to avoid interactive Finder layout automation while preserving the Applications link.
 
 For Universal builds, production signing/notarization, owner-provided secrets, detached update signatures, and clean-Mac gates, see the [release procedure](docs/release/macos.md). Routine CI never receives signing credentials, publishes releases, or updates a Board.
 
@@ -98,6 +134,16 @@ Simulator mode is the easiest first step. For hardware play:
 
 UNO Q maker GPIO is **3.3 V**; never apply 5 V to analog inputs. Disconnect power before changing wiring. Follow the in-app safety panel and pending [physical acceptance plan](docs/qa/recovery-safety.md).
 
+## Upgrade the Board's Companion runtime
+
+This is **separate from upgrading Tinkeroo on the Mac**. On an already installed, compatible, supervised TBP baseline, use **Board Setup → Recoverable Linux runtime update**:
+
+1. Connect/select the physical USB Board, inspect its hardware serial, and select its registered Board profile.
+2. Confirm the exact Board, type `UPDATE <hardware serial>`, and choose **Update / resume bundled Linux runtime**. Only the runtime bundled with this Mac app is eligible; there is no arbitrary archive installer.
+3. Wait for authenticated disarmed trial health and the reported committed outcome. Interruption or a failed trial must be inspected/resumed or explicitly aborted; never assume disconnect means success. No automatic reconnect/rearm follows.
+
+This does not install the initial baseline, change credentials/dependencies/firmware, or flash the OS. Unsupported contracts require the supported official setup handoff. Actual UNO Q update/rollback acceptance is still NOT RUN. See the [runtime contract and recovery limitations](docs/architecture/runtime-updates.md).
+
 ## Board Setup and recovery
 
 **Board Setup** replaces Parent Settings and brings connections, existing-Board Linux authentication, hostname/Wi-Fi configuration, scheduled restart, local pairing cleanup, and guarded factory restore into one hub. Linux passwords are request-only, never saved. Management pauses gameplay.
@@ -118,6 +164,7 @@ The GitHub repository remains `josebarrueta/tinkercrew`. Existing bundle identit
 - [Companion installation, API, and tests](companion/README.md)
 - [Board Setup management and destructive recovery](docs/architecture/board-setup.md)
 - [Resumable setup handoffs and remaining implementation](docs/architecture/setup-checkpoints.md)
+- [Recoverable installed-baseline Linux runtime updates and limitations](docs/architecture/runtime-updates.md)
 - [Secure protocol proposal](docs/architecture/secure-board-protocol.md)
 - [MVP roadmap and open work](https://github.com/josebarrueta/tinkercrew/issues/13)
 

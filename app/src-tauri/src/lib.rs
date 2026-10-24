@@ -1,10 +1,13 @@
 mod admin_process;
+mod app_updates;
 mod connection;
 mod discovery;
+mod file_lock;
 mod management;
 mod pairing;
 mod progress;
 mod recovery;
+mod runtime_update;
 mod session;
 mod setup;
 
@@ -66,7 +69,13 @@ pub fn run() {
             connection::forget_board,
             pairing::pair_installed_companion,
             pairing::list_board_pairings,
-            pairing::revoke_board_pairing
+            pairing::revoke_board_pairing,
+            app_updates::app_update_info,
+            app_updates::open_app_releases,
+            runtime_update::runtime_bundle_info,
+            runtime_update::runtime_update_status,
+            runtime_update::update_companion_runtime,
+            runtime_update::abort_companion_runtime_update
         ])
         .run(tauri::generate_context!())
         .expect("error while running Tinkeroo");

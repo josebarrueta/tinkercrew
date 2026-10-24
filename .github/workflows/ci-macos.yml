@@ -45,19 +45,22 @@ jobs:
           python3 -m venv .venv
           .venv/bin/python -m pip install --disable-pip-version-check -r companion/python/requirements-auth.txt
           echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
+      - name: Verify supervised TLS runtime health before expensive native compilation
+        run: PYTHONPATH=companion/python:companion/tests python3 -m unittest test_deployment.DeploymentTests.test_real_tls_health_binds_the_candidate_nonce_before_commit -v
       - name: Run software checks and build native app
         run: bash scripts/check-mvp.sh --build
       - name: Bundle native development DMG without rebuilding
         working-directory: app
         env:
           CI: 'true'
-        run: npm exec --offline -- tauri bundle --bundles app,dmg --ci
+        run: npm exec --offline -- tauri bundle --bundles app,dmg --ci --config src-tauri/tauri.development.conf.json
       - name: Verify DMG layout and prepare downloadable artifacts
         run: |
           set -euo pipefail
           bundle=app/src-tauri/target/release/bundle
           dmgs=("$bundle"/dmg/*.dmg)
           test "${#dmgs[@]}" = 1
+          codesign --verify --deep --strict "$bundle/macos/Tinkeroo.app"
           bash scripts/check-dmg-layout.sh "${dmgs[0]}"
           mkdir -p artifacts/build
           ditto -c -k --sequesterRsrc --keepParent "$bundle/macos/Tinkeroo.app" artifacts/build/Tinkeroo.app.zip

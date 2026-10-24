@@ -37,6 +37,62 @@ class ServerTests(unittest.TestCase):
             headers["Content-Type"] = "application/json"
         return urllib.request.urlopen(urllib.request.Request(self.base + path, data=data, headers=headers), timeout=2)
 
+    def test_pending_runtime_update_blocks_other_clients_and_watchdog_disarms_without_a_request(self):
+        import tempfile
+        import time
+        from pathlib import Path
+        from tinkercrew_companion.server import CompanionHTTPServer, runtime_maintenance
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            core = Companion(MemoryHardware())
+            server = CompanionHTTPServer(("127.0.0.1", 0), make_handler(core, self.token, maintenance=lambda: runtime_maintenance(directory)))
+            worker = threading.Thread(target=server.serve_forever, daemon=True)
+            worker.start()
+            base = f"http://127.0.0.1:{server.server_port}"
+            def call(path, body=None):
+                data = json.dumps(body).encode() if body is not None else None
+                return urllib.request.urlopen(urllib.request.Request(base + path, data=data, headers={"Authorization": "Bearer " + self.token, "Content-Type": "application/json"}), timeout=2)
+            try:
+                with call("/v1/control-lease", {"lease_ms": 2000}):
+                    pass
+                (directory / "job.json").write_text(json.dumps({"phase": "uploading"}))
+                deadline = time.monotonic() + 1
+                while not core.hello()["health"]["safe_state"] and time.monotonic() < deadline:
+                    time.sleep(0.01)
+                self.assertTrue(core.hello()["health"]["safe_state"])
+                with call("/v1/hello") as response:
+                    self.assertEqual(response.status, 200)
+                with self.assertRaises(urllib.error.HTTPError) as busy:
+                    call("/v1/control-lease", {"lease_ms": 1500})
+                self.assertEqual(busy.exception.code, 503)
+                self.assertEqual(json.load(busy.exception)["error"]["code"], "maintenance_active")
+                busy.exception.close()
+                (directory / "job.json").write_text(json.dumps({"phase": "aborted"}))
+                self.assertTrue(core.hello()["health"]["safe_state"])
+                with call("/v1/control-lease", {"lease_ms": 1500}) as response:
+                    self.assertEqual(response.status, 200)
+            finally:
+                server.shutdown()
+                server.server_close()
+                worker.join(timeout=2)
+
+    def test_numeric_listener_starts_and_serves_when_reverse_dns_is_unavailable(self):
+        from unittest.mock import patch
+        from tinkercrew_companion.server import CompanionHTTPServer
+        with patch("socket.getfqdn", side_effect=OSError("fixture reverse DNS unavailable")):
+            server = CompanionHTTPServer(("127.0.0.1", 0), make_handler(Companion(MemoryHardware()), self.token))
+            worker = threading.Thread(target=server.serve_forever, daemon=True)
+            worker.start()
+            try:
+                request = urllib.request.Request(f"http://127.0.0.1:{server.server_port}/v1/hello", headers={"Authorization": "Bearer " + self.token})
+                with urllib.request.urlopen(request, timeout=2) as response:
+                    self.assertEqual(response.status, 200)
+                    self.assertEqual(json.load(response)["protocol"], "1.0")
+            finally:
+                server.shutdown()
+                server.server_close()
+                worker.join(timeout=2)
+
     def test_body_framing_limits_are_rejected_before_reading(self):
         for framing, expected in [
             ([("Content-Length", "65537")], "message_too_large"),

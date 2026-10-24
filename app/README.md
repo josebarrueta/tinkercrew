@@ -42,7 +42,11 @@ npm run test:e2e
 npm run build:app
 ```
 
-The app command creates `src-tauri/target/release/bundle/macos/Tinkeroo.app`. `npm run build:dmg` also creates a headless drag-to-Applications DMG under `src-tauri/target/release/bundle/dmg/`. Development artifacts use ad-hoc signing, not a public Developer ID identity. Hardened Runtime is enabled. The manual protected release workflow prepares Universal signed/notarized candidates only when owner-provided credentials exist; actual notarization and clean-Mac acceptance remain pending. See [`docs/release/macos.md`](../docs/release/macos.md).
+The app command creates `src-tauri/target/release/bundle/macos/Tinkeroo.app`. `npm run build:dmg` also creates a headless drag-to-Applications DMG under `src-tauri/target/release/bundle/dmg/`. Development artifacts use ad-hoc signing, not a public Developer ID identity. Hardened Runtime is enabled. The development scripts use a separate explicit ad-hoc signing config and CI checks the strict bundle/resource seal; the production signing config is not overridden. The manual protected release workflow prepares Universal signed/notarized candidates only when owner-provided credentials exist; actual notarization and clean-Mac acceptance remain pending. See [`docs/release/macos.md`](../docs/release/macos.md).
+
+## Upgrade the installed app
+
+Use **Board Setup → Upgrade the Mac app** to see the installed version, read the replacement checklist and open the fixed official Releases page. It disconnects local gameplay, refuses unresolved maintenance and never downloads/installs code or updates a Board automatically. Quit Tinkeroo, replace only the app bundle from a newer trusted DMG, and keep app data/Keychain. Public signed/notarized installers remain unavailable/unvalidated; development users can pull `main`, run `npm ci` and `npm run build:dmg`, then replace their locally built app. See the [full user instructions](../README.md#upgrade-the-mac-app).
 
 ## CI downloads and licensing
 
@@ -64,7 +68,7 @@ Mission definitions are versioned, schema-validated local JSON in `src/lib/missi
 
 The native app stores progress in `crew-progress.sqlite` inside its macOS application-data directory. Saves are atomic and revision-checked so a stale window cannot overwrite newer progress. Mission/version validation refuses incompatible or corrupt saves rather than silently resetting them. Browser-only development uses localStorage for **non-secret progress only**, separate from native SQLite saves. Live hardware evidence is never restored as if newly observed after a restart.
 
-Connected Board records and credentials use macOS Keychain, never SQLite or frontend storage. The Mission engine never collects credentials. Board Setup retains the explicit USB-verified provisioned-record import for legacy development and adds installation-key registration/signed sessions for an already installed TBP-configured Companion. Global gameplay/SSH seeds live only in Keychain; temporary session tokens stay native-memory-only. Complete wizard/SSH/deployment integration remains unfinished. See [`installation-pairing.md`](../docs/architecture/installation-pairing.md). See [`docs/architecture/board-connections.md`](../docs/architecture/board-connections.md) for transport, trust, diagnostics, and pending physical acceptance.
+Connected Board records and credentials use macOS Keychain, never SQLite or frontend storage. The Mission engine never collects credentials. Board Setup retains the explicit USB-verified provisioned-record import for legacy development and adds installation-key registration/signed sessions for an already installed TBP-configured Companion. Global gameplay/SSH seeds live only in Keychain; temporary session tokens stay native-memory-only. A separate [Linux runtime updater](../docs/architecture/runtime-updates.md) adds fixed bundled-code transfer, resume, trial health and rollback for compatible installed baselines. Complete wizard/SSH/initial or whole-app deployment integration remains unfinished. See [`installation-pairing.md`](../docs/architecture/installation-pairing.md). See [`docs/architecture/board-connections.md`](../docs/architecture/board-connections.md) for transport, trust, diagnostics, and pending physical acceptance.
 
 ## Board Setup
 

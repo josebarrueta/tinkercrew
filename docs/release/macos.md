@@ -5,7 +5,7 @@ Status: packaging/signing/notarization automation and signed-update design imple
 ## Architecture and minimum OS
 
 - Minimum macOS: **12.0**.
-- Development builds use the current machine's architecture and may be ad-hoc signed.
+- Development builds use the current machine's architecture and are explicitly ad-hoc signed by the development-only config.
 - Public release workflow builds **Universal 2** (`universal-apple-darwin`) with both `aarch64-apple-darwin` and `x86_64-apple-darwin` Rust targets. One DMG supports both Apple silicon and Intel.
 - A successful cross-build is not Intel runtime validation. Test an actual supported Intel Mac and an Apple silicon Mac before claiming support/publication. No Rosetta requirement is intended.
 - No ADB executable is embedded today; official external Platform-Tools remains separately installed. Any future embedded USB helper must pass the same signing-team/embedded-code checks and licensing review.
@@ -18,7 +18,7 @@ npm ci
 npm run build:dmg
 ```
 
-The `.app` is under `src-tauri/target/release/bundle/macos/`, and the drag-to-Applications `.dmg` is under `src-tauri/target/release/bundle/dmg/`. Tauri's DMG bundler creates the Applications link. The script sets exactly `CI=true` to skip interactive Finder layout automation; `CI=1` is not equivalent for the installed bundler and caused an AppleScript timeout during implementation. The Applications link is retained even when cosmetic Finder layout is skipped. These are **development artifacts**, not notarized public installers.
+The `.app` is under `src-tauri/target/release/bundle/macos/`, and the drag-to-Applications `.dmg` is under `src-tauri/target/release/bundle/dmg/`. Tauri's DMG bundler creates the Applications link. The script sets exactly `CI=true` to skip interactive Finder layout automation; `CI=1` is not equivalent for the installed bundler and caused an AppleScript timeout during implementation. The Applications link is retained even when cosmetic Finder layout is skipped. These are **development artifacts**, not notarized public installers. `build:app`, `build:dmg`, and CI bundling explicitly use `src-tauri/tauri.development.conf.json` to seal/sign the executable **and bundle resources** ad-hoc. CI runs `codesign --verify --deep --strict`; local verification uses the same command on `src-tauri/target/release/bundle/macos/Tinkeroo.app`. The protected production workflow does not load this override.
 
 ## Owner-only prerequisites (do later, not silently)
 
@@ -65,7 +65,7 @@ This performs real Apple submissions and is intentionally **not** part of routin
 
 ## Signed application update design
 
-MVP updates are **parent-approved manual installs**, not an automatic background installer. The app never checks/downloads/installs updates during a Mission or silently updates the UNO Q. A parent obtains a release candidate from the official GitHub Release, verifies signatures, and installs the DMG. There is currently no in-app updater plugin or permission capable of installing arbitrary downloads.
+MVP updates are **parent-approved manual installs**, not an automatic background installer. The app never checks/downloads/installs updates during a Mission or silently updates the UNO Q. A parent obtains a release candidate from the official GitHub Release, verifies signatures, and installs the DMG. There is currently no in-app updater plugin or permission capable of installing arbitrary downloads. **Board Setup → Upgrade the Mac app** displays the installed version and opens only the fixed official Releases URL, after stopping local gameplay and refusing unresolved maintenance. It never compares/downloads/installs artifacts automatically. Follow the [user replacement/source-build instructions](../../README.md#upgrade-the-mac-app); keep app data/Keychain and explicitly reconnect after replacement. Mac app replacement never automatically updates the Board's Companion or firmware.
 
 The publication format protects **both** metadata and artifact:
 

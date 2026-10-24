@@ -32,9 +32,9 @@ class PairingTests(unittest.TestCase):
         self.key = ed25519.Ed25519PrivateKey.generate()
         self.ssh_key = ed25519.Ed25519PrivateKey.generate()
         self.registration = {"installation_id": INSTALLATION, "label": "Test Mac", "public_key": base64.urlsafe_b64encode(self.key.public_key().public_bytes_raw()).decode().rstrip("="), "ssh_public_key": self.ssh_key.public_key().public_bytes(serialization.Encoding.OpenSSH, serialization.PublicFormat.OpenSSH).decode()}
-        self.companion = Companion(MemoryHardware(), board_id=BOARD)
+        self.companion = Companion(MemoryHardware(), board_id=BOARD, clock=lambda: self.clock)
         self.companion.record_distance(250)
-        self.server = CompanionHTTPServer(("127.0.0.1", 0), make_handler(self.companion, auth=self.registry, rate_clock=lambda: self.clock))
+        self.server = CompanionHTTPServer(("127.0.0.1", 0), make_handler(self.companion, auth=self.registry, rate_clock=lambda: self.clock, control_clock=lambda: self.clock))
         cert_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
         name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "localhost")])
         now = datetime.datetime.now(datetime.timezone.utc)
@@ -204,6 +204,14 @@ class PairingTests(unittest.TestCase):
         with self.assertRaises(AuthError) as forbidden:
             management.dispatch({"operation": "revoke", "expected_serial": "42", "installation_id": INSTALLATION}, ssh_installation=INSTALLATION)
         self.assertEqual(forbidden.exception.code, "authentication_failed")
+        from unittest.mock import patch
+        with patch("os.geteuid", return_value=0):
+            with self.assertRaises(AuthError) as permissions:
+                management.dispatch({"operation": "runtime_status", "expected_serial": "42"})
+            self.assertEqual(permissions.exception.code, "unsupported_permissions")
+        for operation, parameters in (("runtime_status", {}), ("runtime_cancel", {"release": "a" * 64})):
+            with self.assertRaises(AuthError):
+                management.dispatch(dict(operation=operation, expected_serial="42", **parameters), ssh_installation=INSTALLATION)
 
     def test_expired_and_invalid_proofs_are_single_attempt_and_sessions_expire(self):
         self.pair()
@@ -244,8 +252,12 @@ class PairingTests(unittest.TestCase):
         self.assertEqual(self.request("/v1/commands", {"operation": "pixels.set", "arguments": {"color": "#00ff00", "brightness": 0.2, "duration_ms": 1500}}, token)[0], 200)
         self.registry.revoke(INSTALLATION)
         import time
-        time.sleep(0.15)
-        # The public hardware state boundary, not a DB inspection or an authorization-triggering request.
+        # Logical lease/session time is frozen: expiry cannot make this pass.
+        # Wait for the independently scheduled watchdog, not one arbitrary sleep.
+        deadline = time.monotonic() + 1
+        while not self.companion.state()["health"]["safe_state"] and time.monotonic() < deadline:
+            time.sleep(0.01)
+        # Public state only; no authorization-triggering request or manual tick.
         self.assertTrue(self.companion.state()["health"]["safe_state"])
 
     def test_usb_pairing_is_single_use_and_signed_session_controls_only_until_revoked(self):

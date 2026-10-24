@@ -44,6 +44,11 @@
   let restartConfirmation = $state("");
   let forgetConfirmation = $state("");
   let trustConfirmation = $state("");
+  let appVersion = $state("native app required");
+  let runtimeConfirmation = $state("");
+  let runtimeAbortConfirmation = $state("");
+  let runtimeStatus = $state("");
+  let runtimeRelease = $state("");
   let pairConfirmation = $state("");
   let installationLabel = $state("Family Mac");
   let pairingSerial = $state("");
@@ -165,6 +170,23 @@
   }
   onMount(() => {
     void pollRestore();
+    if (native)
+      void invoke<{ version: string }>("app_update_info")
+        .then((value) => {
+          appVersion = value.version;
+        })
+        .catch(() => {
+          appVersion = "unavailable";
+        });
+    if (native)
+      void invoke<{ release: string }>("runtime_bundle_info")
+        .then((value) => {
+          runtimeRelease = value.release;
+        })
+        .catch(() => {
+          error =
+            "The fixed runtime bundle is unavailable; no update can be started.";
+        });
     const timer = setInterval(() => {
       if (restore.phase !== "idle") void pollRestore();
     }, 1000);
@@ -177,6 +199,49 @@
 </script>
 
 <section class="management" aria-label="Board configuration and recovery">
+  <details>
+    <summary>Upgrade the Mac app</summary>
+    <p>
+      Installed Mac app: {appVersion}. App upgrades are manual and
+      parent-approved, separate from the UNO Q runtime updater below. There is
+      no background updater or automatic download.
+    </p>
+    <ol>
+      <li>
+        Finish any Board maintenance, stop the Mission, and disconnect gameplay.
+        The button below returns this Mac to Simulator mode.
+      </li>
+      <li>
+        Choose a newer supported release from the official GitHub Releases page.
+        Public signed/notarized installers are not available/validated yet;
+        development builds may share a version number, so check their commit and
+        architecture.
+      </li>
+      <li>
+        Quit Tinkeroo before replacing Tinkeroo.app in Applications from the new
+        DMG. Keep this Mac's app data and Keychain entries; do not use Forget,
+        delete progress, or factory-reset the Board to upgrade.
+      </li>
+      <li>
+        Reopen Tinkeroo, check your Crew/progress, and explicitly reconnect and
+        rearm only when ready. Never bypass Gatekeeper. If blocked, stop and use
+        a trusted local build or wait for an approved release.
+      </li>
+    </ol>
+    <button
+      disabled={!native || busy || restorePending}
+      onclick={() =>
+        task(async () => {
+          await invoke("open_app_releases");
+          message =
+            "Requested the official Mac app releases page. No app was downloaded or installed, and the Board was not updated. Quit Tinkeroo before replacing the app.";
+        }, true)}>Open official Mac app releases</button
+    >
+    <p>
+      The README includes source-build upgrade commands. Replacing the Mac app
+      never automatically upgrades Board firmware or the Companion.
+    </p>
+  </details>
   <h3>Configure an existing UNO Q</h3>
   <p>
     Use your Linux username/password over a serial-targeted USB → SSH
@@ -462,6 +527,104 @@
           }, true)}>Revoke selected installation on this Board</button
       >
     </fieldset>
+  </details>
+  <details>
+    <summary>Recoverable Linux runtime update</summary>
+    <p>
+      Updates only the six bundled Companion runtime modules on an already
+      installed, compatible TBP baseline with its supervisor running. Firmware,
+      dependencies, bootstrap helpers, credentials, and Pairings cannot be
+      changed by this path. First installation and firmware/dependency changes
+      still require separate supported setup.
+    </p>
+    <p>
+      Arduino App CLI restart can re-upload the sketch; this updater
+      deliberately does not call it. A local supervisor restarts only its own
+      Python child. Unacknowledged or crashing trials roll back without this Mac
+      staying connected. A fresh authenticated, disarmed health check is
+      required before committing.
+    </p>
+    <p>
+      Bundled release: <span class="digest"
+        >{runtimeRelease || "native app required"}</span
+      >
+    </p>
+    <p>
+      Select the exact registered Board in the Companion connection selector
+      below first. No update automatically reconnects or rearms gameplay.
+    </p>
+    <fieldset
+      disabled={!native ||
+        busy ||
+        restorePending ||
+        !board ||
+        !usbConfirmed ||
+        !pairedBoardId}
+    >
+      <button
+        onclick={() =>
+          task(async () => {
+            const status = await invoke<{
+              phase: string;
+              current: string;
+              offset: number;
+              supervisor_ready: boolean;
+            }>("runtime_update_status", { serial });
+            runtimeStatus = `${status.phase}; ${status.offset} bytes transferred; supervisor ${status.supervisor_ready ? "present" : "unavailable"}; active ${status.current}`;
+          })}>Inspect runtime update status over USB</button
+      >
+      <label
+        >Type UPDATE {board?.serial ?? "hardware-serial"}<input
+          autocomplete="off"
+          bind:value={runtimeConfirmation}
+        /></label
+      >
+      <button
+        disabled={runtimeConfirmation !== `UPDATE ${board?.serial}`}
+        onclick={async () => {
+          const confirmation = runtimeConfirmation;
+          runtimeConfirmation = "";
+          await task(async () => {
+            const result = await invoke<{ phase: string; message: string }>(
+              "update_companion_runtime",
+              { serial, boardId: pairedBoardId, confirmation },
+            );
+            runtimeStatus = result.phase;
+            message = result.message;
+          }, true);
+        }}>Update / resume bundled Linux runtime</button
+      >
+      <p>
+        If an earlier transfer/trial is pending after interruption or an app
+        upgrade, inspect the same physical Board and resolve it explicitly.
+        Abort does not undo an already committed update or erase Board data.
+      </p>
+      <label
+        >Type ABORT UPDATE {board?.serial ?? "hardware-serial"}<input
+          autocomplete="off"
+          bind:value={runtimeAbortConfirmation}
+        /></label
+      >
+      <button
+        disabled={runtimeAbortConfirmation !== `ABORT UPDATE ${board?.serial}`}
+        onclick={async () => {
+          const confirmation = runtimeAbortConfirmation;
+          runtimeAbortConfirmation = "";
+          await task(async () => {
+            const result = await invoke<{ phase: string; message: string }>(
+              "abort_companion_runtime_update",
+              { serial, boardId: pairedBoardId, confirmation },
+            );
+            runtimeStatus = result.phase;
+            message = result.message;
+          }, true);
+        }}>Abort / recover pending runtime update</button
+      >
+    </fieldset>
+    {#if runtimeStatus}<p role="status">
+        Runtime update: {runtimeStatus}. Physical hardware acceptance is still
+        separate.
+      </p>{/if}
   </details>
   <details class="recovery">
     <summary>Restart, pairing cleanup, and factory recovery</summary>

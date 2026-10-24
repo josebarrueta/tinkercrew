@@ -11,7 +11,7 @@ use zeroize::Zeroizing;
 
 const COMMAND: &str = "python3 /home/arduino/ArduinoApps/tinkercrew-companion/python/management.py";
 
-fn usb(serial: &str, body: &Value) -> Result<Value, String> {
+pub(crate) fn usb(serial: &str, body: &Value) -> Result<Value, String> {
     management::inspect(serial)?; // Requires fresh physical usb: evidence and UNO Q/Debian/SoC identity.
     let path = crate::discovery::adb_path().map_err(|error| error.message)?;
     let input = Zeroizing::new(serde_json::to_vec(body).map_err(|_| "Invalid Pairing input.")?);
@@ -23,13 +23,13 @@ fn usb(serial: &str, body: &Value) -> Result<Value, String> {
     }
     Ok(response["result"].clone())
 }
-struct Forward {
+pub(crate) struct Forward {
     path: PathBuf,
     serial: String,
-    port: u16,
+    pub(crate) port: u16,
 }
 impl Forward {
-    fn new(serial: &str) -> Result<Self, String> {
+    pub(crate) fn new(serial: &str) -> Result<Self, String> {
         let path = crate::discovery::adb_path().map_err(|error| error.message)?;
         let output = admin_process::run(
             &path,
