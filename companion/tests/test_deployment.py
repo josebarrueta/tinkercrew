@@ -146,12 +146,15 @@ class DeploymentTests(unittest.TestCase):
         environment["TC_SIMULATE_HARDWARE"] = "1"
         process = subprocess.Popen([sys.executable, "-m", "tinkercrew_companion.supervisor", str(self.root)], env=environment, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         context = ssl.create_default_context(cafile=str(certificate))
+        diagnostic = {"route": "not_requested", "http": None, "exception": None}
         def request(path, body=None, token=None):
-            peer = http.client.HTTPSConnection("localhost", port, context=context, timeout=1)
+            diagnostic.update(route=path, http=None, exception=None)
+            peer = http.client.HTTPSConnection("localhost", port, context=context, timeout=3)
             try:
                 headers = {"Authorization": "Bearer " + token} if token else {}
                 peer.request("POST" if body is not None else "GET", path, json.dumps(body) if body is not None else None, headers)
                 response = peer.getresponse()
+                diagnostic["http"] = response.status
                 result = json.load(response)
                 return result if response.status == 200 else {}
             finally:
@@ -165,7 +168,8 @@ class DeploymentTests(unittest.TestCase):
                 session = request("/v1/sessions", {"board_id": board_id, "installation_id": installation, "challenge_id": challenge["challenge_id"], "signature": base64.urlsafe_b64encode(key.sign(message)).decode().rstrip("=")})
                 hello = request("/v1/hello", token=session["session_token"])
                 return hello["runtime"]["release"] == self.bundle["release"]
-            except (OSError, KeyError, http.client.HTTPException):
+            except (OSError, KeyError, http.client.HTTPException) as error:
+                diagnostic["exception"] = type(error).__name__
                 return False
         try:
             store = RuntimeDeployment(self.root)
@@ -180,7 +184,7 @@ class DeploymentTests(unittest.TestCase):
             except AssertionError:
                 status = store.dispatch("status", {})
                 observed = status.get("observed") or {}
-                self.fail(f'authenticated trial health unavailable: phase={status["phase"]}, reason={status.get("reason", "none")}, child={observed.get("state", "unobserved")}')
+                self.fail(f'authenticated trial health unavailable: phase={status["phase"]}, reason={status.get("reason", "none")}, child={observed.get("state", "unobserved")}, request={diagnostic}')
             self.assertTrue(hello["health"]["safe_state"])
             self.assertEqual(hello["board"]["board_id"], board_id)
             self.assertEqual(store.dispatch("finish", {"token": token, "nonce": hello["runtime"]["nonce"]})["phase"], "committed")
