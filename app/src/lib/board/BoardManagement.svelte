@@ -44,6 +44,10 @@
   let restartConfirmation = $state("");
   let forgetConfirmation = $state("");
   let trustConfirmation = $state("");
+  let runtimeConfirmation = $state("");
+  let runtimeAbortConfirmation = $state("");
+  let runtimeStatus = $state("");
+  let runtimeRelease = $state("");
   let pairConfirmation = $state("");
   let installationLabel = $state("Family Mac");
   let pairingSerial = $state("");
@@ -165,6 +169,15 @@
   }
   onMount(() => {
     void pollRestore();
+    if (native)
+      void invoke<{ release: string }>("runtime_bundle_info")
+        .then((value) => {
+          runtimeRelease = value.release;
+        })
+        .catch(() => {
+          error =
+            "The fixed runtime bundle is unavailable; no update can be started.";
+        });
     const timer = setInterval(() => {
       if (restore.phase !== "idle") void pollRestore();
     }, 1000);
@@ -462,6 +475,104 @@
           }, true)}>Revoke selected installation on this Board</button
       >
     </fieldset>
+  </details>
+  <details>
+    <summary>Recoverable Linux runtime update</summary>
+    <p>
+      Updates only the six bundled Companion runtime modules on an already
+      installed, compatible TBP baseline with its supervisor running. Firmware,
+      dependencies, bootstrap helpers, credentials, and Pairings cannot be
+      changed by this path. First installation and firmware/dependency changes
+      still require separate supported setup.
+    </p>
+    <p>
+      Arduino App CLI restart can re-upload the sketch; this updater
+      deliberately does not call it. A local supervisor restarts only its own
+      Python child. Unacknowledged or crashing trials roll back without this Mac
+      staying connected. A fresh authenticated, disarmed health check is
+      required before committing.
+    </p>
+    <p>
+      Bundled release: <span class="digest"
+        >{runtimeRelease || "native app required"}</span
+      >
+    </p>
+    <p>
+      Select the exact registered Board in the Companion connection selector
+      below first. No update automatically reconnects or rearms gameplay.
+    </p>
+    <fieldset
+      disabled={!native ||
+        busy ||
+        restorePending ||
+        !board ||
+        !usbConfirmed ||
+        !pairedBoardId}
+    >
+      <button
+        onclick={() =>
+          task(async () => {
+            const status = await invoke<{
+              phase: string;
+              current: string;
+              offset: number;
+              supervisor_ready: boolean;
+            }>("runtime_update_status", { serial });
+            runtimeStatus = `${status.phase}; ${status.offset} bytes transferred; supervisor ${status.supervisor_ready ? "present" : "unavailable"}; active ${status.current}`;
+          })}>Inspect runtime update status over USB</button
+      >
+      <label
+        >Type UPDATE {board?.serial ?? "hardware-serial"}<input
+          autocomplete="off"
+          bind:value={runtimeConfirmation}
+        /></label
+      >
+      <button
+        disabled={runtimeConfirmation !== `UPDATE ${board?.serial}`}
+        onclick={async () => {
+          const confirmation = runtimeConfirmation;
+          runtimeConfirmation = "";
+          await task(async () => {
+            const result = await invoke<{ phase: string; message: string }>(
+              "update_companion_runtime",
+              { serial, boardId: pairedBoardId, confirmation },
+            );
+            runtimeStatus = result.phase;
+            message = result.message;
+          }, true);
+        }}>Update / resume bundled Linux runtime</button
+      >
+      <p>
+        If an earlier transfer/trial is pending after interruption or an app
+        upgrade, inspect the same physical Board and resolve it explicitly.
+        Abort does not undo an already committed update or erase Board data.
+      </p>
+      <label
+        >Type ABORT UPDATE {board?.serial ?? "hardware-serial"}<input
+          autocomplete="off"
+          bind:value={runtimeAbortConfirmation}
+        /></label
+      >
+      <button
+        disabled={runtimeAbortConfirmation !== `ABORT UPDATE ${board?.serial}`}
+        onclick={async () => {
+          const confirmation = runtimeAbortConfirmation;
+          runtimeAbortConfirmation = "";
+          await task(async () => {
+            const result = await invoke<{ phase: string; message: string }>(
+              "abort_companion_runtime_update",
+              { serial, boardId: pairedBoardId, confirmation },
+            );
+            runtimeStatus = result.phase;
+            message = result.message;
+          }, true);
+        }}>Abort / recover pending runtime update</button
+      >
+    </fieldset>
+    {#if runtimeStatus}<p role="status">
+        Runtime update: {runtimeStatus}. Physical hardware acceptance is still
+        separate.
+      </p>{/if}
   </details>
   <details class="recovery">
     <summary>Restart, pairing cleanup, and factory recovery</summary>

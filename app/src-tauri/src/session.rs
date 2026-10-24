@@ -111,7 +111,7 @@ pub(crate) fn installation(directory: &std::path::Path, create: bool) -> Result<
         .mode(0o600)
         .open(directory.join("installation-keys.lock"))
         .map_err(|_| failure())?;
-    fs2::FileExt::try_lock_exclusive(&file).map_err(|_| {
+    let _lock = crate::file_lock::ExclusiveFile::new(file).map_err(|_| {
         ConnectionError::new(
             "keychain_unavailable",
             "Another app instance is updating installation keys. Retry after it finishes.",
@@ -158,6 +158,23 @@ pub(crate) struct GameplayAuth {
     cached: Mutex<Option<CachedSession>>,
 }
 impl GameplayAuth {
+    pub fn from_profile(
+        profile: &crate::connection::BoardProfile,
+        directory: &std::path::Path,
+    ) -> Result<Self> {
+        if let Some(id) = &profile.installation_id {
+            let keys = installation(directory, false)?;
+            if &keys.installation_id != id {
+                return Err(ConnectionError::new(
+                    "pairing_required",
+                    "This Board belongs to a different installation key. Recover through USB.",
+                ));
+            }
+            Ok(Self::paired(keys))
+        } else {
+            Ok(Self::legacy(&profile.api_token))
+        }
+    }
     pub fn legacy(token: &str) -> Self {
         Self {
             mode: AuthMode::Legacy(Zeroizing::new(token.into())),

@@ -1,83 +1,119 @@
 import { expect, test, type Page } from "@playwright/test";
 
 // UI/IPC contract only: every native call is intercepted. No Board, SSH, or flasher runs.
-async function mockManagement(page: Page, initialPhase = "idle") {
-  await page.addInitScript((initialPhase) => {
-    const scope = window as unknown as {
-      isTauri: boolean;
-      __managementCalls: { command: string; args: Record<string, unknown> }[];
-      __TAURI_INTERNALS__: {
-        invoke: (
-          command: string,
-          args?: Record<string, unknown>,
-        ) => Promise<unknown>;
+async function mockManagement(
+  page: Page,
+  initialPhase = "idle",
+  registered = false,
+) {
+  await page.addInitScript(
+    ({ initialPhase, registered }) => {
+      const scope = window as unknown as {
+        isTauri: boolean;
+        __managementCalls: { command: string; args: Record<string, unknown> }[];
+        __TAURI_INTERNALS__: {
+          invoke: (
+            command: string,
+            args?: Record<string, unknown>,
+          ) => Promise<unknown>;
+        };
       };
-    };
-    scope.isTauri = true;
-    scope.__managementCalls = [];
-    const board = {
-      adbSerial: "USB_TEST",
-      serial: "42",
-      username: "arduino",
-      hostname: "test-unoq",
-      os: "debian",
-      osVersion: "13",
-      imageVersion: "test-build",
-    };
-    const image = {
-      version: "20260528-558",
-      os: "Debian GNU/Linux 13",
-      url: "https://downloads.arduino.cc/test-only.tar.zst",
-      sha256: "a".repeat(64),
-    };
-    let phase = initialPhase;
-    scope.__TAURI_INTERNALS__ = {
-      invoke: async (command, args = {}) => {
-        scope.__managementCalls.push({ command, args });
-        if (command === "list_boards") return [];
-        if (command === "load_progress" || command === "load_setup")
-          return null;
-        if (command === "save_progress")
-          return Number(args.expectedRevision) + 1;
-        if (command === "factory_restore_status")
-          return {
-            phase,
-            bytes: 0,
-            message: "Mocked native status; no hardware execution.",
-          };
-        if (command === "inspect_setup_usb")
-          return [{ serial: "USB_TEST", state: "device" }];
-        if (command === "admin_inspect_usb" || command === "admin_login")
-          return board;
-        if (command === "admin_action")
-          return { ssids: ["Makers-net"], state: "configured" };
-        if (command === "recovery_images") return [image];
-        if (command === "prepare_factory_restore")
-          return { planId: 1, board, image };
-        if (command === "start_factory_restore") {
-          phase = "flashing";
-          return {
-            phase,
-            bytes: 0,
-            message: "Mock only; no flasher was executed.",
-          };
-        }
-        if (command === "verify_factory_boot") {
-          const source =
-            phase === "download_interrupted"
-              ? "no_flash_started"
-              : args.officialRecoveryConfirmed
-                ? "human_official_recovery"
-                : "tinkeroo_flasher";
-          phase = "idle";
-          return { board, source };
-        }
-        if (command === "disconnect_board" || command === "admin_logout")
-          return null;
-        throw new Error(`Unexpected mock command: ${command}`);
-      },
-    };
-  }, initialPhase);
+      scope.isTauri = true;
+      scope.__managementCalls = [];
+      const board = {
+        adbSerial: "USB_TEST",
+        serial: "42",
+        username: "arduino",
+        hostname: "test-unoq",
+        os: "debian",
+        osVersion: "13",
+        imageVersion: "test-build",
+      };
+      const image = {
+        version: "20260528-558",
+        os: "Debian GNU/Linux 13",
+        url: "https://downloads.arduino.cc/test-only.tar.zst",
+        sha256: "a".repeat(64),
+      };
+      let phase = initialPhase;
+      scope.__TAURI_INTERNALS__ = {
+        invoke: async (command, args = {}) => {
+          scope.__managementCalls.push({ command, args });
+          if (command === "list_boards")
+            return registered
+              ? [{ boardId: "known-board", name: "Registered test UNO Q" }]
+              : [];
+          if (command === "runtime_bundle_info")
+            return {
+              release: "b".repeat(64),
+              contract: "c".repeat(64),
+              bytes: 1234,
+            };
+          if (command === "runtime_update_status")
+            return {
+              phase: "uploading",
+              current: "a".repeat(64),
+              offset: 8192,
+              supervisor_ready: true,
+            };
+          if (command === "update_companion_runtime")
+            return {
+              phase: "committed",
+              release: "b".repeat(64),
+              message: "Mock runtime update verified; no hardware execution.",
+            };
+          if (command === "abort_companion_runtime_update")
+            return {
+              phase: "committed",
+              release: "b".repeat(64),
+              message:
+                "Mock recovery verified; an already committed update was not undone.",
+            };
+          if (command === "load_progress" || command === "load_setup")
+            return null;
+          if (command === "save_progress")
+            return Number(args.expectedRevision) + 1;
+          if (command === "factory_restore_status")
+            return {
+              phase,
+              bytes: 0,
+              message: "Mocked native status; no hardware execution.",
+            };
+          if (command === "inspect_setup_usb")
+            return [{ serial: "USB_TEST", state: "device" }];
+          if (command === "admin_inspect_usb" || command === "admin_login")
+            return board;
+          if (command === "admin_action")
+            return { ssids: ["Makers-net"], state: "configured" };
+          if (command === "recovery_images") return [image];
+          if (command === "prepare_factory_restore")
+            return { planId: 1, board, image };
+          if (command === "start_factory_restore") {
+            phase = "flashing";
+            return {
+              phase,
+              bytes: 0,
+              message: "Mock only; no flasher was executed.",
+            };
+          }
+          if (command === "verify_factory_boot") {
+            const source =
+              phase === "download_interrupted"
+                ? "no_flash_started"
+                : args.officialRecoveryConfirmed
+                  ? "human_official_recovery"
+                  : "tinkeroo_flasher";
+            phase = "idle";
+            return { board, source };
+          }
+          if (command === "disconnect_board" || command === "admin_logout")
+            return null;
+          throw new Error(`Unexpected mock command: ${command}`);
+        },
+      };
+    },
+    { initialPhase, registered },
+  );
   await page.goto("/");
   await page
     .getByRole("button", { name: "☰ Board Setup", exact: true })
@@ -117,6 +153,84 @@ async function managementCalls(page: Page) {
       ).__managementCalls,
   );
 }
+
+test("runtime updates require an inspected registered Board and distinct typed update/recovery consent", async ({
+  page,
+}) => {
+  const management = await mockManagement(page, "idle", true);
+  await management
+    .getByText("Recoverable Linux runtime update", { exact: true })
+    .click();
+  await management
+    .getByRole("button", {
+      name: "Inspect runtime update status over USB",
+      exact: true,
+    })
+    .click();
+  await expect(management.getByText(/8192 bytes transferred/)).toBeVisible();
+  const update = management.getByRole("button", {
+    name: "Update / resume bundled Linux runtime",
+    exact: true,
+  });
+  await expect(update).toBeDisabled();
+  await management
+    .getByLabel("Type UPDATE 42", { exact: true })
+    .fill("UPDATE wrong-board");
+  await expect(update).toBeDisabled();
+  await management
+    .getByLabel("Type UPDATE 42", { exact: true })
+    .fill("UPDATE 42");
+  await update.click();
+  await expect(
+    management.getByText(
+      "Mock runtime update verified; no hardware execution.",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  expect(
+    (await managementCalls(page)).find(
+      (call) => call.command === "update_companion_runtime",
+    )?.args,
+  ).toEqual({
+    serial: "USB_TEST",
+    boardId: "known-board",
+    confirmation: "UPDATE 42",
+  });
+  await expect(
+    management.getByLabel("Type UPDATE 42", { exact: true }),
+  ).toHaveValue("");
+  const abort = management.getByRole("button", {
+    name: "Abort / recover pending runtime update",
+    exact: true,
+  });
+  await expect(abort).toBeDisabled();
+  await management
+    .getByLabel("Type ABORT UPDATE 42", { exact: true })
+    .fill("ABORT UPDATE 42");
+  await abort.click();
+  await expect(
+    management.getByText(
+      "Mock recovery verified; an already committed update was not undone.",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  expect(
+    (await managementCalls(page)).find(
+      (call) => call.command === "abort_companion_runtime_update",
+    )?.args,
+  ).toEqual({
+    serial: "USB_TEST",
+    boardId: "known-board",
+    confirmation: "ABORT UPDATE 42",
+  });
+  expect(
+    (await managementCalls(page)).some(
+      (call) =>
+        call.command === "start_factory_restore" ||
+        call.command === "probe_board",
+    ),
+  ).toBe(false);
+});
 
 test("Board Setup distinguishes credentials, restart, local cleanup, and destructive restore", async ({
   page,

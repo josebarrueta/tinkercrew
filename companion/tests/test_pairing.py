@@ -204,6 +204,14 @@ class PairingTests(unittest.TestCase):
         with self.assertRaises(AuthError) as forbidden:
             management.dispatch({"operation": "revoke", "expected_serial": "42", "installation_id": INSTALLATION}, ssh_installation=INSTALLATION)
         self.assertEqual(forbidden.exception.code, "authentication_failed")
+        from unittest.mock import patch
+        with patch("os.geteuid", return_value=0):
+            with self.assertRaises(AuthError) as permissions:
+                management.dispatch({"operation": "runtime_status", "expected_serial": "42"})
+            self.assertEqual(permissions.exception.code, "unsupported_permissions")
+        for operation, parameters in (("runtime_status", {}), ("runtime_cancel", {"release": "a" * 64})):
+            with self.assertRaises(AuthError):
+                management.dispatch(dict(operation=operation, expected_serial="42", **parameters), ssh_installation=INSTALLATION)
 
     def test_expired_and_invalid_proofs_are_single_attempt_and_sessions_expire(self):
         self.pair()

@@ -7,6 +7,7 @@ import ssl
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
 from collections import deque
 from urllib.parse import parse_qs, urlparse
 
@@ -65,7 +66,28 @@ class CompanionHTTPServer(ThreadingHTTPServer):
             worker.join(timeout=0.25)
 
 
-def make_handler(companion: Companion, token: str | None = None, *, auth=None, rate_clock=time.monotonic):
+def runtime_maintenance(directory):
+    """Fixed private runtime metadata; errors deny gameplay, never trust an incomplete trial."""
+    try:
+        for name in ("job.json", "selection.json"):
+            path = Path(directory) / name
+            if not path.exists() and not path.is_symlink():
+                continue
+            if path.is_symlink() or not path.is_file() or path.stat().st_size > 4096:
+                return True
+            record = json.loads(path.read_bytes())
+            if not isinstance(record, dict):
+                return True
+            if name == "job.json" and record.get("phase") not in {"aborted", "rolled_back", "committed"}:
+                return True
+            if name == "selection.json" and ("trial" not in record or record["trial"] is not None):
+                return True
+        return False
+    except (OSError, ValueError, TypeError):
+        return True
+
+
+def make_handler(companion: Companion, token: str | None = None, *, auth=None, rate_clock=time.monotonic, maintenance=None):
     if (auth is None) == (token is None):
         raise ValueError("Select exactly one authentication mode")
     if auth is not None:
@@ -79,6 +101,10 @@ def make_handler(companion: Companion, token: str | None = None, *, auth=None, r
     def tick():
         nonlocal control_token
         with rate_lock:
+            if maintenance is not None and maintenance():
+                if not companion.hello()["health"]["safe_state"]:
+                    companion.enter_safe_state("maintenance_active")
+                control_token = None
             if control_token and (time.monotonic() >= control_until or not auth.authenticate(control_token, touch=False)):
                 companion.enter_safe_state("control_session_ended")
                 control_token = None
@@ -154,7 +180,9 @@ def make_handler(companion: Companion, token: str | None = None, *, auth=None, r
             if not self._require_auth():
                 return
             if parsed.path == "/v1/hello":
-                self._send(200, companion.hello())
+                hello = companion.hello()
+                hello["runtime"] = {"release": os.environ.get("TC_RUNTIME_RELEASE", "unmanaged"), "nonce": os.environ.get("TC_RUNTIME_NONCE", "")}
+                self._send(200, hello)
             elif parsed.path == "/v1/state":
                 self._send(200, companion.state())
             elif parsed.path == "/v1/events":
@@ -197,6 +225,10 @@ def make_handler(companion: Companion, token: str | None = None, *, auth=None, r
                     self._send(200, result)
                     return
                 with rate_lock:
+                    if maintenance is not None and maintenance():
+                        tick()
+                        self._send(503, {"status": "error", "error": {"code": "maintenance_active"}})
+                        return
                     if auth is not None:
                         tick()
                         current = self.headers["Authorization"][7:]
@@ -267,10 +299,11 @@ def run() -> None:
     auth = None
     if mode == "tbp":
         from .auth import PairingRegistry
-        from pathlib import Path
         directory = Path(os.environ.get("TC_CONFIG", "data/companion.json")).parent
         auth = PairingRegistry(directory, board_id)
-    server = CompanionHTTPServer((host, port), make_handler(companion, token if auth is None else None, auth=auth))
+    runtime_directory = os.environ.get("TC_RUNTIME_STATE")
+    maintenance = (lambda: runtime_maintenance(runtime_directory)) if runtime_directory else None
+    server = CompanionHTTPServer((host, port), make_handler(companion, token if auth is None else None, auth=auth, maintenance=maintenance))
 
     certificate = setting(config, "TC_TLS_CERT", "tls_cert")
     private_key = setting(config, "TC_TLS_KEY", "tls_key")
@@ -284,7 +317,10 @@ def run() -> None:
         raise SystemExit("TLS certificate/key are required unless loopback development HTTP is explicitly enabled")
 
     from .discovery import advertise
-    advertisement = advertise(board_id, port, str(setting(config, "TC_ADVERTISE_HOST", "advertise_host", "")))
+    advertisement = None if host in {"127.0.0.1", "localhost", "::1"} else advertise(board_id, port, str(setting(config, "TC_ADVERTISE_HOST", "advertise_host", "")))
+    import signal
+    for number in (signal.SIGTERM, signal.SIGINT):
+        signal.signal(number, lambda *_: threading.Thread(target=server.shutdown, daemon=True).start())
     try:
         server.serve_forever(poll_interval=0.1)
     finally:
@@ -292,3 +328,7 @@ def run() -> None:
         server.server_close()
         if advertisement is not None:
             advertisement.close()
+
+
+if __name__ == "__main__":
+    run()

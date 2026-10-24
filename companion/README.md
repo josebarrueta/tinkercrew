@@ -39,11 +39,17 @@ The service refuses network startup without TLS. For local tests only, use loopb
 
 TBP mode adds USB-token-bound installation registration, restricted/tagged SSH keys, signed single-attempt Ed25519 session challenges, bounded opaque sessions, and physical revocation. Read the [implementation and limitations](../docs/architecture/installation-pairing.md) before attempting hardware bring-up. This is not completion of first-run provisioning or the full TBP proposal.
 
+## Recoverable Linux-only updates
+
+`python/main.py` now starts a stable local supervisor, which owns one server child. After a compatible baseline is explicitly installed, registered and running, Board Setup can transfer/resume only its compiled-in runtime, verify fresh authenticated disarmed health and commit a trial. An unacknowledged/crashing trial rolls back independently of the Mac; no Arduino CLI, sketch upload, dependency installation, TLS replacement or registration reset is performed. Authentication/registry code is pinned by the baseline contract. Unknown baseline/ownership compatibility fails closed.
+
+The installation commands above are **not** this update primitive: official app start/stop/build can affect the MCU. Read the [runtime update contract, recovery and limitations](../docs/architecture/runtime-updates.md) before hardware use. Actual host/container and physical update acceptance is still NOT RUN; full initial provisioning, baseline upgrades, verified dedicated-key SSH and wizard completion remain unfinished.
+
 ## API
 
 Gameplay routes except `GET /v1/health/public` require `Authorization: Bearer …`. In TBP mode this is a short-lived session token; legacy mode uses the provisioned token. Only TBP mode exposes token-protected `POST /v1/pairings` and signed authentication via `POST /v1/sessions/challenge` / `POST /v1/sessions`; it also supports `DELETE /v1/sessions/current`. Begin/activate/revoke remain fixed host-side management operations, not gameplay endpoints.
 
-- `GET /v1/hello` — versions, Board health, capabilities, limits.
+- `GET /v1/hello` — versions, Board health, capabilities, limits, and authenticated supervisor release/process nonce (not a physical self-test).
 - `GET /v1/state` — latest input health/value/sample age and bounded requested output state (expired commands are reported off; this is not a physical light/sound measurement).
 - `GET /v1/events?after=<sequence>` — ordered button edges and distance samples.
 - `POST /v1/control-lease` — renew the maximum two-second control lease.
@@ -64,7 +70,7 @@ python3 -m venv .venv
 PYTHONPATH=companion/python .venv/bin/python -m unittest discover -s companion/tests -v
 ```
 
-Run the simulator and inspect it with a client:
+Run the simulator and inspect it with a client (from `companion/`; the token below is a public local-test fixture):
 
 ```sh
 TC_SIMULATE_HARDWARE=1 \

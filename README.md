@@ -118,6 +118,7 @@ The GitHub repository remains `josebarrueta/tinkercrew`. Existing bundle identit
 - [Companion installation, API, and tests](companion/README.md)
 - [Board Setup management and destructive recovery](docs/architecture/board-setup.md)
 - [Resumable setup handoffs and remaining implementation](docs/architecture/setup-checkpoints.md)
+- [Recoverable installed-baseline Linux runtime updates and limitations](docs/architecture/runtime-updates.md)
 - [Secure protocol proposal](docs/architecture/secure-board-protocol.md)
 - [MVP roadmap and open work](https://github.com/josebarrueta/tinkercrew/issues/13)
 

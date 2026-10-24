@@ -162,7 +162,7 @@ struct RecoveryInner {
 pub struct Recovery {
     inner: Arc<Mutex<RecoveryInner>>,
     operations: tokio::sync::Mutex<()>,
-    owner: Mutex<Option<fs::File>>,
+    owner: Mutex<Option<crate::file_lock::ExclusiveFile>>,
     directory: PathBuf,
 }
 impl Recovery {
@@ -192,7 +192,7 @@ impl Recovery {
                 .mode(0o600)
                 .open(self.directory.join("factory-restore.lock"))
                 .map_err(|_| "Cannot establish private recovery ownership.")?;
-            fs2::FileExt::try_lock_exclusive(&file).map_err(|_| "Another Tinkeroo instance owns recovery. Quit the other instance before preparing or accepting recovery; this app will not start a competing erase.")?;
+            let file = crate::file_lock::ExclusiveFile::new(file).map_err(|_| "Another Tinkeroo instance owns recovery. Quit the other instance before preparing or accepting recovery; this app will not start a competing erase.")?;
             *owner = Some(file);
         }
         Ok(())

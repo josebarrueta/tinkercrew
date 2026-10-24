@@ -1,5 +1,6 @@
-from tinkercrew_companion.server import run
+from pathlib import Path
+from tinkercrew_companion.supervisor import run
 
 
 if __name__ == "__main__":
-    run()
+    run(Path(__file__).resolve().parents[1])

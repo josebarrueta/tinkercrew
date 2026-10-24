@@ -26,7 +26,7 @@ Checkpoint 8, **Establish full USB Pairing**, is a hard implementation gate. A c
 
 1. Integrate the separate [installed-Companion key registration/session/revocation slice](installation-pairing.md) into full first-run setup, including Board TLS identity provisioning, dedicated-key SSH login verification, and recovery. Registration alone cannot satisfy this checkpoint.
 2. Supported-version probing of image-specific setup helpers and safe password/Wi-Fi stdin operations before considering direct first-run automation.
-3. Atomic Companion install/upgrade, integrity/version verification, interrupted-transfer rollback, and preservation of a known-good deployment.
+3. Initial/whole-app Companion installation and compatible baseline upgrades. The separate [Linux-only runtime updater](runtime-updates.md) now implements integrity-checked transfer, resume, process-bound health and rollback on already compatible supervised baselines; it neither installs that baseline nor completes this checkpoint.
 4. Reboot followed by actual stable-identity LAN **and** USB verification, not treating transport disappearance as success.
 5. Wiring the Mission's real hardware self-test result and Crew creation into setup completion, after the preceding trust/deployment gates exist.
 

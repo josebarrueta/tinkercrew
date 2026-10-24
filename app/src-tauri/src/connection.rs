@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::{
     net::{IpAddr, SocketAddr},
+    os::unix::fs::OpenOptionsExt,
     path::PathBuf,
     sync::{
         Arc,
@@ -183,8 +184,41 @@ impl Connections {
                 .directory
                 .join("board-recovery/factory-restore-active.json")
                 .exists()
+            || self.directory.join("runtime-update-active.json").exists()
+            || self.other_management_active()
+    }
+    fn other_management_active(&self) -> bool {
+        match std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(self.directory.join("board-management.lock"))
+        {
+            Ok(file) => crate::file_lock::ExclusiveFile::new(file).is_err(),
+            Err(error) => error.kind() != std::io::ErrorKind::NotFound,
+        }
     }
     pub(crate) fn begin_maintenance(&self) -> std::result::Result<MaintenancePermit, String> {
+        self.maintenance_permit(false)
+    }
+    pub(crate) fn begin_runtime_update(&self) -> std::result::Result<MaintenancePermit, String> {
+        self.maintenance_permit(true)
+    }
+    fn maintenance_permit(
+        &self,
+        resume_runtime: bool,
+    ) -> std::result::Result<MaintenancePermit, String> {
+        let lock = std::fs::OpenOptions::new()
+            .create(true)
+            .truncate(false)
+            .read(true)
+            .write(true)
+            .mode(0o600)
+            .open(self.directory.join("board-management.lock"))
+            .map_err(|_| "Cannot establish exclusive Board-management ownership.")?;
+        let lock = crate::file_lock::ExclusiveFile::new(lock).map_err(|_| "Another app instance owns Board management. Wait before starting another operation.")?;
+        if !resume_runtime && self.directory.join("runtime-update-active.json").exists() {
+            return Err("A runtime update is pending verification. Resume/resolve that update before other management operations.".into());
+        }
         if self
             .directory
             .join("board-recovery/factory-restore-active.json")
@@ -198,6 +232,7 @@ impl Connections {
         Ok(MaintenancePermit {
             flag: self.maintenance.clone(),
             keep: false,
+            _lock: lock,
         })
     }
     pub fn profile(&self, board_id: &str) -> Result<BoardProfile> {
@@ -251,6 +286,7 @@ impl Connections {
 }
 
 pub(crate) struct MaintenancePermit {
+    _lock: crate::file_lock::ExclusiveFile,
     pub(crate) flag: Arc<AtomicBool>,
     pub(crate) keep: bool,
 }
@@ -377,7 +413,7 @@ async fn local_addresses(candidate: &Candidate) -> Result<Vec<SocketAddr>> {
     Ok(addresses)
 }
 
-async fn request(
+pub(crate) async fn request(
     client: &Client,
     profile: &BoardProfile,
     port: u16,
@@ -514,18 +550,7 @@ pub async fn probe_board(
         ));
     }
     let mut profile = state.profile(&board_id)?;
-    let auth = if let Some(id) = &profile.installation_id {
-        let keys = crate::session::installation(&state.directory, false)?;
-        if &keys.installation_id != id {
-            return Err(ConnectionError::new(
-                "pairing_required",
-                "This Board belongs to a different installation key. Recover through USB.",
-            ));
-        }
-        crate::session::GameplayAuth::paired(keys)
-    } else {
-        crate::session::GameplayAuth::legacy(&profile.api_token)
-    };
+    let auth = crate::session::GameplayAuth::from_profile(&profile, &state.directory)?;
     let (client, addresses) = verify_candidate(&profile, &candidate, &auth).await?;
     let mut active = state.active.lock().await;
     if state.maintenance_active() {
@@ -748,6 +773,8 @@ mod tests {
         let second = Connections::new(directory.path().to_path_buf());
         let permit = first.begin_maintenance().unwrap();
         assert!(first.maintenance_active());
+        assert!(second.maintenance_active());
+        assert!(second.begin_maintenance().is_err());
         assert!(first.begin_maintenance().is_err());
         std::fs::create_dir(directory.path().join("board-recovery")).unwrap();
         let marker = directory
@@ -760,6 +787,15 @@ mod tests {
         assert!(first.maintenance_active());
         std::fs::remove_file(marker).unwrap();
         assert!(!first.maintenance_active());
+        assert!(!second.maintenance_active());
+        let runtime = directory.path().join("runtime-update-active.json");
+        std::fs::write(&runtime, b"{}").unwrap();
+        assert!(second.maintenance_active());
+        assert!(second.begin_maintenance().is_err());
+        let runtime_permit = first.begin_runtime_update().unwrap();
+        assert!(second.begin_runtime_update().is_err());
+        drop(runtime_permit);
+        std::fs::remove_file(runtime).unwrap();
         assert!(!second.maintenance_active());
     }
 

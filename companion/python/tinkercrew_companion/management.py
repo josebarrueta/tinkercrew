@@ -1,7 +1,8 @@
 """Fixed host-side USB Pairing operations; SSH keys permit identity inspection only.
 
 Run through python/management.py on the host, not a network endpoint. Physical USB
-selection/consent is the Mac adapter's responsibility. No shell/OS/deployment RPC here.
+selection/consent is the Mac adapter's responsibility. Runtime updates are bounded,
+USB-only operations; there is no arbitrary shell/OS/firmware/dependency RPC.
 """
 import argparse
 import json
@@ -43,6 +44,9 @@ class PairingManagement:
 
     def dispatch(self, request, *, ssh_installation=None):
         fields = {"inspect": set(), "pair_begin": {"registration"}, "pair_activate": {"installation_id"}, "list_pairings": set(), "revoke": {"installation_id"}}
+        from .deployment import RuntimeDeployment
+        runtime_fields = {"status": set(), "begin": {"release", "sha256", "size", "contract"}, "chunk": {"token", "offset", "data"}, "stage": {"token"}, "commit": {"token"}, "finish": {"token", "nonce"}, "abort": {"token"}, "cancel": {"release"}}
+        fields.update({"runtime_" + name: parameters for name, parameters in runtime_fields.items()})
         operation = request.get("operation")
         if operation not in fields or set(request) != {"operation", "expected_serial"} | fields[operation]:
             raise AuthError("invalid_message")
@@ -53,9 +57,14 @@ class PairingManagement:
             raise AuthError("identity_mismatch")
         if ssh_installation is not None and not (self.root / "data/pairings.sqlite").is_file():
             raise AuthError()
+        if operation.startswith("runtime_") and os.geteuid() == 0:
+            raise AuthError("unsupported_permissions")
         self.registry = PairingRegistry(self.root / "data", self.config["board_id"], **self.registry_options)
         if ssh_installation is not None and not self.registry.is_active(ssh_installation):
             raise AuthError()
+        if operation.startswith("runtime_"):
+            result = RuntimeDeployment(self.root).dispatch(operation.removeprefix("runtime_"), {key: value for key, value in request.items() if key not in {"operation", "expected_serial"}})
+            return dict(result, board_id=self.config["board_id"], serial=identity["serial"])
         if operation == "pair_activate":
             return self.registry.activate_pairing(request["installation_id"])
         if operation == "list_pairings":
