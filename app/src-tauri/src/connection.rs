@@ -80,11 +80,14 @@ pub struct BoardProfile {
     pub adb_serial: String,
     pub tls_name: String,
     pub certificate_pem: String,
+    #[serde(default)]
     pub api_token: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub installation_id: Option<String>,
     pub last_address: Option<Candidate>,
 }
 impl BoardProfile {
-    fn validate(&self) -> Result<()> {
+    pub(crate) fn validate(&self) -> Result<()> {
         if self.board_id == "unprovisioned"
             || self.board_id.len() < 8
             || self.board_id.len() > 64
@@ -101,9 +104,18 @@ impl BoardProfile {
                 .adb_serial
                 .bytes()
                 .all(|c| c.is_ascii_alphanumeric() || b"-_.:".contains(&c))
-            || self.api_token.len() < 32
-            || self.api_token.len() > 512
-            || self.api_token.contains(['\r', '\n'])
+            || match &self.installation_id {
+                Some(id) => {
+                    !crate::session::valid_id(id)
+                        || !crate::session::valid_id(&self.board_id)
+                        || !self.api_token.is_empty()
+                }
+                None => {
+                    self.api_token.len() < 32
+                        || self.api_token.len() > 512
+                        || self.api_token.contains(['\r', '\n'])
+                }
+            }
             || self.certificate_pem.len() > 8192
         {
             return Err(ConnectionError::new(
@@ -142,6 +154,7 @@ struct ActiveBoard {
     handle: u64,
     client: Client,
     profile: BoardProfile,
+    auth: crate::session::GameplayAuth,
     port: u16,
 }
 
@@ -281,6 +294,11 @@ pub async fn register_board(
             "The exact record's Board must be ready on physical USB through this Mac's local ADB server. Wireless ADB is not USB proof.",
         ));
     }
+    remember_board(&state, &profile)
+}
+
+pub(crate) fn remember_board(state: &Connections, profile: &BoardProfile) -> Result<()> {
+    profile.validate()?;
     let _guard = state.profile_writes.lock().map_err(|_| {
         ConnectionError::new(
             "storage_error",
@@ -297,7 +315,7 @@ pub async fn register_board(
             "This development build supports up to 16 paired Boards.",
         ));
     }
-    state.save_profile(&profile)?;
+    state.save_profile(profile)?;
     let bytes = serde_json::to_vec(&ids)
         .map_err(|_| ConnectionError::new("storage_error", "Could not save the Board index."))?;
     let temp = state.directory.join("board-handles.json.tmp");
@@ -366,9 +384,14 @@ async fn request(
     method: Method,
     path: &str,
     body: Option<Value>,
+    auth: &crate::session::GameplayAuth,
 ) -> Result<Value> {
+    let token = zeroize::Zeroizing::new(
+        auth.token(client, &profile.tls_name, port, &profile.board_id)
+            .await?,
+    );
     let mut authorization =
-        reqwest::header::HeaderValue::from_str(&format!("Bearer {}", profile.api_token)).map_err(
+        reqwest::header::HeaderValue::from_str(&format!("Bearer {}", token.as_str())).map_err(
             |_| {
                 ConnectionError::new(
                     "invalid_pairing",
@@ -419,7 +442,7 @@ async fn request(
     })
 }
 
-async fn verify_candidate(
+pub(crate) async fn secure_client(
     profile: &BoardProfile,
     candidate: &Candidate,
 ) -> Result<(Client, Vec<SocketAddr>)> {
@@ -444,6 +467,15 @@ async fn verify_candidate(
                 "Secure local transport could not start. Restart the app and retry.",
             )
         })?;
+    Ok((client, addresses))
+}
+
+async fn verify_candidate(
+    profile: &BoardProfile,
+    candidate: &Candidate,
+    auth: &crate::session::GameplayAuth,
+) -> Result<(Client, Vec<SocketAddr>)> {
+    let (client, addresses) = secure_client(profile, candidate).await?;
     let hello = request(
         &client,
         profile,
@@ -451,6 +483,7 @@ async fn verify_candidate(
         Method::GET,
         "/v1/hello",
         None,
+        auth,
     )
     .await?;
     if hello["board"]["board_id"].as_str() != Some(&profile.board_id) {
@@ -481,7 +514,19 @@ pub async fn probe_board(
         ));
     }
     let mut profile = state.profile(&board_id)?;
-    let (client, addresses) = verify_candidate(&profile, &candidate).await?;
+    let auth = if let Some(id) = &profile.installation_id {
+        let keys = crate::session::installation(&state.directory, false)?;
+        if &keys.installation_id != id {
+            return Err(ConnectionError::new(
+                "pairing_required",
+                "This Board belongs to a different installation key. Recover through USB.",
+            ));
+        }
+        crate::session::GameplayAuth::paired(keys)
+    } else {
+        crate::session::GameplayAuth::legacy(&profile.api_token)
+    };
+    let (client, addresses) = verify_candidate(&profile, &candidate, &auth).await?;
     let mut active = state.active.lock().await;
     if state.maintenance_active() {
         return Err(ConnectionError::new(
@@ -490,15 +535,7 @@ pub async fn probe_board(
         ));
     }
     if let Some(old) = active.take() {
-        let _ = request(
-            &old.client,
-            &old.profile,
-            old.port,
-            Method::POST,
-            "/v1/commands",
-            Some(json!({"operation":"outputs.clear", "arguments":{}})),
-        )
-        .await;
+        clear_connection(&old).await;
     }
     // USB loopback addresses are ephemeral; never let them displace the last validated LAN address.
     if !addresses.iter().all(|address| address.ip().is_loopback()) {
@@ -512,24 +549,33 @@ pub async fn probe_board(
         handle,
         client,
         profile,
+        auth,
         port: candidate.port,
     });
     Ok(handle)
+}
+
+async fn clear_connection(old: &ActiveBoard) {
+    let _ = request(
+        &old.client,
+        &old.profile,
+        old.port,
+        Method::POST,
+        "/v1/commands",
+        Some(json!({"operation":"outputs.clear", "arguments":{}})),
+        &old.auth,
+    )
+    .await;
+    old.auth
+        .close(&old.client, &old.profile.tls_name, old.port)
+        .await;
 }
 
 #[tauri::command]
 pub async fn disconnect_board(state: tauri::State<'_, Connections>) -> Result<()> {
     let mut active = state.active.lock().await;
     if let Some(old) = active.take() {
-        let _ = request(
-            &old.client,
-            &old.profile,
-            old.port,
-            Method::POST,
-            "/v1/commands",
-            Some(json!({"operation":"outputs.clear", "arguments":{}})),
-        )
-        .await;
+        clear_connection(&old).await;
     }
     for (serial, port) in state.forwards.lock().await.drain(..) {
         crate::discovery::remove_forward(&serial, port).await;
@@ -675,6 +721,7 @@ pub async fn board_request(
         method,
         &path,
         body,
+        &selected.auth,
     )
     .await
 }
@@ -756,24 +803,26 @@ mod tests {
             tls_name: "guardian.local".into(),
             certificate_pem: pem,
             api_token: "test-only-credential-01234567890123456789".into(),
+            installation_id: None,
             last_address: None,
         };
         let candidate = Candidate::new("127.0.0.1", port).unwrap();
         tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap().block_on(async {
-            let (client, _) = verify_candidate(&profile, &candidate).await.unwrap();
-            request(&client, &profile, port, Method::POST, "/v1/control-lease", Some(json!({"lease_ms":1500}))).await.unwrap();
-            request(&client, &profile, port, Method::POST, "/v1/commands", Some(json!({"operation":"pixels.set", "arguments":{"color":"#22c55e","brightness":0.3,"duration_ms":1000}}))).await.unwrap();
-            let state = request(&client, &profile, port, Method::GET, "/v1/state", None).await.unwrap();
+            let auth = crate::session::GameplayAuth::legacy(&profile.api_token);
+            let (client, _) = verify_candidate(&profile, &candidate, &auth).await.unwrap();
+            request(&client, &profile, port, Method::POST, "/v1/control-lease", Some(json!({"lease_ms":1500})), &auth).await.unwrap();
+            request(&client, &profile, port, Method::POST, "/v1/commands", Some(json!({"operation":"pixels.set", "arguments":{"color":"#22c55e","brightness":0.3,"duration_ms":1000}})), &auth).await.unwrap();
+            let state = request(&client, &profile, port, Method::GET, "/v1/state", None, &auth).await.unwrap();
             assert_eq!(state["outputs"]["pixels"]["color"], "#22c55e");
             let mut wrong = profile.clone();
             wrong.board_id = "other-board".into();
-            assert_eq!(verify_candidate(&wrong, &candidate).await.err().unwrap().code, "identity_mismatch");
+            assert_eq!(verify_candidate(&wrong, &candidate, &crate::session::GameplayAuth::legacy(&wrong.api_token)).await.err().unwrap().code, "identity_mismatch");
             wrong = profile.clone();
             wrong.api_token = "wrong-credential-01234567890123456789".into();
-            assert_eq!(verify_candidate(&wrong, &candidate).await.err().unwrap().code, "authentication_failed");
+            assert_eq!(verify_candidate(&wrong, &candidate, &crate::session::GameplayAuth::legacy(&wrong.api_token)).await.err().unwrap().code, "authentication_failed");
             wrong = profile.clone();
             wrong.certificate_pem = rcgen::generate_simple_self_signed(vec!["guardian.local".into()]).unwrap().cert.pem();
-            assert_eq!(verify_candidate(&wrong, &candidate).await.err().unwrap().code, "companion_unavailable");
+            assert_eq!(verify_candidate(&wrong, &candidate, &crate::session::GameplayAuth::legacy(&wrong.api_token)).await.err().unwrap().code, "companion_unavailable");
         });
     }
 

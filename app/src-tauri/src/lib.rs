@@ -2,8 +2,10 @@ mod admin_process;
 mod connection;
 mod discovery;
 mod management;
+mod pairing;
 mod progress;
 mod recovery;
+mod session;
 mod setup;
 
 use tauri::Manager;
@@ -61,7 +63,10 @@ pub fn run() {
             recovery::start_factory_restore,
             recovery::factory_restore_status,
             recovery::verify_factory_boot,
-            connection::forget_board
+            connection::forget_board,
+            pairing::pair_installed_companion,
+            pairing::list_board_pairings,
+            pairing::revoke_board_pairing
         ])
         .run(tauri::generate_context!())
         .expect("error while running Tinkeroo");

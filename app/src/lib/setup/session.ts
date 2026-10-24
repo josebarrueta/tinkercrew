@@ -27,7 +27,7 @@ export const setupSteps = [
     title: "Choose a safe Board name",
     kind: "official",
     instruction:
-      "Use official Arduino App Lab to choose a name beginning with a letter or digit and containing only letters, digits, or hyphens. Tinkeroo does not run compatibility-sensitive hostname helpers yet.",
+      "Use official Arduino App Lab to choose a name beginning with a letter or digit and containing only letters, digits, or hyphens. This checkpoint guide hands off to official tooling; the separate existing-Board management controls do not establish first-boot compatibility.",
   },
   {
     id: "credentials",
@@ -55,7 +55,7 @@ export const setupSteps = [
     title: "Establish full USB Pairing",
     kind: "unsupported",
     instruction:
-      "Full TBP USB bootstrap, dedicated SSH/gameplay key registration, and revocation are not integrated. Do not mark this step complete using the development bearer-record import. Already provisioned Boards can use the separate connection controls while this checkpoint stays pending.",
+      "Installation-key registration, signed gameplay sessions, and physical revocation are available separately for an already installed, TBP-configured Companion. Full wizard integration, dedicated-key SSH login verification, and deployment are not integrated. Neither that registration nor development bearer-record import can mark this checkpoint complete.",
   },
   {
     id: "deploy",

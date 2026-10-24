@@ -35,11 +35,13 @@ Optional Bonjour announcements use `python/requirements.txt` (`zeroconf`) and `_
 
 Optional keys are `board_version` (defaults to the explicit value `unknown`), `bind` (default `0.0.0.0`), and `port` (default `7443`). Corresponding `TC_*` variables override the file for managed deployments.
 
-The service refuses network startup without TLS. For local tests only, use loopback plus `TC_DEVELOPMENT_HTTP=1`. TLS identity generation, USB trust bootstrap, and short-lived Ed25519 sessions are specified in `../docs/architecture/secure-board-protocol.md`; this minimum Companion currently consumes a provisioned bearer credential and certificate.
+The service refuses network startup without TLS. For local tests only, use loopback plus `TC_DEVELOPMENT_HTTP=1`. Existing deployments retain explicit provisioned-bearer mode. Updated deployments can opt into `auth_mode: "tbp"`, a stable UUID, `tls_name`, and the existing certificate/key paths; remove `api_token`/`TC_API_TOKEN` to avoid a rejected legacy bypass. Install `python/requirements.txt` in the runtime. The host `python/management.py` and app runtime must share the private `data` registry and kernel boot/monotonic identity; actual Arduino ownership/mount compatibility is still unverified. The host helper refuses root-account enrollment and does not install itself or generate TLS identity.
+
+TBP mode adds USB-token-bound installation registration, restricted/tagged SSH keys, signed single-attempt Ed25519 session challenges, bounded opaque sessions, and physical revocation. Read the [implementation and limitations](../docs/architecture/installation-pairing.md) before attempting hardware bring-up. This is not completion of first-run provisioning or the full TBP proposal.
 
 ## API
 
-All routes except `GET /v1/health/public` require `Authorization: Bearer …`.
+Gameplay routes except `GET /v1/health/public` require `Authorization: Bearer …`. In TBP mode this is a short-lived session token; legacy mode uses the provisioned token. Only TBP mode exposes token-protected `POST /v1/pairings` and signed authentication via `POST /v1/sessions/challenge` / `POST /v1/sessions`; it also supports `DELETE /v1/sessions/current`. Begin/activate/revoke remain fixed host-side management operations, not gameplay endpoints.
 
 - `GET /v1/hello` — versions, Board health, capabilities, limits.
 - `GET /v1/state` — latest input health/value/sample age and bounded requested output state (expired commands are reported off; this is not a physical light/sound measurement).
@@ -56,8 +58,10 @@ The STM32 and Linux watchdogs clear pixels and matrix state, stop the buzzer, an
 No Board is needed for the deterministic core and HTTP adapter tests:
 
 ```sh
-cd companion
-PYTHONPATH=python python3 -m unittest discover -s tests -v
+# From the repository root; tests never touch hardware or live SSH/Keychain files.
+python3 -m venv .venv
+.venv/bin/python -m pip install -r companion/python/requirements-auth.txt
+PYTHONPATH=companion/python .venv/bin/python -m unittest discover -s companion/tests -v
 ```
 
 Run the simulator and inspect it with a client:

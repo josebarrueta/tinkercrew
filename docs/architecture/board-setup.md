@@ -2,7 +2,7 @@
 
 Status: **implemented software, physical UNO Q acceptance pending**. Parent Settings is now named **Board Setup**. This consolidates management without changing the bundle identifier, existing Keychain services, saved Mission progress, Crew vocabulary, or Board protocol/discovery identifiers. No Board was reset during development.
 
-This is a single navigation hub, **not a claim that full one-click provisioning is complete**. Full TBP Pairing, dedicated installation keys/sessions, atomic Companion deployment/rollback, and integrated hardware/Crew acceptance remain blocked implementation work under #11. The existing official-tool checkpoint guide and provisioned-record development bridge remain visibly distinct.
+This is a single navigation hub, **not a claim that full one-click provisioning is complete**. The subsequent [authentication slice](installation-pairing.md) implements installation-key registration, signed sessions, and physical revocation for an already installed TBP Companion. Full first-run Pairing/identity integration, verified dedicated-key SSH use, atomic Companion deployment/rollback, and integrated hardware/Crew acceptance remain unfinished under #11. The existing official-tool checkpoint guide and provisioned-record development bridge remain visibly distinct.
 
 ## Existing-Board workflow
 

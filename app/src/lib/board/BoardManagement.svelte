@@ -44,6 +44,14 @@
   let restartConfirmation = $state("");
   let forgetConfirmation = $state("");
   let trustConfirmation = $state("");
+  let pairConfirmation = $state("");
+  let installationLabel = $state("Family Mac");
+  let pairingSerial = $state("");
+  let pairings = $state<
+    { installation_id: string; label: string; state: string }[]
+  >([]);
+  let revokeInstallation = $state("");
+  let revokeConfirmation = $state("");
   let tool = $state("");
   let images = $state<Image[]>([]);
   let imageIndex = $state("");
@@ -344,6 +352,117 @@
         )}>Join this Wi-Fi network</button
     >
   </fieldset>
+  <details>
+    <summary>Installation Pairing and lost-Mac revocation</summary>
+    <p>
+      This requires an updated, already installed Companion explicitly
+      configured for TBP authentication, its host management helper, and a
+      supported unprivileged USB account. It does not install/upgrade the
+      Companion or finish first-run setup. Unsupported images/accounts fail
+      closed.
+    </p>
+    <p>
+      Pairing learns the TLS certificate directly over physical USB, registers
+      separate gameplay/SSH public keys, and proves the gameplay private key to
+      obtain short-lived sessions. Private keys stay in macOS Keychain. SSH
+      login, certificate renewal, deployment and physical acceptance remain
+      separate work; the setup guide must not claim completion.
+    </p>
+    <fieldset
+      disabled={!native || busy || restorePending || !board || !usbConfirmed}
+    >
+      <label
+        >Mac label for recovery<input
+          autocomplete="off"
+          maxlength="60"
+          bind:value={installationLabel}
+        /></label
+      >
+      <label
+        >Type PAIR {board?.serial ?? "hardware-serial"}<input
+          autocomplete="off"
+          bind:value={pairConfirmation}
+        /></label
+      >
+      <button
+        disabled={!installationLabel ||
+          pairConfirmation !== `PAIR ${board?.serial}`}
+        onclick={() =>
+          task(async () => {
+            await invoke("pair_installed_companion", {
+              serial,
+              confirmation: pairConfirmation,
+              installationLabel,
+            });
+            pairConfirmation = "";
+            await onForgot();
+            message =
+              "Installation public keys registered and a signed gameplay session verified. Select the paired Board and Connect below. This did not deploy the Companion, verify SSH login, or complete hardware/setup acceptance.";
+          }, true)}>Register this Mac with the installed TBP Companion</button
+      >
+      <button
+        onclick={() =>
+          task(async () => {
+            const result = await invoke<{
+              serial: string;
+              pairings: {
+                installation_id: string;
+                label: string;
+                state: string;
+              }[];
+            }>("list_board_pairings", { serial });
+            pairingSerial = result.serial;
+            pairings = result.pairings;
+            revokeInstallation = "";
+            revokeConfirmation = "";
+          })}>List installations over physical USB</button
+      >
+      <label
+        >Installation to revoke<select bind:value={revokeInstallation}
+          ><option value="">Choose explicitly</option
+          >{#each pairings as pairing}<option value={pairing.installation_id}
+              >{pairing.label} · {pairing.installation_id} · {pairing.state}</option
+            >{/each}</select
+        ></label
+      >
+      <p>
+        This revokes the selected installation on the physical Board, including
+        its active gameplay sessions. Only its tagged SSH key is removed;
+        unrelated keys and Mac Mission progress remain. This is different from
+        local record cleanup below.
+      </p>
+      <label
+        >Type REVOKE {revokeInstallation || "installation-id"} ON {pairingSerial ||
+          "hardware-serial"}<input
+          autocomplete="off"
+          bind:value={revokeConfirmation}
+        /></label
+      >
+      <button
+        disabled={!revokeInstallation ||
+          !pairingSerial ||
+          revokeConfirmation !==
+            `REVOKE ${revokeInstallation} ON ${pairingSerial}`}
+        onclick={() =>
+          task(async () => {
+            const result = await invoke<{ ssh_key_removed: boolean }>(
+              "revoke_board_pairing",
+              {
+                serial,
+                installationId: revokeInstallation,
+                confirmation: revokeConfirmation,
+              },
+            );
+            revokeConfirmation = "";
+            pairings = [];
+            revokeInstallation = "";
+            message = result.ssh_key_removed
+              ? "The Board revoked the installation, invalidated its sessions, and removed only its tagged SSH key."
+              : "The Board revoked the installation and invalidated its sessions. SSH file cleanup remains pending; the leftover forced key is disabled by the registry. Resolve file permissions through official management and retry cleanup.";
+          }, true)}>Revoke selected installation on this Board</button
+      >
+    </fieldset>
+  </details>
   <details class="recovery">
     <summary>Restart, pairing cleanup, and factory recovery</summary>
     <h3>Restart the UNO Q — keeps its data</h3>
@@ -376,9 +495,10 @@
     <h3>Forget Tinkeroo records — this Mac only</h3>
     <p>
       Removes this Mac's saved gameplay credential, not Board apps, Wi-Fi, Linux
-      credentials, another installation, or remote authorized_keys. This
-      development bearer-record cleanup does not revoke a copied token on the
-      Board; full remote revocation remains integration work. Mission progress
+      credentials, another installation, or remote authorized_keys. Local
+      cleanup does not revoke credentials on the Board. Use physical
+      installation revocation above for TBP Pairings; copied legacy bearer
+      tokens require explicit Board-side credential rotation. Mission progress
       is retained.
     </p>
     <fieldset disabled={!native || busy || restorePending || !pairedBoardId}>
