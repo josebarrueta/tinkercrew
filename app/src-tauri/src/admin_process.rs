@@ -80,7 +80,9 @@ mod tests {
 
     #[test]
     fn secrets_use_stdin_and_subprocess_failures_are_bounded_and_sanitized() {
-        let python = Path::new("/usr/bin/python3");
+        // Use the activated test toolchain, not Apple's CLT launcher, whose first
+        // invocation can run developer-tool setup outside this fixture's deadline.
+        let python = Path::new("python3");
         let code = "import sys,json; print(json.dumps({'stdin':sys.stdin.read()=='fixture-only-secret','argv':len(sys.argv)}))";
         let output = run(
             python,
