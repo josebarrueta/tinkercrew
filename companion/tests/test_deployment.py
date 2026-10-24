@@ -149,8 +149,19 @@ class DeploymentTests(unittest.TestCase):
         diagnostic = {"route": "not_requested", "http": None, "exception": None}
         def request(path, body=None, token=None):
             diagnostic.update(route=path, http=None, exception=None)
-            peer = http.client.HTTPSConnection("localhost", port, context=context, timeout=3)
+            # Match native pinned routing: fixed IPv4 TCP peer, verified localhost TLS
+            # identity. Do not depend on the runner's localhost IPv6/DNS policy.
+            peer = http.client.HTTPConnection("127.0.0.1", port, timeout=3)
             try:
+                diagnostic["step"] = "tcp_connect"
+                stream = socket.create_connection(("127.0.0.1", port), timeout=3)
+                diagnostic["step"] = "tls_handshake"
+                try:
+                    peer.sock = context.wrap_socket(stream, server_hostname="localhost")
+                except Exception:
+                    stream.close()
+                    raise
+                diagnostic["step"] = "http_response"
                 headers = {"Authorization": "Bearer " + token} if token else {}
                 peer.request("POST" if body is not None else "GET", path, json.dumps(body) if body is not None else None, headers)
                 response = peer.getresponse()

@@ -53,11 +53,12 @@ Build downloads expire after **14 days**; QA reports and failed browser-test dia
 With the [prerequisites below](#prerequisites) installed, quit the old app and run from your existing checkout:
 
 ```sh
-git status --short       # preserve/commit your changes first; do not discard them
-git switch main
-git pull --ff-only
-npm --prefix app ci
-npm --prefix app run build:dmg
+git status --short       # STOP if this lists changes; preserve/commit them first
+# The && chain stops if checkout, pull, install, or build fails.
+git switch main &&
+git pull --ff-only &&
+npm --prefix app ci &&
+npm --prefix app run build:dmg &&
 codesign --verify --deep --strict app/src-tauri/target/release/bundle/macos/Tinkeroo.app
 ```
 
