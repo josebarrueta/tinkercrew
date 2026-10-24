@@ -40,8 +40,8 @@ class DeploymentTests(unittest.TestCase):
         store.dispatch("stage", {"token": begun["token"]})
         return begun["token"]
 
-    def wait_for(self, predicate):
-        deadline = time.monotonic() + 5
+    def wait_for(self, predicate, *, timeout=5):
+        deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
             if predicate():
                 return
@@ -172,7 +172,15 @@ class DeploymentTests(unittest.TestCase):
             self.wait_for(lambda: (self.root / "data/runtime/observed.json").exists())
             token = self.upload(store, self.bundle)
             store.dispatch("commit", {"token": token})
-            self.wait_for(authenticated_health)
+            # Cold CI interpreters compile uncached modules before serving TLS. This is
+            # a test-observation budget, not an extension of the 45-second trial.
+            self.wait_for(lambda: (store.dispatch("status", {}).get("observed") or {}).get("release") == self.bundle["release"], timeout=15)
+            try:
+                self.wait_for(authenticated_health, timeout=20)
+            except AssertionError:
+                status = store.dispatch("status", {})
+                observed = status.get("observed") or {}
+                self.fail(f'authenticated trial health unavailable: phase={status["phase"]}, reason={status.get("reason", "none")}, child={observed.get("state", "unobserved")}')
             self.assertTrue(hello["health"]["safe_state"])
             self.assertEqual(hello["board"]["board_id"], board_id)
             self.assertEqual(store.dispatch("finish", {"token": token, "nonce": hello["runtime"]["nonce"]})["phase"], "committed")
