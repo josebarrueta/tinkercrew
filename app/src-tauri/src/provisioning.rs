@@ -1,6 +1,5 @@
 //! Fixed initial source/identity preparation. Official first firmware start stays a handoff.
 use crate::{
-    admin_process,
     connection::{self, Connections},
     management, runtime_update,
 };
@@ -26,7 +25,7 @@ fn usb(serial: &str, soc: &str, mut body: Value) -> Result<Value, String> {
     let input = Zeroizing::new(
         serde_json::to_vec(&body).map_err(|_| "Invalid initial preparation request.")?,
     );
-    let bytes = Zeroizing::new(admin_process::run(&adb, &["-H", "127.0.0.1", "-P", "5037", "-s", serial, "exec-out", &command], &input, Duration::from_secs(60)).map_err(|_| "Initial preparation is unsupported or interrupted. Reinspect the same Board; existing apps were not overwritten and no start/firmware operation was requested.")?);
+    let bytes = Zeroizing::new(crate::adb_transport::request(&adb, serial, &command, &input, Duration::from_secs(60)).map_err(|_| "Initial preparation is unsupported or interrupted. Reinspect the same Board; existing apps were not overwritten and no start/firmware operation was requested.")?);
     let response: Value =
         serde_json::from_slice(&bytes).map_err(|_| "Incompatible initial preparation response.")?;
     if response["status"] != "ok" || response["result"]["serial"].as_str() != Some(soc) {

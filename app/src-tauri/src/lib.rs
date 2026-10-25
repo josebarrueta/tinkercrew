@@ -1,3 +1,4 @@
+mod adb_transport;
 mod admin_process;
 mod app_updates;
 mod connection;

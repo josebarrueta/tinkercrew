@@ -23,7 +23,7 @@ pub(crate) fn usb(serial: &str, body: &Value) -> Result<Value, String> {
     management::inspect(serial)?; // Requires fresh physical usb: evidence and UNO Q/Debian/SoC identity.
     let path = crate::discovery::adb_path().map_err(|error| error.message)?;
     let input = Zeroizing::new(serde_json::to_vec(body).map_err(|_| "Invalid Pairing input.")?);
-    let output = Zeroizing::new(admin_process::run(&path, &["-H", "127.0.0.1", "-P", "5037", "-s", serial, "exec-out", COMMAND], &input, Duration::from_secs(10)).map_err(|_| "The updated TBP Companion host helper is unavailable or rejected the request. Install/configure the compatible Companion through official tooling; no guessed helper/path fallback was attempted.")?);
+    let output = Zeroizing::new(crate::adb_transport::request(&path, serial, COMMAND, &input, Duration::from_secs(10)).map_err(|_| "The updated TBP Companion host helper is unavailable or rejected the request. Install/configure the compatible Companion through official tooling; no guessed helper/path fallback was attempted.")?);
     let response: Value = serde_json::from_slice(&output)
         .map_err(|_| "Incompatible Companion management response.")?;
     if response["status"] != "ok" {

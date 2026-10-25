@@ -26,14 +26,20 @@ pub(crate) fn adb_path() -> Result<PathBuf> {
 }
 
 pub(crate) async fn adb(args: &[&str]) -> Result<String> {
+    let path = adb_path()?;
+    let startup_path = path.clone();
+    tauri::async_runtime::spawn_blocking(move || crate::adb_transport::ensure_server(&startup_path)).await.map_err(|_| ConnectionError::new("adb_unavailable","Local USB service startup stopped."))?.map_err(|_| ConnectionError::new("adb_unavailable","The local ADB service could not start safely. Check official Platform-Tools and retry."))?;
     let output = tokio::time::timeout(
         Duration::from_secs(2),
-        Command::new(adb_path()?)
+        Command::new(path)
             .args(["-H", "127.0.0.1", "-P", "5037"])
             .args(args)
             .env_remove("ADB_SERVER_SOCKET")
             .env_remove("ANDROID_ADB_SERVER_ADDRESS")
             .env_remove("ANDROID_ADB_SERVER_PORT")
+            .env_remove("ADB_SERVER_PORT")
+            .env_remove("ADB_TRACE")
+            .env_remove("ADB_TRACE_LOG_PATH")
             .kill_on_drop(true)
             .output(),
     )
