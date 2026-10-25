@@ -111,12 +111,7 @@ fn usb_request(serial: &str, body: Value) -> Result<Value, String> {
         return Err("Choose a valid, explicit USB serial.".into());
     }
     let path = crate::discovery::adb_path().map_err(|error| error.message)?;
-    let devices = admin_process::run(
-        &path,
-        &["-H", "127.0.0.1", "-P", "5037", "devices", "-l"],
-        &[],
-        Duration::from_secs(4),
-    )?;
+    let devices = crate::adb_transport::local(&path, &["devices", "-l"], Duration::from_secs(4))?;
     if !physical_usb_ready(
         std::str::from_utf8(&devices).map_err(|_| "Unreadable USB list.")?,
         serial,
@@ -126,18 +121,10 @@ fn usb_request(serial: &str, body: Value) -> Result<Value, String> {
     let body = PrivateJson(body);
     let bytes =
         Zeroizing::new(serde_json::to_vec(&body.0).map_err(|_| "Invalid management input.")?);
-    let result = admin_process::run(
+    let result = crate::adb_transport::request(
         &path,
-        &[
-            "-H",
-            "127.0.0.1",
-            "-P",
-            "5037",
-            "-s",
-            serial,
-            "exec-out",
-            &helper_command(),
-        ],
+        serial,
+        &helper_command(),
         &bytes,
         Duration::from_secs(40),
     )?;
@@ -453,6 +440,30 @@ pub async fn admin_forget_ssh_trust(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    #[ignore = "Owner-only physical read-only inspection; never part of routine CI"]
+    fn physical_usb_inspection_owner_only() {
+        assert!(
+            std::env::var("TC_ACCEPTANCE_CONSENT").as_deref() == Ok("inspect-only"),
+            "Explicit inspect-only owner consent is required."
+        );
+        let serial = std::env::var("TC_ACCEPTANCE_USB_SERIAL")
+            .expect("Supply the exact owner-selected physical USB serial.");
+        assert!(valid_serial(&serial), "Invalid explicit USB serial.");
+        let identity = inspect(&serial).expect(
+            "Fixed read-only native USB inspection failed; no configuration change was requested.",
+        );
+        assert!(
+            identity.adb_serial == serial && identity.os == "debian" && identity.boot_id.is_some(),
+            "The selected Board did not return the supported read-only identity contract."
+        );
+        let suffix = &identity.serial[identity.serial.len().saturating_sub(4)..];
+        println!(
+            "Read-only native inspection: SoC suffix {suffix}; account {}; OS {} {}; image {}; kernel boot identity available. No configuration/Pairing/deployment/reboot/output/reset/flash requested.",
+            identity.username, identity.os, identity.os_version, identity.image_version
+        );
+    }
 
     #[test]
     fn management_has_no_shell_reset_or_unknown_argument_endpoint() {

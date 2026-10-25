@@ -29,6 +29,9 @@ pub(crate) fn run(
         .env_remove("ADB_SERVER_SOCKET")
         .env_remove("ANDROID_ADB_SERVER_ADDRESS")
         .env_remove("ANDROID_ADB_SERVER_PORT")
+        .env_remove("ADB_SERVER_PORT")
+        .env_remove("ADB_TRACE")
+        .env_remove("ADB_TRACE_LOG_PATH")
         .env("LC_ALL", "C")
         .spawn()
         .map_err(|_| "The required local management tool could not start.")?;

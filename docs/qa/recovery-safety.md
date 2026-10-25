@@ -25,6 +25,19 @@ Covered behavior includes:
 - Ordered connection fallback/consent/manual entry, exact ADB serial matching, local-address validation, event gaps, malformed freshness, and real TLS credential/certificate/identity rejection.
 - Companion input health, bounded Commands, lease loss, expiring output state, negative/ambiguous body framing protection, request read timeouts, and authenticated POST rate limiting.
 
+## Explicit owner-only read-only native inspection
+
+Routine checks **skip** the ignored `physical_usb_inspection_owner_only` test. Only after owner consent, external official Platform-Tools installation and exact physical USB selection, run this single named inspection deliberately:
+
+```sh
+TC_ACCEPTANCE_CONSENT=inspect-only TC_ACCEPTANCE_USB_SERIAL='<exact selected USB serial>' \
+  cargo test --manifest-path app/src-tauri/Cargo.toml physical_usb_inspection_owner_only -- --ignored --nocapture
+```
+
+It uses the actual native fixed management adapter, not a mock: local-only ADB startup, physical USB/model/SoC/Debian inspection, shell-v2/non-TTY private stdin and bounded/sanitized subprocesses. It never requests configuration, Pairing, deployment, output, reboot, reset or flashing. It does not touch Tinkeroo Keychain. Do not run a blanket `--ignored` suite against hardware. Record only sanitized serial suffixes in shared evidence.
+
+One configured Board passed this read-only subset; the [2026-10-25 report](uno-q-2026-10-25-read-only.md) records the discovered/fixed raw-exec EOF bug and explicit remaining limits. Broad P01/M01/P03 and all safety/family acceptance remain incomplete.
+
 ## Physical test prerequisites
 
 - An adult supervises powered tests and follows the in-app hardware safety panel.
@@ -80,7 +93,7 @@ All rows remain **PENDING**. See [Board Setup boundaries and recovery procedure]
 | M10 | Explicit successful Linux restore | Official flasher completion plus same SoC/exact BUILD_ID, actual userdata reset, new credentials/SSH trust, source-labeled local receipt; STM32/Companion self-test separately verified | PENDING |
 | M11 | Supported interrupted/external recovery | App never starts duplicate erase or kills writer; PID/boot-session ambiguity blocks unsafe acceptance; human confirmation is not app-observed success; interrupted download never claims a restore | PENDING |
 
-No M-series test has been run during implementation. Full TBP/atomic deployment and integrated setup completion remain **BLOCKED** code work under #11, not merely physical tests awaiting execution.
+Only the explicit owner-only read-only USB/identity subset has been exercised on one configured Board; no M-series configuration, Pairing, deployment, reboot, GPIO or destructive test has run. The hybrid guide software from PR #24 now exists; real first-start/Bridge/topology and full flow acceptance remain NOT RUN/BLOCKED by their actual prerequisites. Unsupported whole-baseline migration remains an official handoff, not an atomic Linux+MCU claim.
 
 ## Per-run evidence template
 
@@ -104,4 +117,4 @@ Follow-up issue:
 
 ## Release gate
 
-Do not close #10 while physical rows remain untested. A failed or unexplained interruption is a release blocker, not a row to omit. Full TBP Pairing and supported provisioning recovery are still integration work; scenarios depending on those capabilities must be recorded BLOCKED or NOT RUN until implemented, not reported as passes. Family usability belongs to #4; signing/Gatekeeper acceptance belongs to #12.
+Acceptance is consolidated in #21; closing superseded #4/#10 tickets did not pass physical rows. A failed or unexplained interruption is a release blocker, not a row to omit. Unsupported/incomplete capabilities stay BLOCKED/NOT RUN rather than fabricated passes. Family usability, actual supported hybrid setup, hardware safe-off and clean-Mac acceptance remain #21; production signing/Gatekeeper work remains #12 and dependency/source-availability review remains #25.
