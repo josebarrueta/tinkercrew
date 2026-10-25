@@ -28,6 +28,10 @@
     "active": true,
     "targets": ["app", "dmg"],
     "category": "FamilyGame",
+    "resources": {
+      "../../docs/release/third-party/DEPENDENCY_INVENTORY.json": "third-party/DEPENDENCY_INVENTORY.json",
+      "../../docs/release/third-party/DEPENDENCY_NOTICES.txt": "third-party/DEPENDENCY_NOTICES.txt"
+    },
     "shortDescription": "Build. Code. Imagine. Together.",
     "longDescription": "A local-first cooperative maker game for one family crew and an Arduino UNO Q.",
     "macOS": {

@@ -20,6 +20,10 @@ npm run build:dmg
 
 The `.app` is under `src-tauri/target/release/bundle/macos/`, and the drag-to-Applications `.dmg` is under `src-tauri/target/release/bundle/dmg/`. Tauri's DMG bundler creates the Applications link. The script sets exactly `CI=true` to skip interactive Finder layout automation; `CI=1` is not equivalent for the installed bundler and caused an AppleScript timeout during implementation. The Applications link is retained even when cosmetic Finder layout is skipped. These are **development artifacts**, not notarized public installers. `build:app`, `build:dmg`, and CI bundling explicitly use `src-tauri/tauri.development.conf.json` to seal/sign the executable **and bundle resources** ad-hoc. CI runs `codesign --verify --deep --strict`; local verification uses the same command on `src-tauri/target/release/bundle/macos/Tinkeroo.app`. The protected production workflow does not load this override.
 
+## Dependency evidence before binary sharing or signing
+
+The [dependency disclosure gate](third-party/README.md) binds the conservative Cargo/npm inventory, reviewed upstream source texts/classifications and actual app/DMG resource bytes. The current evidence and review are **pending**, not legal approval. Routine CI still builds/tests, but withholds new binary download uploads until a matching review record exists; older artifacts are not retroactively reviewed/revoked. Production preflight and the attended finalizer reject incomplete evidence or stale/missing review before signing inputs/Apple operations. A plaintext review record is not identity authentication: owner-controlled code review and protected release approval remain required. Complete the MPL/source-availability and vendored native notice audit; do not mechanically approve all components or refresh hashes to bypass review.
+
 ## Owner-only prerequisites (do later, not silently)
 
 1. An Apple Developer Program account holder creates a **Developer ID Application** certificate, with its private key held in Keychain and an encrypted `.p12` export stored outside this repository. See [Apple CSR instructions](https://developer.apple.com/help/account/create-certificates/create-a-certificate-signing-request) and [Tauri's macOS signing guide](https://v2.tauri.app/distribute/sign/macos/).
@@ -46,10 +50,10 @@ No release inputs belong in source, `.env` commits, issue comments, build logs, 
 
 `.github/workflows/release-macos.yml` is **manual-dispatch only**; it does not publish on pushes or pull requests. All external actions are pinned to reviewed commit SHAs. Before executing it:
 
-1. Complete/triage #4/#10 and the remaining TBP/provisioning integration gates. The workflow cannot replace this decision.
+1. Complete/triage #21 acceptance and the dependency evidence/source-availability review in #25; the original #4/#10 acceptance is consolidated in #21. Respect unsupported TBP/provisioning handoffs. The workflow cannot replace this decision.
 2. Update `app/package.json`, `app/src-tauri/Cargo.toml`, and `app/src-tauri/tauri.conf.json` to the same version; refresh lockfiles. Commit reviewed code and create the matching immutable `vVERSION` tag.
 3. Dispatch the workflow **on that tag** and approve the protected environment. It fails before signing if the ref/version or required inputs are missing.
-4. It runs software checks without signing inputs, builds a Developer-ID-signed/notarized Universal app and DMG, and finalizes the DMG with `scripts/finalize-macos-release.sh`.
+4. It runs software checks and dependency review preflight without signing inputs, then builds a Developer-ID-signed/notarized Universal app and DMG, and finalizes the DMG with `scripts/finalize-macos-release.sh`.
 5. The finalizer submits the **final DMG** using `notarytool --wait`, requires `Accepted`, staples app and DMG, and runs strict release verification. It never passes a private key/password's contents as a CLI argument.
 6. `scripts/verify-macos-release.sh` requires Developer ID, Hardened Runtime, valid signatures on all embedded Mach-O code with the same signing team, valid app/DMG stapled tickets, and Gatekeeper assessments. It fails on ad-hoc development builds. No extra JIT, unsigned executable memory, disabled library validation, App Sandbox, or debug entitlements are configured.
 7. Only after stapling/verification, it signs both the immutable DMG and `release-manifest.json` with the update key, then independently verifies both signatures against the configured public key using `tools/release-verify`.
@@ -61,7 +65,7 @@ For an attended local finalization, first build with an installed Developer ID i
 bash scripts/finalize-macos-release.sh /absolute/Tinkeroo.app /absolute/input.dmg VERSION darwin-universal
 ```
 
-This performs real Apple submissions and is intentionally **not** part of routine checks. Production credentials/notarization remain untested here. The release verifier's signed public fixture tests prove Tauri/Minisign compatibility and tamper rejection, not Apple approval or custody of a production key.
+The finalizer first repeats the dependency review and actual bundle-resource checks; it refuses pending evidence even if signing credentials are present. After those gates, this performs real Apple submissions and is intentionally **not** part of routine checks. Production credentials/notarization remain untested here. The release verifier's signed public fixture tests prove Tauri/Minisign compatibility and tamper rejection, not Apple approval or custody of a production key.
 
 ## Signed application update design
 

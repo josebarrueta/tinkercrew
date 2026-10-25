@@ -21,6 +21,8 @@ These are **graph upper bounds, not proof of code in the final executable**. Pro
 
 The npm lock has **118 non-root entries**, all with license metadata. Filtering only npm production dependencies would be misleading: Svelte is declared as a dev dependency while its compiled runtime contributes to the frontend. Conversely, optional foreign-platform compiler binaries in the lock do not establish redistribution in the Mac app. Sources: `app/package.json`, `app/package-lock.json`, and the actual build policy in `docs/release/macos.md`.
 
+The subsequent conservative lock inventory contains **549 Cargo lock packages and 118 npm entries (667 records)**. The filtered Cargo metadata counts above are a different input/scope, not the complete lockfile universe. Neither count is a binary inclusion verdict.
+
 ## Findings requiring explicit review
 
 1. **MPL is present; the repository's MIT license is not a blanket license for every dependency.** Rust package metadata declares MPL-2.0 for `cssparser 0.37.0`, `cssparser-macros 0.7.1`, `dtoa-short 0.3.5`, `option-ext 0.2.0` and `selectors 0.38.0`. All five occur in the inspected normal-edge upper bound. The npm lock also has 12 MPL-2.0 entries for Lightning CSS and platform packages. Determine actual redistribution and provide the appropriate source-availability/notice plan; do not infer compliance from the inventory. Primary text: [`cssparser`'s packaged MPL, §§3.1–3.4](https://docs.rs/crate/cssparser/0.37.0/source/LICENSE); exact package metadata is in the locked crates and npm lock.
@@ -31,11 +33,11 @@ The npm lock has **118 non-root entries**, all with license metadata. Filtering 
 
 ## Proposed next vertical slices
 
-Await confirmation of these public test seams before writing tests:
+The owner confirmed these public test seams before implementation:
 
 - Audit CLI: temporary lockfiles/package-source trees in; deterministic inventory/notices, diagnostics and exit status out.
 - Packaged notice artifact: temporary/test bundle or built app in; evidence that required notices/source instructions are actually present and match inventory.
 
 Then implement one behavior at a time: deterministic lock-bound inventory/drift rejection; bounded regular-file license evidence including vendored components; missing/conflicting evidence refusal; packaged notices and artifact checks; routine CI/release preflight before secrets. Store no private absolute cache paths or credentials. Keep inventory freshness, human compliance review and production-publication approval as separate states.
 
-**Still pending:** those tests/implementation, complete license/source-availability review, actual bundled notices, Intel/Apple-silicon artifact comparison, owner approval and #21 acceptance. No checkbox has been marked passed by this research.
+The [disclosure tooling foundation](../release/third-party/README.md) now has public CLI/artifact tests, deterministic lock-bound inventory, verified evidence intake, actual bundle/DMG disclosure-resource checks and pending-review release/download gates. The default manifest deliberately has no classified evidence; the draft disclosure is not full upstream notices. **Still pending:** complete license/source-availability classification/text review, final upstream notices, Intel/Apple-silicon artifact comparison, owner approval and #21 acceptance. No checkbox has been marked passed by this research.

@@ -71,7 +71,17 @@ jobs:
           cp "${dmgs[0]}" artifacts/build/
           cd artifacts/build
           shasum -a 256 ./*.dmg Tinkeroo.app.zip > SHA256SUMS.txt
+      - name: Check dependency review before sharing any binary downloads
+        id: notice_review
+        run: |
+          if python3 scripts/dependency_notices.py release-check --root . --inventory docs/release/third-party/DEPENDENCY_INVENTORY.json --evidence docs/release/third-party/evidence.json --notices docs/release/third-party/DEPENDENCY_NOTICES.txt --review docs/release/third-party/review.json; then
+            echo 'allowed=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'allowed=false' >> "$GITHUB_OUTPUT"
+            echo 'Binary downloads withheld: dependency evidence/review is pending or invalid.'
+          fi
       - name: Store development downloads (not production installers)
+        if: steps.notice_review.outputs.allowed == 'true'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: tinkeroo-macos-${{ runner.arch }}-${{ github.sha }}
@@ -91,10 +101,13 @@ jobs:
           retention-days: 7
       - name: Summarize download trust and retention
         if: always()
+        env:
+          NOTICE_REVIEW_MATCHES: ${{ steps.notice_review.outputs.allowed }}
         run: |
           {
             printf '### Development build\n\n'
             printf 'Native runner architecture: `%s`. No signing secrets or notarization are used.\n\n' "$RUNNER_ARCH"
-            printf 'Build artifacts: 14 days. QA reports/failed browser diagnostics: 7 days.\n\n'
+            printf 'Matching dependency review record: `%s`. Binary downloads are withheld unless it matches; this is not independent legal approval.\n\n' "${NOTICE_REVIEW_MATCHES:-false}"
+            printf 'When allowed, build artifacts: 14 days. QA reports/failed browser diagnostics: 7 days.\n\n'
             printf 'These are ad-hoc development artifacts, not approved public installers. Do not bypass Gatekeeper to claim release acceptance.\n'
           } >> "$GITHUB_STEP_SUMMARY"

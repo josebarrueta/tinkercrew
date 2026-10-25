@@ -50,7 +50,7 @@ Use **Board Setup → Upgrade the Mac app** to see the installed version, read t
 
 ## CI downloads and licensing
 
-[macOS CI](../.github/workflows/ci-macos.yml) runs the checks and native-architecture app/DMG build without signing secrets. Download development bundles from the run's Artifacts section (14-day retention); QA reports and failed browser diagnostics are retained for 7 days. They are not production-signed/notarized installers. See the root [installation and CI guidance](../README.md#install-the-macos-app).
+[macOS CI](../.github/workflows/ci-macos.yml) runs the checks and native-architecture app/DMG build without signing secrets. Binary download uploads are withheld while dependency evidence/review is pending. Once a matching review record permits sharing, development bundles appear in the run's Artifacts section (14-day retention); QA reports and failed browser diagnostics remain available for 7 days. The app/DMG carries a hash-checked dependency disclosure, not an automated legal approval; see the [notice gate](../docs/release/third-party/README.md). They are not production-signed/notarized installers. See the root [installation and CI guidance](../README.md#install-the-macos-app).
 
 Original project code/documentation uses the root [MIT License](../LICENSE); upstream dependencies and tools retain their own licenses. Generated binaries are not committed to git.
 

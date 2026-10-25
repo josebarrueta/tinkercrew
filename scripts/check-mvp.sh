@@ -40,6 +40,7 @@ run_check() {
   fi
 }
 run_check 'Python Ed25519 dependency' python3 -c 'from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey'
+run_check 'Dependency inventory and source notices freshness (not approval)' python3 scripts/dependency_notices.py check --root . --inventory docs/release/third-party/DEPENDENCY_INVENTORY.json --evidence docs/release/third-party/evidence.json --notices docs/release/third-party/DEPENDENCY_NOTICES.txt
 run_check 'Frontend quality and Rust lint' bash -c 'cd app && npm run quality'
 run_check 'Native persistence, TLS Companion, management and restore guards' cargo test --manifest-path app/src-tauri/Cargo.toml
 run_check 'Companion core and HTTP' env PYTHONPATH=companion/python python3 -m unittest discover -s companion/tests
@@ -52,6 +53,7 @@ run_check 'Python compilation' python3 -m compileall -q companion/python compani
 run_check 'Whitespace validation' git diff --check
 if [[ "$build" == 1 ]]; then
   run_check 'Production macOS app bundle' bash -c 'cd app && npm run build:app'
+  run_check 'Packaged dependency disclosure (not approval)' python3 scripts/dependency_notices.py bundle-check --root . --inventory docs/release/third-party/DEPENDENCY_INVENTORY.json --evidence docs/release/third-party/evidence.json --notices docs/release/third-party/DEPENDENCY_NOTICES.txt --app app/src-tauri/target/release/bundle/macos/Tinkeroo.app
 else
   printf '| Production macOS app bundle | NOT RUN (use --build) |\n' >> "$report"
 fi
