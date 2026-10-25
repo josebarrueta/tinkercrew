@@ -14,6 +14,8 @@ version="$3"
 target="$4"
 [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9.-]+)?$ ]] || { printf 'Invalid release version.\n' >&2; exit 2; }
 case "$target" in darwin-aarch64|darwin-x86_64|darwin-universal) ;; *) printf 'Invalid release target.\n' >&2; exit 2 ;; esac
+python3 "$root/scripts/dependency_notices.py" release-check --root "$root" --inventory "$root/docs/release/third-party/DEPENDENCY_INVENTORY.json" --evidence "$root/docs/release/third-party/evidence.json" --notices "$root/docs/release/third-party/DEPENDENCY_NOTICES.txt" --review "$root/docs/release/third-party/review.json"
+python3 "$root/scripts/dependency_notices.py" bundle-check --root "$root" --inventory "$root/docs/release/third-party/DEPENDENCY_INVENTORY.json" --evidence "$root/docs/release/third-party/evidence.json" --notices "$root/docs/release/third-party/DEPENDENCY_NOTICES.txt" --app "$app"
 : "${TC_UPDATE_PUBLIC_KEY_FILE:?Set the release verification public-key file}"
 [[ -n "${TAURI_SIGNING_PRIVATE_KEY:-}${TAURI_SIGNING_PRIVATE_KEY_PATH:-}" ]] || { printf 'A release signing key is required in the environment.\n' >&2; exit 1; }
 [[ -f "$TC_UPDATE_PUBLIC_KEY_FILE" && -f "$source_dmg" && -d "$app/Contents" ]] || { printf 'Missing release input files.\n' >&2; exit 1; }

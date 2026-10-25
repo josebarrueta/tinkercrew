@@ -32,7 +32,7 @@ Do not disable Gatekeeper or remove quarantine to declare an installation succes
 
 ### CI development downloads
 
-After a successful run of [macOS CI](https://github.com/josebarrueta/tinkercrew/actions/workflows/ci-macos.yml), open the run's **Artifacts** section and download `tinkeroo-macos-ARCH-COMMIT` (GitHub sign-in may be required). Extract the Actions archive; it contains a DMG, an app ZIP that preserves bundle metadata/symlinks, and `SHA256SUMS.txt`.
+New binary downloads are **withheld while dependency evidence/owner review is pending**; software checks and QA reports still run. See the [dependency disclosure gate](docs/release/third-party/README.md). Older artifacts are not retroactively reviewed or revoked. Once a matching review record permits sharing, open a successful [macOS CI](https://github.com/josebarrueta/tinkercrew/actions/workflows/ci-macos.yml) run's **Artifacts** section and download `tinkeroo-macos-ARCH-COMMIT` (GitHub sign-in may be required). Extract the Actions archive; it contains a DMG, an app ZIP that preserves bundle metadata/symlinks, and `SHA256SUMS.txt`.
 
 CI builds the runner's **native architecture**, identified in the artifact name and DMG filename—not a validated Universal release. Check the workflow/ref/commit before downloading; PR artifacts are untrusted development outputs. Hashes detect corruption, not publisher authenticity. Production signature verification is a separate release gate.
 
@@ -119,7 +119,7 @@ The check script reuses `.venv` when present; it never installs packages itself.
 
 This runs frontend/type/format/lint checks, Rust persistence and real loopback TLS tests, Python Companion tests, browser Mission/recovery tests, release metadata/signature checks, and an app build. Reports go to ignored `artifacts/qa/` and record toolchain versions and pass/fail results. To skip the app build, omit `--build`.
 
-[macOS CI](.github/workflows/ci-macos.yml) runs on pushes, pull requests, and manual dispatch. It runs these software checks, builds the development DMG, verifies its read-only app/Applications-link layout, and retains the outputs described above. The separate [production release workflow](.github/workflows/release-macos.yml) is manual, protected, credential-dependent, and creates drafts only.
+[macOS CI](.github/workflows/ci-macos.yml) runs on pushes, pull requests, and manual dispatch. It runs these software checks, builds the development DMG, verifies its read-only app/Applications-link layout, checks the packaged dependency disclosure, and shares binary outputs only when the dependency review record matches. QA reports remain available while review is pending. The separate [production release workflow](.github/workflows/release-macos.yml) is manual, protected, credential-dependent, and creates drafts only.
 
 Physical Board, actual ADB/Bonjour/VPN, electrical safe-off timing, family play-testing, and notarization acceptance remain separate. See the [QA/recovery matrix](docs/qa/recovery-safety.md).
 
@@ -171,6 +171,6 @@ The GitHub repository remains `josebarrueta/tinkercrew`. Existing bundle identit
 
 ## License
 
-Original Tinkeroo code and documentation are licensed under the **[MIT License](LICENSE)**, consistent with the existing app package metadata. Third-party dependencies, libraries, tools, and assets retain their own licenses; this is not a claim that every distributed component is MIT-licensed. Preserve required upstream notices and complete the dependency/notice audit before public binary distribution.
+Original Tinkeroo code and documentation are licensed under the **[MIT License](LICENSE)**, consistent with the existing app package metadata. Third-party dependencies, libraries, tools, and assets retain their own licenses; this is not a claim that every distributed component is MIT-licensed. Preserve required upstream notices and complete the dependency/notice audit before binary distribution. [Inventory/disclosure tooling](docs/release/third-party/README.md) now detects drift, checks actual app/DMG resources and blocks sharing/release preparation on incomplete evidence or review; the audit itself remains pending and no legal approval is inferred.
 
 Google's Platform-Tools are separately installed, not redistributed; see the [ADB licensing assessment](docs/research/adb-distribution.md). LEGO, Arduino, Android, and other third-party names/trademarks are not licensed by this repository's MIT license; no affiliation or endorsement is implied.

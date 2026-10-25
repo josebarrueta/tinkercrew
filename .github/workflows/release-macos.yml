@@ -60,6 +60,13 @@ jobs:
           echo "$(brew --prefix openssl@3)/bin" >> "$GITHUB_PATH"
       - name: Software release checks (no signing secrets)
         run: bash scripts/check-mvp.sh
+      - name: Require complete dependency evidence and matching owner review (no signing secrets)
+        run: >-
+          python3 scripts/dependency_notices.py release-check --root .
+          --inventory docs/release/third-party/DEPENDENCY_INVENTORY.json
+          --evidence docs/release/third-party/evidence.json
+          --notices docs/release/third-party/DEPENDENCY_NOTICES.txt
+          --review docs/release/third-party/review.json
       - name: Prepare protected signing inputs
         env:
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
