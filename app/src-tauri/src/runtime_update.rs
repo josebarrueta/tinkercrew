@@ -241,6 +241,7 @@ pub async fn runtime_update_status(serial: String) -> Result<Value, String> {
 #[tauri::command]
 pub async fn update_companion_runtime(
     state: tauri::State<'_, Connections>,
+    setup_store: tauri::State<'_, crate::setup::SetupStore>,
     serial: String,
     board_id: String,
     confirmation: String,
@@ -337,7 +338,51 @@ pub async fn update_companion_runtime(
         }
         Err("Runtime acceptance is unresolved. The Board supervisor rolls back unacknowledged trials independently; reconnect USB and inspect/resume rather than assuming success.".into())
     }.await;
+    let proof = async {
+    if let Ok(outcome) = &result
+        && ["current", "committed"].contains(&outcome.phase.as_str())
+    {
+        let hello = connection::request(
+            &client,
+            &profile,
+            forward.port,
+            reqwest::Method::GET,
+            "/v1/hello",
+            None,
+            &auth,
+        )
+        .await
+        .map_err(|error| error.message)?;
+        if hello["board"]["board_id"].as_str() != Some(&board_id)
+            || hello["health"]["safe_state"] != true
+            || hello["runtime"]["release"].as_str() != Some(&bundle.release)
+        {
+            return Err("The runtime committed, but fresh setup proof is no longer valid. Reinspect/resume rather than claiming completion.".into());
+        }
+        crate::setup::observed_step(
+            &setup_store,
+            8,
+            crate::setup::SetupObservation {
+                serial: serial.clone(),
+                soc: soc.clone(),
+                board_id: board_id.clone(),
+                boot_id: hello["runtime"]["boot_id"]
+                    .as_str()
+                    .unwrap_or_default()
+                    .into(),
+                runtime_release: bundle.release.clone(),
+                runtime_nonce: hello["runtime"]["nonce"]
+                    .as_str()
+                    .unwrap_or_default()
+                    .into(),
+                hardware: None,
+            },
+        )?;
+    }
+    Ok::<(), String>(())
+    }.await;
     auth.close(&client, &profile.tls_name, forward.port).await;
+    proof?;
     if result.is_ok() {
         std::fs::remove_file(marker).map_err(|_| "Runtime outcome verified but the local pending record could not be cleared. Resolve it before gameplay.")?;
     }
@@ -434,10 +479,51 @@ pub async fn abort_companion_runtime_update(
     Err("Cancellation was requested, but active runtime health remains unverified. Keep the local guard and use explicit USB/official recovery.".into())
 }
 
+pub(crate) fn runtime_identity() -> Result<(String, String), String> {
+    let bundle = bundled_runtime()?;
+    Ok((bundle.release, bundle.contract))
+}
+
+pub(crate) fn baseline_bundle() -> Result<(String, Vec<u8>), String> {
+    let source: BTreeMap<_, _> = RUNTIME.iter().chain(CONTRACT.iter()).copied().collect();
+    let files = source
+        .iter()
+        .map(|(name, bytes)| (*name, STANDARD.encode(bytes)))
+        .collect::<BTreeMap<_, _>>();
+    let release = tree(&source.into_iter().collect::<Vec<_>>());
+    let bytes = serde_json::to_vec(&json!({"format":1,"release":release,"files":files}))
+        .map_err(|_| "Could not prepare the fixed initial Companion package.")?;
+    if bytes.len() > 2 * 1024 * 1024 {
+        return Err("The fixed initial package exceeds its safe size.".into());
+    }
+    Ok((release, bytes))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::io::Write;
+
+    #[test]
+    fn initial_package_is_accepted_by_the_fixed_provisioner_without_starting_firmware() {
+        let directory = tempfile::tempdir().unwrap();
+        let (release, bytes) = baseline_bundle().unwrap();
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let mut process = std::process::Command::new("python3")
+            .arg(root.join("scripts/tests/provision_fixture.py"))
+            .arg(directory.path())
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .spawn()
+            .unwrap();
+        process.stdin.take().unwrap().write_all(&bytes).unwrap();
+        let output = process.wait_with_output().unwrap();
+        assert!(output.status.success());
+        let result: Value = serde_json::from_slice(&output.stdout).unwrap();
+        assert_eq!(result["release"].as_str(), Some(release.as_str()));
+        assert_eq!(result["phase"], "awaiting_identity");
+        assert_eq!(result["started"], false);
+    }
 
     #[test]
     fn compiled_runtime_bundle_is_accepted_by_the_real_board_stager() {

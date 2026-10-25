@@ -4,8 +4,8 @@ use std::{path::Path, sync::Mutex};
 
 #[derive(Serialize)]
 pub struct SavedProgress {
-    payload: String,
-    revision: i64,
+    pub(crate) payload: String,
+    pub(crate) revision: i64,
 }
 
 pub struct ProgressStore(Mutex<Connection>);

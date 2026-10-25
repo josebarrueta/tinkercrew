@@ -1,12 +1,20 @@
-//! Fixed physical USB bootstrap for an already installed TBP Companion. No deploy/shell IPC.
+//! Physical USB Pairing and restricted dedicated-key SSH proof. No arbitrary shell IPC.
 use crate::{
     admin_process,
     connection::{self, BoardProfile, Connections},
     management, session,
 };
+use base64::{Engine, engine::general_purpose::STANDARD};
+use security_framework::passwords::{get_generic_password, set_generic_password};
 use serde::Serialize;
 use serde_json::{Value, json};
-use std::{path::PathBuf, time::Duration};
+use std::{
+    io::{Read, Write},
+    net::{SocketAddr, TcpStream},
+    path::PathBuf,
+    time::{Duration, Instant},
+};
+pub(crate) const SSH_PIN_SERVICE: &str = "com.tinkercrew.desktop.installation-ssh";
 use zeroize::Zeroizing;
 
 const COMMAND: &str = "python3 /home/arduino/ArduinoApps/tinkercrew-companion/python/management.py";
@@ -30,6 +38,15 @@ pub(crate) struct Forward {
 }
 impl Forward {
     pub(crate) fn new(serial: &str) -> Result<Self, String> {
+        Self::for_port(serial, 7443)
+    }
+    fn ssh(serial: &str) -> Result<Self, String> {
+        Self::for_port(serial, 22)
+    }
+    fn for_port(serial: &str, remote: u16) -> Result<Self, String> {
+        if ![22, 7443].contains(&remote) {
+            return Err("Unsupported fixed Companion forwarding endpoint.".into());
+        }
         let path = crate::discovery::adb_path().map_err(|error| error.message)?;
         let output = admin_process::run(
             &path,
@@ -42,7 +59,7 @@ impl Forward {
                 serial,
                 "forward",
                 "tcp:0",
-                "tcp:7443",
+                &format!("tcp:{remote}"),
             ],
             &[],
             Duration::from_secs(4),
@@ -80,6 +97,139 @@ impl Drop for Forward {
     }
 }
 
+fn verify_dedicated_ssh(
+    serial: &str,
+    soc: &str,
+    profile: &BoardProfile,
+    keys: &session::InstallationKeys,
+) -> Result<String, String> {
+    let physical = usb(
+        serial,
+        &json!({"operation":"ssh_identity","expected_serial":soc}),
+    )?;
+    if physical["serial"].as_str() != Some(soc)
+        || physical["board_id"].as_str() != Some(&profile.board_id)
+        || physical["username"] != "arduino"
+    {
+        return Err(
+            "The USB SSH identity/account does not match this Board. Use supported official setup."
+                .into(),
+        );
+    }
+    let host = STANDARD
+        .decode(
+            physical["host_key"]
+                .as_str()
+                .ok_or("Missing USB SSH host identity.")?,
+        )
+        .map_err(|_| "Invalid USB SSH host identity.")?;
+    if host.len() != 51 {
+        return Err("Unsupported SSH host identity.".into());
+    }
+    let forward = Forward::ssh(serial)?;
+    let tcp = TcpStream::connect_timeout(&SocketAddr::from(([127,0,0,1], forward.port)), Duration::from_secs(3)).map_err(|_| "SSH is disabled or unreachable. Enable it explicitly over USB/official setup, then retry Pairing with the existing installation keys.")?;
+    let mut ssh = ssh2::Session::new().map_err(|_| "Dedicated-key SSH could not initialize.")?;
+    ssh.set_timeout(5000);
+    ssh.method_pref(ssh2::MethodType::HostKey, "ssh-ed25519")
+        .map_err(|_| "This SSH implementation cannot verify the supported host identity.")?;
+    ssh.set_tcp_stream(tcp);
+    ssh.handshake().map_err(
+        |_| "Dedicated-key SSH handshake failed; no weaker host-key fallback was attempted.",
+    )?;
+    if ssh.host_key().map(|(key, _)| key) != Some(host.as_slice()) {
+        return Err(
+            "The SSH peer differs from the physically inspected host key; Pairing stopped.".into(),
+        );
+    }
+    let pin = ssh
+        .host_key_hash(ssh2::HashType::Sha256)
+        .ok_or("Missing SSH fingerprint.")?;
+    match get_generic_password(SSH_PIN_SERVICE, serial) {
+        Ok(previous) if previous != pin => return Err("The installation SSH host key changed. Verify the physical Board and explicitly clear this app's SSH trust after an intentional restore; it was not silently replaced.".into()),
+        Ok(_) => {},
+        Err(error) if error.code() == -25300 => {},
+        Err(_) => return Err("Unlock Keychain before verifying the dedicated SSH identity.".into()),
+    }
+    let private = keys.ssh_private().map_err(|error| error.message)?;
+    ssh.userauth_pubkey_memory("arduino", None, &private, None).map_err(|_| "The registered dedicated key did not authenticate. Reinspect permissions/SSH support and retry; no password/agent fallback was attempted.")?;
+    if !ssh.authenticated() {
+        return Err("Dedicated-key SSH authorization was not completed.".into());
+    }
+    let mut channel = ssh
+        .channel_session()
+        .map_err(|_| "Restricted SSH inspection could not start.")?;
+    channel
+        .exec("inspect")
+        .map_err(|_| "Restricted SSH inspection was rejected.")?;
+    channel
+        .write_all(
+            &serde_json::to_vec(&json!({"operation":"inspect","expected_serial":soc}))
+                .map_err(|_| "Invalid fixed SSH inspection.")?,
+        )
+        .map_err(|_| "Restricted SSH inspection could not be sent.")?;
+    channel
+        .send_eof()
+        .map_err(|_| "Restricted SSH input could not close.")?;
+    let mut output = Vec::new();
+    let deadline = Instant::now() + Duration::from_secs(10);
+    ssh.set_blocking(false);
+    let mut buffer = [0u8; 4096];
+    loop {
+        if Instant::now() >= deadline {
+            return Err("Restricted SSH inspection exceeded its total response deadline.".into());
+        }
+        match channel.read(&mut buffer) {
+            Ok(0) => break,
+            Ok(count) => {
+                output.extend_from_slice(&buffer[..count]);
+                if output.len() > 16384 {
+                    return Err("Restricted SSH inspection exceeded its safe limit.".into());
+                }
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                std::thread::sleep(Duration::from_millis(10))
+            }
+            Err(_) => {
+                return Err(
+                    "Restricted SSH inspection failed; no general shell was attempted.".into(),
+                );
+            }
+        }
+    }
+    ssh.set_blocking(true);
+    channel
+        .wait_close()
+        .map_err(|_| "Restricted SSH inspection did not close.")?;
+    if channel.exit_status().map_err(|_| "Missing SSH result.")? != 0 {
+        return Err("Restricted SSH inspection failed; no general shell was attempted.".into());
+    }
+    let proof: Value =
+        serde_json::from_slice(&output).map_err(|_| "Incompatible restricted SSH proof.")?;
+    let result = &proof["result"];
+    if proof["status"] != "ok"
+        || result["board_id"].as_str() != Some(&profile.board_id)
+        || result["serial"].as_str() != Some(soc)
+        || result["username"] != "arduino"
+        || result["tls_name"].as_str() != Some(&profile.tls_name)
+        || result["certificate_pem"].as_str() != Some(&profile.certificate_pem)
+    {
+        return Err(
+            "Restricted SSH did not prove the same Board, account and TLS identity as USB Pairing."
+                .into(),
+        );
+    }
+    let boot = physical["boot_id"]
+        .as_str()
+        .filter(|value| session::valid_id(value))
+        .ok_or("The host did not report a supported kernel boot identity.")?;
+    if result["boot_id"].as_str() != Some(boot) {
+        return Err("USB and restricted SSH did not observe the same kernel boot.".into());
+    }
+    set_generic_password(SSH_PIN_SERVICE, serial, pin)
+        .map_err(|_| "Could not save the verified dedicated SSH fingerprint.")?;
+    Ok(boot.to_owned())
+}
+
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PairingResult {
@@ -91,6 +241,7 @@ pub struct PairingResult {
 #[tauri::command]
 pub async fn pair_installed_companion(
     state: tauri::State<'_, Connections>,
+    setup_store: tauri::State<'_, crate::setup::SetupStore>,
     serial: String,
     confirmation: String,
     installation_label: String,
@@ -158,19 +309,67 @@ pub async fn pair_installed_companion(
     }
     let installation = keys.installation_id.clone();
     let source_serial = serial.clone();
-    let activated = tauri::async_runtime::spawn_blocking(move || usb(&source_serial, &json!({"operation":"pair_activate","expected_serial":soc,"installation_id":installation}))).await.map_err(|_| "SSH registration stopped; retry Pairing with the saved installation keys.")??;
+    let activation_soc = soc.clone();
+    let activated = tauri::async_runtime::spawn_blocking(move || usb(&source_serial, &json!({"operation":"pair_activate","expected_serial":activation_soc,"installation_id":installation}))).await.map_err(|_| "SSH registration stopped; retry Pairing with the saved installation keys.")??;
     if activated["state"] != "active"
         || activated["installation_id"].as_str() != Some(&keys.installation_id)
     {
         return Err("The dedicated SSH key registration was not confirmed.".into());
     }
+    let source_serial = serial.clone();
+    let source_profile = profile.clone();
+    let ssh_soc = soc.clone();
+    let (keys, boot) = tauri::async_runtime::spawn_blocking(move || {
+        let boot = verify_dedicated_ssh(&source_serial, &ssh_soc, &source_profile, &keys)?;
+        Ok::<_, String>((keys, boot))
+    })
+    .await
+    .map_err(|_| "Dedicated-key verification stopped; retry with the saved installation keys.")??;
     let installation_id = keys.installation_id.clone();
     let auth = session::GameplayAuth::paired(keys);
     auth.token(&client, &profile.tls_name, forward.port, &board_id)
         .await
         .map_err(|error| error.message)?;
+    let hello = connection::request(
+        &client,
+        &profile,
+        forward.port,
+        reqwest::Method::GET,
+        "/v1/hello",
+        None,
+        &auth,
+    )
+    .await;
     auth.close(&client, &profile.tls_name, forward.port).await;
+    let hello = hello.map_err(|error| error.message)?;
+    if hello["board"]["board_id"].as_str() != Some(&board_id)
+        || hello["runtime"]["boot_id"].as_str() != Some(&boot)
+        || hello["protocol"] != "1.0"
+    {
+        return Err(
+            "Pinned HTTPS did not prove the same Board/kernel as USB and dedicated SSH.".into(),
+        );
+    }
     connection::remember_board(&state, &profile).map_err(|error| error.message)?;
+    crate::setup::observed_step(
+        &setup_store,
+        7,
+        crate::setup::SetupObservation {
+            serial,
+            soc,
+            board_id: board_id.clone(),
+            boot_id: boot,
+            runtime_release: hello["runtime"]["release"]
+                .as_str()
+                .unwrap_or_default()
+                .into(),
+            runtime_nonce: hello["runtime"]["nonce"]
+                .as_str()
+                .unwrap_or_default()
+                .into(),
+            hardware: None,
+        },
+    )?;
     Ok(PairingResult {
         board_id,
         installation_id,

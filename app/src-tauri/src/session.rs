@@ -82,6 +82,24 @@ impl InstallationKeys {
         Self::key(&self.ssh_seed)?;
         Ok(())
     }
+    pub fn ssh_private(&self) -> Result<Zeroizing<String>> {
+        self.validate()?;
+        let bytes = Zeroizing::new(
+            URL_SAFE_NO_PAD
+                .decode(&self.ssh_seed)
+                .map_err(|_| failure())?,
+        );
+        let mut seed = Zeroizing::new([0u8; 32]);
+        if bytes.len() != 32 {
+            return Err(failure());
+        }
+        seed.copy_from_slice(&bytes);
+        let pair = ssh_key::private::Ed25519Keypair::from_seed(&seed);
+        ssh_key::PrivateKey::new(ssh_key::private::KeypairData::Ed25519(pair), "")
+            .map_err(|_| failure())?
+            .to_openssh(ssh_key::LineEnding::LF)
+            .map_err(|_| failure())
+    }
     pub fn registration(&self, label: &str) -> Result<Value> {
         self.validate()?;
         if label.is_empty() || label.chars().count() > 60 || label.chars().any(char::is_control) {
@@ -344,6 +362,26 @@ async fn post_authorized(
 mod tests {
     use super::*;
     use std::io::{BufRead, BufReader, Write};
+
+    #[test]
+    fn dedicated_ssh_memory_key_matches_the_registered_key_and_is_not_gameplay_authority() {
+        let keys = InstallationKeys::generate().unwrap();
+        let registration = keys.registration("Fixture Mac").unwrap();
+        let encoded = keys.ssh_private().unwrap();
+        let decoded = ssh_key::PrivateKey::from_openssh(encoded.as_str()).unwrap();
+        assert!(!decoded.is_encrypted());
+        assert_eq!(
+            decoded.public_key().to_openssh().unwrap(),
+            registration["ssh_public_key"].as_str().unwrap()
+        );
+        let gameplay = URL_SAFE_NO_PAD
+            .decode(registration["public_key"].as_str().unwrap())
+            .unwrap();
+        assert_ne!(
+            decoded.public_key().key_data().ed25519().unwrap().as_ref(),
+            gameplay.as_slice()
+        );
+    }
 
     #[test]
     fn native_installation_proves_its_key_to_a_real_tls_companion_and_reuses_its_session() {

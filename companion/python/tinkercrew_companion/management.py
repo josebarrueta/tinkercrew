@@ -31,9 +31,10 @@ def inspect_host():
 
 
 class PairingManagement:
-    def __init__(self, app_directory, *, ssh_directory=None, inspect=inspect_host, clock=time.monotonic, boot_id=None):
+    def __init__(self, app_directory, *, ssh_directory=None, inspect=inspect_host, clock=time.monotonic, boot_id=None, read_ssh_host=None):
         self.root = Path(app_directory).resolve()
         self.inspect = inspect
+        self.read_ssh_host = read_ssh_host or (lambda: Path("/etc/ssh/ssh_host_ed25519_key.pub").read_bytes())
         config_path = self.root / "data/companion.json"
         if config_path.stat().st_size > 16384:
             raise AuthError("unsupported_configuration")
@@ -43,7 +44,7 @@ class PairingManagement:
         self.registry_options = {"ssh_directory": ssh_directory or Path.home() / ".ssh", "management_script": self.root / "python/management.py", "clock": clock, "boot_id": boot_id}
 
     def dispatch(self, request, *, ssh_installation=None):
-        fields = {"inspect": set(), "pair_begin": {"registration"}, "pair_activate": {"installation_id"}, "list_pairings": set(), "revoke": {"installation_id"}}
+        fields = {"inspect": set(), "pair_begin": {"registration"}, "pair_activate": {"installation_id"}, "list_pairings": set(), "revoke": {"installation_id"}, "ssh_identity": set()}
         from .deployment import RuntimeDeployment
         runtime_fields = {"status": set(), "begin": {"release", "sha256", "size", "contract"}, "chunk": {"token", "offset", "data"}, "stage": {"token"}, "commit": {"token"}, "finish": {"token", "nonce"}, "abort": {"token"}, "cancel": {"release"}}
         fields.update({"runtime_" + name: parameters for name, parameters in runtime_fields.items()})
@@ -65,6 +66,18 @@ class PairingManagement:
         if operation.startswith("runtime_"):
             result = RuntimeDeployment(self.root).dispatch(operation.removeprefix("runtime_"), {key: value for key, value in request.items() if key not in {"operation", "expected_serial"}})
             return dict(result, board_id=self.config["board_id"], serial=identity["serial"])
+        if operation == "ssh_identity":
+            raw = self.read_ssh_host()
+            if len(raw) > 1024:
+                raise AuthError("unsupported_configuration")
+            fields = raw.decode().split()
+            if len(fields) < 2 or fields[0] != "ssh-ed25519":
+                raise AuthError("unsupported_configuration")
+            import base64
+            blob = base64.b64decode(fields[1], validate=True)
+            if len(blob) != 51 or blob[:19] != b"\x00\x00\x00\x0bssh-ed25519\x00\x00\x00\x20":
+                raise AuthError("unsupported_configuration")
+            return {"board_id": self.config["board_id"], "serial": identity["serial"], "username": identity["username"], "host_key": fields[1], "boot_id": self.registry.boot_id}
         if operation == "pair_activate":
             return self.registry.activate_pairing(request["installation_id"])
         if operation == "list_pairings":
@@ -76,7 +89,12 @@ class PairingManagement:
             certificate_path = self.root / certificate_path
         if certificate_path.stat().st_size > 8192:
             raise AuthError("unsupported_configuration")
-        metadata = {"board_id": self.registry.board_id, "serial": identity["serial"], "username": identity["username"], "tls_name": self.config["tls_name"], "certificate_pem": certificate_path.read_text(), "protocol_versions": ["1.0"]}
+        # Normalize only the X.509 certificate: never export a concatenated PEM private key.
+        import subprocess
+        certificate = subprocess.run(["/usr/bin/openssl", "x509", "-in", str(certificate_path), "-outform", "PEM"], check=True, capture_output=True, text=True, timeout=3).stdout
+        if len(certificate) > 8192:
+            raise AuthError("unsupported_configuration")
+        metadata = {"board_id": self.registry.board_id, "serial": identity["serial"], "username": identity["username"], "tls_name": self.config["tls_name"], "certificate_pem": certificate, "protocol_versions": ["1.0"], "boot_id": self.registry.boot_id}
         if operation == "pair_begin":
             metadata.update(self.registry.begin_pairing(request["registration"]))
         return metadata

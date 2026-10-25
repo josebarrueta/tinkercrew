@@ -13,11 +13,34 @@ describe("resumable parent setup checkpoints", () => {
       setup.advance();
     }
     expect(setup.step.id).toBe("pair");
-    expect(() => setup.confirmHumanStep()).toThrow("not integrated");
-    expect(() => setup.advance()).toThrow("not integrated");
+    expect(() => setup.confirmHumanStep()).toThrow("native proof");
+    expect(() => setup.advance()).toThrow("native proof");
     expect(new SetupSession(setup.getProgress()).step.id).toBe("pair");
     setup.startNew("another-uno");
     expect(setup.getProgress().checkpoints).toEqual([]);
+  });
+
+  it("reads native-observed checkpoints but never advances them with a checkbox", () => {
+    const guide = new SetupSession();
+    guide.selectBoard("uno-1234");
+    guide.observeUsb([{ serial: "uno-1234", state: "device" }]);
+    guide.advance();
+    for (let index = 1; index < 7; index++) {
+      guide.confirmHumanStep();
+      guide.advance();
+    }
+    const progress = guide.getProgress();
+    const resumed = new SetupSession({
+      ...progress,
+      stageIndex: 8,
+      checkpoints: [
+        ...progress.checkpoints,
+        { stageId: "pair", source: "observed" },
+      ],
+    });
+    expect(resumed.step.id).toBe("deploy");
+    expect(() => resumed.confirmHumanStep()).toThrow("native proof");
+    expect(() => resumed.advance()).toThrow("native proof");
   });
 
   it("rejects secret fields, impossible checkpoints, and unsupported fake completion", () => {

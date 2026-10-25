@@ -1,45 +1,37 @@
 # Resumable parent setup guide (#11)
 
-Status: **guarded checkpoint/handoff foundation implemented, full provisioning still blocked**. This is not completed factory-reset UNO Q acceptance or a substitute for the unsupported integrations below.
+Status: **hybrid wizard software integrated; physical UNO Q / Keychain / family acceptance NOT RUN**. A recorded setup is not evidence of electrical safe-off timing or permission to reuse stale hardware observations. First account/OS setup and first firmware startup remain explicit official-tool handoffs. Unknown whole-baseline upgrades are not silently attempted.
 
-## Available now
+## Parent flow
 
-Open Board Setup → **Set up a UNO Q — resumable official-tool handoff guide** in the native Mac app.
+Open Board Setup → **Set up a UNO Q — resumable official-tool handoff guide** in the native Mac app. Install official Platform-Tools separately first. Browser preview cannot operate a Board or record success.
 
-- Enumerate USB/ADB identities through a fixed, bounded local `adb devices -l` operation.
-- Explicitly select the physically identified UNO Q serial; never assume the first ADB device is the Board.
-- Record observed USB availability separately from human identity/boot/official-tool confirmations.
-- Open the fixed official Arduino App Lab configuration guide for naming, Linux credentials, Wi-Fi, and network/SSH mode. Compatibility-sensitive Linux helpers are not automated speculatively.
-- Correct Wi-Fi credentials in official tooling and return to the same checkpoint; this checkpoint guide never collects Linux/Wi-Fi passwords. The separate [Board Setup management controls](board-setup.md) can use request-only passwords for existing-Board configuration.
-- Resume checkpoint progress from macOS Keychain after app restart. Reopening requires fresh USB inspection, and continuing refreshes USB evidence again.
-- Changing Board identity requires an explicit new-setup action. It clears only guide checkpoints, not keys, apps, networks, Pairings, or Board configuration. Repeated confirmations do not append duplicate completed checkpoints.
-- Native and frontend validators reject unknown/secret fields, incompatible state, incorrect proof-source labels, and impossible success beyond the implemented handoff frontier.
-- Browser previews show the guide but cannot record actual Board setup success.
+1. Select the exact physical USB/ADB identity. A fixed bounded local `adb devices -l` operation never chooses the first device automatically.
+2. Confirm model/physical identity, boot/power, name, Linux credentials, Wi-Fi and SSH setup through the described official/supported parent controls. These first seven checkpoints distinguish observed USB availability from human confirmations; ADB readiness alone does not prove Linux boot/model/power stability. Incorrect Wi-Fi can be corrected at the same checkpoint without resetting the guide.
+3. Prepare the absent-target baseline and private identity using [initial preparation](initial-provisioning.md), then explicitly start the selected app in official App Lab. First start can compile/upload the sketch and stop another app. Preparation is not running/firmware proof. Enable SSH explicitly even for USB-only dedicated-key verification; complete wizard acceptance additionally requires LAN.
+4. **Pair:** type `PAIR <SoC>` for the inspected physical Board. Native code must register the installation, verify its restricted dedicated SSH key against the USB-read host identity, and establish signed pinned-TLS authentication for the same UUID/kernel. A legacy bearer import or `authorized_keys` write alone is insufficient.
+5. **Software:** type `UPDATE <SoC>`. The fixed compatible supervised runtime must be current, or complete the bounded resumable trial with fresh authenticated disarmed release/process health. No arbitrary archive, baseline/schema/dependency migration or firmware command is available. Unknown contracts hand off rather than overwriting a working app.
+6. **Restart:** record intent before an explicit approved restart request. Scheduling or lost transport does not advance. Observe a changed kernel boot on the same SoC/build, with the same disarmed Companion UUID/release/process over pinned authenticated LAN **and** physical USB. A changed ADB hint is accepted only through that same-hardware proof. Unknown outcomes block duplicate scheduling. An explicitly supplied local endpoint requires consent.
+7. **Hardware:** explicitly start a bounded native self-test; move Distance at least 10 mm and press all three Buttons after starting. Native code consumes authenticated fresh state/events (age at most 750 ms), suppresses old history, rejects gaps/stale/degraded input and binds the 90-second witness to the same kernel/runtime/process. Human checkboxes confirm the actually seen lights/heard sound, not input evidence. Confirmation explicitly obtains only its own short lease, cannot displace another live controller, and requires the real self-test's passed result plus disarmed health. No automatic Mission arming follows.
+8. **Crew:** preserve existing Treasure Guardian/remix/progress, save three named Crew members with roles/tracks in local SQLite, and explicitly confirm them. Native completion reads that persisted Crew and requires a hardware witness within two monotonic minutes on this Mac boot, fresh same-process/boot/runtime USB/TLS proof, fresh inputs and disarmed health. If stale, explicitly repeat hardware proof; no stale checkbox/history shortcut exists.
 
-These claims describe the checkpoint guide, not the separate #19 management/recovery controls. Those controls add existing-Board configuration, scheduled restart, and guarded destructive restore, but do not complete the Pairing/deployment frontier below.
+The already-provisioned bearer-record import remains a separate development bridge; it never completes these protected checkpoints.
 
-The guide performs no remote shell commands, OS updates, flashing, bootloader changes, password operations, SSH-key modification, or deployment. An `adb`-ready transport is **not** represented as proof of Linux boot completion, power stability, image compatibility, or UNO Q model; those steps are explicitly human/official-tool confirmations.
+## Resume and recovery
 
-## Where it deliberately stops
+- Checkpoints, evidence binding and revision share **one Keychain item**, separate from credentials and Mission SQLite. There is no two-item crash window between a claimed step and its Board evidence. Records contain identifiers, ordered proof sources, release/process/kernel IDs and hardware witness metadata, never passwords, private keys, tokens, shell commands or URLs.
+- Frontend saves can write only the first seven checkpoints. Native authenticated operations alone append Pairing/software/restart/hardware and the persisted Crew confirmation. Both parsers accept ordered native records but reject impossible/unknown/secret fields. A frontend save cannot manufacture an observed checkpoint.
+- Writes use revision checks and a dedicated cross-instance file lock; native Board actions also retain existing shared management/runtime/recovery guards. Locked/unreadable Keychain or conflicting evidence is an error, not an empty record to overwrite.
+- Reopening reads historical evidence, not live authority. Every next native action reproves the selected Board. A partially completed native operation is reinspected/resumed rather than inferred successful from its absence.
+- Explicit new setup clears only this guide, not Board data, networks, credentials, keys, Pairings or Mission progress. Evidence never transfers to another SoC/UUID. A freshly verified later kernel invalidates only downstream hardware/Crew evidence; configuration and earlier proofs remain.
+- Closing/hiding the guide clears transient Linux password state and closes a live hardware-test session; starting another self-test replaces the old in-memory witness. Native runtime/reboot journals are not silently cancelled on closure. Self-test outputs/control remain independently bounded if transport/app closure prevents cleanup.
+- Crew creation and other-window Mission saves use the existing repository revision checks. An unreadable/conflicting save is preserved and reported, never reset to make setup pass.
+- Official links are fixed native URLs. There is no arbitrary shell/program/path/URL IPC. Firmware/OS/destructive recovery remain distinct explicit owner actions.
 
-Checkpoint 8, **Establish full USB Pairing**, is a hard implementation gate. A checkbox cannot claim this succeeded. The remaining steps stay visibly pending:
+## Limits and evidence
 
-1. Integrate the separate [installed-Companion key registration/session/revocation slice](installation-pairing.md) into full first-run setup, including Board TLS identity provisioning, dedicated-key SSH login verification, and recovery. Registration alone cannot satisfy this checkpoint.
-2. Supported-version probing of image-specific setup helpers and safe password/Wi-Fi stdin operations before considering direct first-run automation.
-3. Initial/whole-app Companion installation and compatible baseline upgrades. The separate [Linux-only runtime updater](runtime-updates.md) now implements integrity-checked transfer, resume, process-bound health and rollback on already compatible supervised baselines; it neither installs that baseline nor completes this checkpoint.
-4. Reboot followed by actual stable-identity LAN **and** USB verification, not treating transport disappearance as success.
-5. Wiring the Mission's real hardware self-test result and Crew creation into setup completion, after the preceding trust/deployment gates exist.
+First-boot account/image/password setup is intentionally an official handoff. Initial publication supports only the documented absent target and owned identity; an existing unrelated/legacy/different baseline is not migrated or overwritten. Compatible runtime updates are narrower than a whole-app or Linux+MCU transaction. Dedicated-key SSH is inspection-only, not general maintenance authority. Supported whole-baseline upgrade/migration engineering outside this contract remains separate #11 work.
 
-The provisioned bearer-record import from #7 is a separate **development bridge**, not proof of full TBP Pairing or factory setup. Already configured Boards may use that connection flow and the playable Mission without marking the all-in-one wizard complete.
+Automated coverage includes fixed management/deployment contracts with temporary files and real loopback TLS, native transition/order/Board/boot/process protection, fractional input sample ages, historical-event suppression/gaps/staleness, secret-field rejection, and a **fully intercepted UI/IPC** wizard journey with reload, password clearing on navigation, scheduling-not-success, input-gated hardware confirmation and persisted Crew before completion. None of those tests operates a real Board or user Keychain.
 
-## Storage and safety
-
-Checkpoint records are strict versioned JSON held in a dedicated Keychain item, separate from Board credentials and Mission SQLite progress. They contain the selected serial, ordered stage IDs, evidence source (`observed` or `human`), and current index—never passwords, private keys, tokens, command strings, or request URLs. Writes are revision-checked within the running app; no Board mutation depends solely on a saved checkpoint. A locked/unreadable Keychain is an error, not an empty record to silently overwrite.
-
-Official documentation opens only through a fixed native URL; Mission code receives no arbitrary browser/shell/program interface. Image-specific operations remain disabled for unknown/unverified support rather than guessing a password or sudo policy. Existing unrelated SSH keys/configuration are untouched.
-
-## Evidence and remaining validation
-
-Automated tests exercise explicit identity selection, unrelated-device rejection, fresh evidence on resume, distinct human/observed records, blocked fake Pairing/deployment success, secret-field rejection, checkpoint reset behavior, native payload validation, and the browser preview's inability to claim completion.
-
-Actual Keychain/reinstall behavior, USB disconnection and boot behavior on reset/configured UNO Q images, and the complete physical setup matrix remain untested. The full reset-Board flow cannot be accepted until the missing integrations above are implemented and the matrix in `docs/qa/recovery-safety.md` passes. #11 remains open engineering work, not merely a task awaiting validation. Physical acceptance formerly referenced through #10 is now consolidated in #21.
+Actual host/container mounts/ownership/dependencies/Bridge behavior, dedicated-key SSH, reset-Board startup, power/USB loss, Keychain/reinstall behavior, LAN/USB observations, physical safe-off, hardware and family acceptance remain unchecked in **#21** (P01/P02/P03 and applicable management/runtime scenarios). No Board was configured, paired, deployed, rebooted, reset or flashed during this software work. Public signing/notarization is separate #12 work.

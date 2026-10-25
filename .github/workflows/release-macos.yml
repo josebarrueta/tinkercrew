@@ -54,6 +54,10 @@ jobs:
           python3 -m venv .venv
           .venv/bin/python -m pip install --disable-pip-version-check -r companion/python/requirements-auth.txt
           echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
+      - name: Prepare OpenSSL 3 for temporary identity provisioning tests
+        run: |
+          brew list openssl@3 >/dev/null || brew install openssl@3
+          echo "$(brew --prefix openssl@3)/bin" >> "$GITHUB_PATH"
       - name: Software release checks (no signing secrets)
         run: bash scripts/check-mvp.sh
       - name: Prepare protected signing inputs

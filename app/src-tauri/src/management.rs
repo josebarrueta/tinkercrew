@@ -27,6 +27,7 @@ pub struct BoardIdentity {
     pub os: String,
     pub os_version: String,
     pub image_version: String,
+    pub boot_id: Option<String>,
 }
 #[derive(Deserialize)]
 struct WireIdentity {
@@ -38,6 +39,8 @@ struct WireIdentity {
     os_version: String,
     #[serde(rename = "imageVersion")]
     image_version: String,
+    #[serde(default, rename = "bootId")]
+    boot_id: Option<String>,
 }
 
 pub(crate) struct AuthorizedBoard {
@@ -160,6 +163,7 @@ fn identity(serial: &str, value: Value) -> Result<BoardIdentity, String> {
         os: wire.os,
         os_version: wire.os_version,
         image_version: wire.image_version,
+        boot_id: wire.boot_id.filter(|value| crate::session::valid_id(value)),
     })
 }
 pub(crate) fn inspect(serial: &str) -> Result<BoardIdentity, String> {
@@ -351,6 +355,20 @@ impl Drop for AdminAction {
         }
     }
 }
+pub(crate) fn assert_authorized(state: &Management, serial: &str) -> Result<(), String> {
+    let current = state
+        .session
+        .lock()
+        .map_err(|_| "Management authorization is busy.")?;
+    if current.as_ref().is_some_and(|session| {
+        session.identity.adb_serial == serial && session.expires > Instant::now()
+    }) {
+        Ok(())
+    } else {
+        Err("Authenticate this exact Board's Linux account before scheduling its restart.".into())
+    }
+}
+
 #[tauri::command]
 pub async fn admin_action(
     state: tauri::State<'_, Management>,
@@ -402,6 +420,7 @@ pub async fn admin_logout(state: tauri::State<'_, Management>) -> Result<(), Str
 
 #[tauri::command]
 pub async fn admin_forget_ssh_trust(
+    connections: tauri::State<'_, Connections>,
     state: tauri::State<'_, Management>,
     serial: String,
     confirmation: String,
@@ -409,14 +428,23 @@ pub async fn admin_forget_ssh_trust(
     if confirmation != format!("FORGET SSH {serial}") {
         return Err("Confirm the exact USB serial before clearing this app's SSH trust.".into());
     }
+    let _permit = connections.begin_maintenance()?;
+    crate::connection::disconnect_board(connections)
+        .await
+        .map_err(|error| error.message)?;
     admin_logout(state).await?;
     tauri::async_runtime::spawn_blocking(move || {
         inspect(&serial)?;
-        match delete_generic_password(PIN_SERVICE, &serial) {
-            Ok(()) => Ok(()),
-            Err(error) if error.code() == -25300 => Ok(()),
-            Err(_) => Err("Unlock Keychain and retry clearing this app's SSH trust.".into()),
+        for service in [PIN_SERVICE, crate::pairing::SSH_PIN_SERVICE] {
+            match delete_generic_password(service, &serial) {
+                Ok(()) => {}
+                Err(error) if error.code() == -25300 => {}
+                Err(_) => {
+                    return Err("Unlock Keychain and retry clearing this app's SSH trust.".into());
+                }
+            }
         }
+        Ok(())
     })
     .await
     .map_err(|_| "SSH trust reset stopped.")?

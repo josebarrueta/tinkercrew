@@ -45,7 +45,13 @@ def handle(request, reader=lambda path: pathlib.Path(path).read_bytes(), runner=
             build = dict(line.split("=", 1) for line in reader("/etc/buildinfo").decode().splitlines() if "=" in line).get("BUILD_ID", "unknown").strip().strip('"')[:64]
         except (OSError, KeyError):
             build = "unknown"
-        return {"serial": str(serial), "username": actual_user, "hostname": reader("/etc/hostname").decode().strip()[:64], "os": "debian", "osVersion": os_info.get("VERSION_ID", "unknown").strip('"')[:32], "imageVersion": build}
+        try:
+            boot_id = reader("/proc/sys/kernel/random/boot_id").decode().strip().lower()
+            if not re.fullmatch(r"[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}", boot_id):
+                boot_id = None
+        except (OSError, KeyError):
+            boot_id = None
+        return {"bootId": boot_id, "serial": str(serial), "username": actual_user, "hostname": reader("/etc/hostname").decode().strip()[:64], "os": "debian", "osVersion": os_info.get("VERSION_ID", "unknown").strip('"')[:32], "imageVersion": build}
     if request["expectedSerial"] != str(serial):
         raise ValueError("Board identity changed. Reconnect the exact selected UNO Q.")
 

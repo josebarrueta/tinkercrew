@@ -4,7 +4,7 @@
 
 A local-first cooperative maker game for one family Crew: build LEGO creations, give them behavior with an Arduino UNO Q, and explore Missions together. The macOS app uses Tauri 2, Rust, and Svelte/TypeScript.
 
-> **Development preview:** the current implementation is on `main`. Simulator play is available without hardware. Physical UNO Q/family acceptance, full first-time Pairing/deployment, and public release signing/notarization are not complete. No production installer has been validated yet.
+> **Development preview:** the current implementation is on `main`. Simulator play is available without hardware. Physical UNO Q/family acceptance and public release signing/notarization are not complete. Hybrid setup software retains explicit official first-account/firmware-start handoffs; unsupported whole-baseline migrations are not attempted. No production installer has been validated yet.
 
 ## Start here
 
@@ -72,7 +72,7 @@ Install the newly built app/DMG by replacing the old bundle as above. Developmen
 - Xcode Command Line Tools: `xcode-select --install` (complete Apple's installation prompt).
 - Current stable Rust with `cargo`, `rustfmt`, and `clippy`. With [rustup](https://rustup.rs/): `rustup component add rustfmt clippy`.
 - Node.js **22.12+** recommended (Node **20.19+ within the 20.x line** is also supported).
-- Python **3.11+** for the combined software checks and release tooling.
+- Python **3.11+** and OpenSSL **3** for the combined software checks and release tooling (for example `brew install openssl@3`; put the formula's `bin` on PATH for identity tests). Normal installed Mac gameplay does not require local Python/OpenSSL.
 - Git. Internet is needed to obtain dependencies/browser binaries initially, not for installed simulator gameplay.
 
 ```sh
@@ -127,10 +127,10 @@ Physical Board, actual ADB/Bonjour/VPN, electrical safe-off timing, family play-
 
 Simulator mode is the easiest first step. For hardware play:
 
-1. Complete supported first-time configuration in official Arduino App Lab; Tinkeroo's all-in-one factory provisioning is not complete.
-2. Install/start the reusable [UNO Q Companion](companion/README.md) on the Board and provision its TLS identity and credential outside source control.
-3. Follow the [USB-verified connection guide](docs/architecture/board-connections.md) and select the exact Board in Board Setup. The provisioned-record import remains a development bridge. Updated TBP-configured Companions can instead use installation-key registration and short-lived sessions; see the [authentication slice and remaining provisioning frontier](docs/architecture/installation-pairing.md). Neither path completes all-in-one first-run setup.
-4. For USB fallback, separately install official [Android Platform-Tools](https://developer.android.com/tools/releases/platform-tools) (Arduino documents `brew install android-platform-tools`). Tinkeroo does **not** bundle Google's binaries or accept their license for you. `TC_ADB_PATH` may point to an absolute `adb` executable.
+1. Separately install official [Android Platform-Tools](https://developer.android.com/tools/releases/platform-tools) (Arduino documents `brew install android-platform-tools`). Tinkeroo does **not** bundle Google's binaries or accept their license for you. `TC_ADB_PATH` may point to an absolute `adb` executable.
+2. Open **Board Setup → Set up a UNO Q — resumable official-tool handoff guide**, select the exact physical USB Board, and follow the supported official first-account/name/password/Wi-Fi/SSH handoffs. Enable SSH explicitly even for dedicated-key verification over USB; full restart proof also needs LAN. No account/password or unknown system configuration is guessed.
+3. On the supported configured baseline, **Prepare initial Companion files and identity** can resume/verify its fixed absent-target source and private Board-side TLS identity without overwriting an existing app/configuration. Explicitly start the selected [UNO Q Companion](companion/README.md) in official App Lab; first start can upload MCU firmware and stop another app. Review backups/loads/target first. See the [preparation and renewal contract](docs/architecture/initial-provisioning.md); unknown whole-baseline upgrades remain a handoff, never a speculative overwrite.
+4. Continue the [resumable guide](docs/architecture/setup-checkpoints.md): native Pairing verifies restricted SSH plus signed TLS, runtime proof verifies only a compatible compiled bundle, tracked restart requires a new kernel plus LAN/USB observations, and fresh bounded hardware/input evidence precedes saving the Crew. Checkboxes alone cannot complete those stages; completion never reconnects/rearms. The [legacy provisioned-record import](docs/architecture/board-connections.md) remains a separate development bridge, not setup proof.
 
 UNO Q maker GPIO is **3.3 V**; never apply 5 V to analog inputs. Disconnect power before changing wiring. Follow the in-app safety panel and pending [physical acceptance plan](docs/qa/recovery-safety.md).
 
@@ -148,7 +148,7 @@ This does not install the initial baseline, change credentials/dependencies/firm
 
 **Board Setup** replaces Parent Settings and brings connections, existing-Board Linux authentication, hostname/Wi-Fi configuration, scheduled restart, local pairing cleanup, and guarded factory restore into one hub. Linux passwords are request-only, never saved. Management pauses gameplay.
 
-Factory restore is a **destructive Linux OS reflash**, not a restart or checkpoint reset. It requires a separately installed official Arduino Flasher CLI **0.5.4**, an inspected physical Board, exact version/checksum, backup/EDL/power acknowledgements, and `ERASE <hardware serial>`. Actual hardware acceptance is **pending**; no reset was performed during development. Full TBP Pairing/automatic Companion deployment remains unfinished, so this is not yet complete one-click onboarding. See the [Board Setup workflow, safety boundaries, and recovery evidence](docs/architecture/board-setup.md).
+Factory restore is a **destructive Linux OS reflash**, not a restart or checkpoint reset. It requires a separately installed official Arduino Flasher CLI **0.5.4**, an inspected physical Board, exact version/checksum, backup/EDL/power acknowledgements, and `ERASE <hardware serial>`. Actual hardware acceptance is **pending**; no reset was performed during development. The hybrid guide now integrates protected Pairing/runtime/restart/hardware/Crew proofs, but retains official first-account/firmware-start handoffs and has not passed reset-Board acceptance; it is not one-click onboarding. See the [Board Setup workflow, safety boundaries, and recovery evidence](docs/architecture/board-setup.md).
 
 ## Tinkeroo look and feel
 
@@ -163,8 +163,9 @@ The GitHub repository remains `josebarrueta/tinkercrew`. Existing bundle identit
 - [App architecture and playable Mission](app/README.md)
 - [Companion installation, API, and tests](companion/README.md)
 - [Board Setup management and destructive recovery](docs/architecture/board-setup.md)
-- [Resumable setup handoffs and remaining implementation](docs/architecture/setup-checkpoints.md)
+- [Resumable hybrid setup and native evidence gates](docs/architecture/setup-checkpoints.md)
 - [Recoverable installed-baseline Linux runtime updates and limitations](docs/architecture/runtime-updates.md)
+- [Initial preparation, dedicated SSH and same-key certificate renewal](docs/architecture/initial-provisioning.md)
 - [Secure protocol proposal](docs/architecture/secure-board-protocol.md)
 - [MVP roadmap and open work](https://github.com/josebarrueta/tinkercrew/issues/13)
 

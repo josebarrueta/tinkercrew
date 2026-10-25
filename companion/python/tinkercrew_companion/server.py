@@ -188,7 +188,7 @@ def make_handler(companion: Companion, token: str | None = None, *, auth=None, r
                 return
             if parsed.path == "/v1/hello":
                 hello = companion.hello()
-                hello["runtime"] = {"release": os.environ.get("TC_RUNTIME_RELEASE", "unmanaged"), "nonce": os.environ.get("TC_RUNTIME_NONCE", "")}
+                hello["runtime"] = {"release": os.environ.get("TC_RUNTIME_RELEASE", "unmanaged"), "nonce": os.environ.get("TC_RUNTIME_NONCE", ""), "certificate_sha256": os.environ.get("TC_RUNTIME_CERTIFICATE_SHA256", ""), "boot_id": auth.boot_id if auth is not None else ""}
                 self._send(200, hello)
             elif parsed.path == "/v1/state":
                 self._send(200, companion.state())

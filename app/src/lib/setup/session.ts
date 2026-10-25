@@ -48,42 +48,42 @@ export const setupSteps = [
     title: "Enable network mode when needed",
     kind: "official",
     instruction:
-      "If using Wi-Fi, enable network/SSH mode in official Arduino setup. Do not replace unrelated SSH keys. USB-only Crews can explicitly skip network mode.",
+      "Enable SSH explicitly in supported parent/official setup, including for the dedicated-key check over USB. LAN is also required for the complete reboot/LAN+USB proof. Do not replace unrelated SSH keys; enabling a service can expose it on local networks.",
   },
   {
     id: "pair",
     title: "Establish full USB Pairing",
-    kind: "unsupported",
+    kind: "native",
     instruction:
-      "Installation-key registration, signed gameplay sessions, and physical revocation are available separately for an already installed, TBP-configured Companion. Full wizard integration, dedicated-key SSH login verification, and deployment are not integrated. Neither that registration nor development bearer-record import can mark this checkpoint complete.",
+      "Prepare the fixed baseline/identity and explicitly start it in official tooling first. Native proof must establish registration, restricted dedicated-key SSH and signed pinned-TLS authentication on the exact Board; a checkbox or legacy bearer import cannot complete this checkpoint.",
   },
   {
     id: "deploy",
-    title: "Install or upgrade the Companion atomically",
-    kind: "unsupported",
+    title: "Verify or update the supported Companion runtime",
+    kind: "native",
     instruction:
-      "Automatic atomic deployment/rollback is not integrated. Use the documented official App CLI bring-up procedure; never overwrite a working deployment speculatively.",
+      "The fixed compatible runtime must be current and prove authenticated disarmed trial health. Initial source preparation and first firmware startup remain a separate explicit official-tool handoff. Unsupported whole-baseline upgrades never overwrite a working deployment.",
   },
   {
     id: "rediscover",
     title: "Reboot and verify LAN plus USB",
-    kind: "unsupported",
+    kind: "native",
     instruction:
-      "Once supported deployment is available, verify the same stable Board identity through LAN and USB after reboot. Do not treat expected transport loss alone as reboot success.",
+      "Record intent before an approved restart, then observe a new kernel boot on the same hardware/build and the same authenticated Companion over LAN and USB. A scheduled request or lost transport is not success.",
   },
   {
     id: "hardware",
     title: "Test the Modulinos",
-    kind: "unsupported",
+    kind: "native",
     instruction:
-      "The playable Mission supplies a fresh input/light/sound self-test. Setup must later consume its actual result, not infer success from a connected icon.",
+      "Run a fresh bounded self-test, move the distance input and press all three buttons. Explicitly confirm the actual light/sound observations. Missing or stale hardware cannot complete setup.",
   },
   {
     id: "crew",
     title: "Create the Crew and begin",
-    kind: "unsupported",
+    kind: "native",
     instruction:
-      "Named shared Crew roles and resumable Treasure Guardian are available in Mission. Finishing that Mission is not proof that unsupported factory setup was completed.",
+      "Persist the Crew locally after the required observed proofs. Completion is a setup record, never permission to reuse stale hardware evidence or silently reconnect/rearm.",
   },
 ] as const;
 
@@ -95,7 +95,7 @@ const serial = z
 export const setupProgressSchema = z.strictObject({
   schemaVersion: z.literal(1),
   selectedSerial: serial.nullable(),
-  stageIndex: z.number().int().min(0).max(7),
+  stageIndex: z.number().int().min(0).max(12),
   checkpoints: z
     .array(
       z.strictObject({
@@ -103,7 +103,7 @@ export const setupProgressSchema = z.strictObject({
         source: z.enum(["observed", "human"]),
       }),
     )
-    .max(7),
+    .max(12),
 });
 export type SetupProgress = z.infer<typeof setupProgressSchema>;
 export interface UsbDevice {
@@ -133,7 +133,8 @@ export class SetupSession {
       p.checkpoints.some(
         (checkpoint, index) =>
           checkpoint.stageId !== setupSteps[index].id ||
-          checkpoint.source !== (index === 0 ? "observed" : "human"),
+          checkpoint.source !==
+            (index === 0 || (index >= 7 && index <= 10) ? "observed" : "human"),
       )
     ) {
       throw new Error(
@@ -142,7 +143,16 @@ export class SetupSession {
     }
   }
   get step() {
-    return setupSteps[this.progress.stageIndex];
+    return (
+      setupSteps.at(this.progress.stageIndex) ??
+      ({
+        id: "complete",
+        title: "Setup recorded",
+        kind: "complete",
+        instruction:
+          "Setup was recorded; reconnect and obtain fresh hardware evidence before gameplay. No automatic rearm.",
+      } as const)
+    );
   }
   getProgress(): SetupProgress {
     return structuredClone(this.progress);
@@ -173,8 +183,10 @@ export class SetupSession {
     this.devices = devices.map((device) => ({ ...device }));
   }
   confirmHumanStep() {
-    if (this.step.kind === "unsupported")
-      throw new Error(this.step.instruction);
+    if (this.step.kind === "native" || this.step.kind === "complete")
+      throw new Error(
+        "This checkpoint requires native proof; a checkbox or frontend save cannot complete it.",
+      );
     if (this.step.kind === "usb")
       throw new Error(
         "USB connection needs observed evidence, not a checkbox.",
@@ -182,8 +194,10 @@ export class SetupSession {
     this.confirmed = true;
   }
   advance() {
-    if (this.step.kind === "unsupported")
-      throw new Error(this.step.instruction);
+    if (this.step.kind === "native" || this.step.kind === "complete")
+      throw new Error(
+        "This checkpoint requires native proof; a checkbox or frontend save cannot complete it.",
+      );
     if (!this.devices)
       throw new Error(
         "Refresh fresh USB evidence before continuing after a restart.",

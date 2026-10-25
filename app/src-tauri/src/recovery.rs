@@ -105,7 +105,7 @@ pub struct BootVerification {
     source: VerificationSource,
     observed_at_unix_seconds: Option<u64>,
 }
-fn boot_session() -> Result<String, String> {
+pub(crate) fn boot_session() -> Result<String, String> {
     let mut bytes = [0u8; 128];
     let mut length = bytes.len();
     let status = unsafe {

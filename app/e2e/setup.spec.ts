@@ -23,13 +23,13 @@ test("setup preview exposes official handoff and never invents factory success",
     .getByText("All checkpoints and evidence", { exact: true })
     .click();
   await expect(
-    guide.getByText("Establish full USB Pairing: pending implementation", {
+    guide.getByText("Establish full USB Pairing: requires native proof", {
       exact: true,
     }),
   ).toBeVisible();
   await expect(
     guide.getByText(
-      "Install or upgrade the Companion atomically: pending implementation",
+      "Verify or update the supported Companion runtime: requires native proof",
       { exact: true },
     ),
   ).toBeVisible();

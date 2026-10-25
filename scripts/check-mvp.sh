@@ -48,7 +48,7 @@ run_check 'Board management helper and release metadata tests' python3 -m unitte
 run_check 'Detached release signature and tamper checks' cargo test --locked --manifest-path tools/release-verify/Cargo.toml
 run_check 'Release verifier formatting' cargo fmt --manifest-path tools/release-verify/Cargo.toml --check
 run_check 'Release verifier lint' cargo clippy --locked --manifest-path tools/release-verify/Cargo.toml --all-targets -- -D warnings
-run_check 'Python compilation' python3 -m compileall -q companion/python companion/tests scripts app/src-tauri/src/board_management.py
+run_check 'Python compilation' python3 -m compileall -q companion/python companion/tests scripts app/src-tauri/src/board_management.py app/src-tauri/src/companion_provision.py
 run_check 'Whitespace validation' git diff --check
 if [[ "$build" == 1 ]]; then
   run_check 'Production macOS app bundle' bash -c 'cd app && npm run build:app'

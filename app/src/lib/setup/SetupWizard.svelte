@@ -8,11 +8,21 @@
     type UsbDevice,
   } from "./session";
   import { connectionError } from "../board/connection";
+  import ObservedSetup, { type Observation } from "./ObservedSetup.svelte";
 
-  let { onUseProvisioned }: { onUseProvisioned: () => void } = $props();
+  let {
+    onUseProvisioned,
+    beforeChange,
+    onProofRefresh,
+  }: {
+    onUseProvisioned: () => void;
+    beforeChange: () => Promise<void>;
+    onProofRefresh: (boardId: string | null) => Promise<void>;
+  } = $props();
   const native = isTauri();
   let session: SetupSession;
   let progress = $state<SetupProgress | null>(null);
+  let observation = $state<Observation | null>(null);
   let devices = $state<UsbDevice[]>([]);
   let chosenSerial = $state("");
   let confirmed = $state(false);
@@ -21,24 +31,44 @@
   let error = $state("");
   let status = $state("Opening local setup checkpoints…");
   let revision = 0;
-  const step = $derived(progress ? setupSteps[progress.stageIndex] : null);
+  const step = $derived(progress ? new SetupSession(progress).step : null);
+  async function reloadNative() {
+    if (!native) return;
+    const saved = await invoke<{
+      payload: string;
+      revision: number;
+      observation?: Observation | null;
+    } | null>("load_setup");
+    session = new SetupSession(saved ? JSON.parse(saved.payload) : undefined);
+    revision = saved?.revision ?? 0;
+    observation = saved?.observation ?? null;
+    progress = session.getProgress();
+    chosenSerial = progress.selectedSerial ?? "";
+    await onProofRefresh(observation?.boardId ?? null);
+    status =
+      "Reloaded native evidence. Historical checkpoints do not grant live arming or replace physical acceptance.";
+  }
 
   onMount(() => {
     let disposed = false;
     void (async () => {
       try {
         const saved = native
-          ? await invoke<{ payload: string; revision: number } | null>(
-              "load_setup",
-            )
+          ? await invoke<{
+              payload: string;
+              revision: number;
+              observation?: Observation | null;
+            } | null>("load_setup")
           : null;
         if (disposed) return;
         session = new SetupSession(
           saved ? JSON.parse(saved.payload) : undefined,
         );
         revision = saved?.revision ?? 0;
+        observation = saved?.observation ?? null;
         progress = session.getProgress();
         chosenSerial = progress.selectedSerial ?? "";
+        if (native) await onProofRefresh(observation?.boardId ?? null);
         status = native
           ? "Setup checkpoints stay in macOS Keychain. Fresh USB checks are required after reopening."
           : "Browser preview only: real setup requires the native macOS app. No Board setup success can be recorded here.";
@@ -108,9 +138,12 @@
 <section class="setup" aria-label="Resumable UNO Q setup guide">
   <h3>Resumable parent setup guide</h3>
   <p>
-    This is a guarded handoff guide, not completed automatic factory
-    provisioning. The app does not modify Linux, Wi-Fi, SSH keys, the
-    bootloader, or the OS here. Existing unrelated configuration is preserved.
+    This is a hybrid setup guide: official tooling handles first account/OS
+    setup and the explicitly approved first app/sketch start. Separate native
+    actions register restricted SSH/gameplay keys, verify or update only the
+    compatible Linux runtime, and request/observe a restart. A checkbox never
+    proves those operations. No OS flashing or automatic firmware update runs
+    here; unrelated configuration and Mission progress are preserved.
   </p>
   <p role="status">{status}</p>
   {#if error}<p role="alert" class="error">{error}</p>{/if}
@@ -156,25 +189,33 @@
       >
     </fieldset>
     <article>
-      <p>Checkpoint {progress.stageIndex + 1} of {setupSteps.length}</p>
+      <p>
+        {progress.stageIndex === setupSteps.length
+          ? "Setup recorded"
+          : `Checkpoint ${progress.stageIndex + 1} of ${setupSteps.length}`}
+      </p>
       <h4>{step.title}</h4>
       <p>{step.instruction}</p>
-      {#if step.kind === "unsupported"}
-        <p class="error">
-          Pending implementation — this checkpoint cannot be marked complete.
-          Full Pairing, atomic deployment/rollback, and their setup acceptance
-          remain blocked.
-        </p>
-        <button onclick={onUseProvisioned}
-          >Return to already-provisioned Board connections</button
-        >
+      {#if step.kind === "native" || step.kind === "complete"}
+        <ObservedSetup
+          stepId={step.id}
+          serial={progress.selectedSerial ?? ""}
+          {observation}
+          {beforeChange}
+          onRefresh={reloadNative}
+          onBegin={onUseProvisioned}
+        />
+        {#if step.kind !== "complete"}<button onclick={onUseProvisioned}
+            >Return to already-provisioned Board connections</button
+          >
+          <p>This separate connection path does not complete the guide.</p>{/if}
       {:else}
         <fieldset disabled={!native || busy || !progress.selectedSerial}>
           {#if step.kind !== "usb"}
             <label class="check"
               ><input type="checkbox" bind:checked={confirmed} />I completed
               this step for the selected UNO Q in person / in official Arduino
-              tooling (or explicitly chose the described USB-only skip)</label
+              tooling (or used the explicitly described supported handoff)</label
             >
           {/if}
           <button
@@ -205,15 +246,16 @@
           <li>
             {item.title}: {index < progress.stageIndex
               ? `recorded (${progress.checkpoints[index].source})`
-              : item.kind === "unsupported"
-                ? "pending implementation"
+              : item.kind === "native"
+                ? "requires native proof"
                 : "not yet recorded"}
           </li>
         {/each}
       </ol>
     </details>
-    <button disabled={!native || busy} onclick={() => act(() => {})}
-      >Retry saving checkpoints</button
+    <button
+      disabled={!native || busy || progress.stageIndex > 7}
+      onclick={() => act(() => {})}>Retry saving checkpoints</button
     >
   {/if}
 </section>
