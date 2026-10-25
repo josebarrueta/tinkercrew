@@ -200,6 +200,17 @@ class DeploymentTests(unittest.TestCase):
             self.assertEqual(hello["board"]["board_id"], board_id)
             self.assertEqual(store.dispatch("finish", {"token": token, "nonce": hello["runtime"]["nonce"]})["phase"], "committed")
             self.assertEqual((self.root / "data/board.crt").read_bytes(), cert.public_bytes(serialization.Encoding.PEM))
+            previous_nonce = hello["runtime"]["nonce"]
+            renewed = x509.CertificateBuilder().subject_name(name).issuer_name(name).public_key(cert_key.public_key()).serial_number(x509.random_serial_number()).not_valid_before(now - datetime.timedelta(minutes=1)).not_valid_after(now + datetime.timedelta(days=2)).add_extension(x509.SubjectAlternativeName([x509.DNSName("localhost")]), critical=False).sign(cert_key, hashes.SHA256())
+            new_pem = renewed.public_bytes(serialization.Encoding.PEM)
+            pending_cert = self.root / "data/renewed.crt"
+            pending_cert.write_bytes(new_pem)
+            os.replace(pending_cert, certificate)
+            # Python/OpenSSL trusts this test's replacement leaf explicitly; the
+            # native Rust TLS test separately proves continuity with the old pin.
+            context = ssl.create_default_context(cafile=str(certificate))
+            self.wait_for(lambda: authenticated_health() and hello["runtime"]["nonce"] != previous_nonce, timeout=10)
+            self.assertEqual(hello["runtime"]["certificate_sha256"], hashlib.sha256(new_pem).hexdigest())
         finally:
             process.terminate()
             process.wait(timeout=4)

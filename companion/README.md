@@ -29,7 +29,7 @@ Before starting, provision owner-readable `data/companion.json` on the Board (do
 }
 ```
 
-For native Mac connections, provision a unique stable `board_id` (`TC_BOARD_ID`); do not regenerate it on each startup. The Mac verifies it after TLS/authentication. The certificate must include the fixed hostname used as `tlsName` in its DNS SAN. See [`docs/architecture/board-connections.md`](../docs/architecture/board-connections.md) for the current USB-verified record/Keychain development bridge and remaining full TBP integration.
+For native Mac connections, provision a unique stable `board_id` (`TC_BOARD_ID`); do not regenerate it on each startup. The Mac verifies it after TLS/authentication. The certificate must include the fixed hostname used as `tlsName` in its DNS SAN. See [`docs/architecture/board-connections.md`](../docs/architecture/board-connections.md) for the legacy USB-verified record bridge, separate installed-TBP registration and hybrid guide, and remaining physical acceptance.
 
 Optional Bonjour announcements use `python/requirements.txt` (`zeroconf`) and `_tinkercrew._tcp.local.`. Discovery failure never blocks USB or manual IP. `TC_ADVERTISE_IPV4` can choose a local IPv4 address when automatic interface selection is unsuitable; `advertise_host` / `TC_ADVERTISE_HOST` can supply the `.local` service hostname. An unprovisioned simulator does not advertise a fake Board identity.
 
@@ -43,7 +43,11 @@ TBP mode adds USB-token-bound installation registration, restricted/tagged SSH k
 
 `python/main.py` now starts a stable local supervisor, which owns one server child. After a compatible baseline is explicitly installed, registered and running, Board Setup can transfer/resume only its compiled-in runtime, verify fresh authenticated disarmed health and commit a trial. An unacknowledged/crashing trial rolls back independently of the Mac; no Arduino CLI, sketch upload, dependency installation, TLS replacement or registration reset is performed. Authentication/registry code is pinned by the baseline contract. Unknown baseline/ownership compatibility fails closed.
 
-The installation commands above are **not** this update primitive: official app start/stop/build can affect the MCU. Read the [runtime update contract, recovery and limitations](../docs/architecture/runtime-updates.md) before hardware use. Actual host/container and physical update acceptance is still NOT RUN; full initial provisioning, baseline upgrades, verified dedicated-key SSH and wizard completion remain unfinished.
+The installation commands above are **not** this update primitive: official app start/stop/build can affect the MCU. Read the [runtime update contract, recovery and limitations](../docs/architecture/runtime-updates.md) before hardware use. Actual host/container and physical update acceptance is still NOT RUN; initial account/OS setup and first firmware startup stay official-tool handoffs. The separate hybrid guide now verifies dedicated-key SSH and protects later setup evidence; whole-baseline migrations beyond the prepared contract remain unsupported.
+
+## Initial files, identity and renewal
+
+On a supported configured Debian 13 / `arduino` UID-1000 Board, native Board Setup can prepare only its fixed initial source and private TBP identity into an absent app directory. Existing app/configuration/key data is not overwritten. The owner then explicitly starts the app in official App Lab; start may upload the sketch or stop another app, so preparation never claims that firmware/start succeeded. Pairing now verifies the restricted dedicated SSH key against a USB-read host identity before remembering the Board. Prepared certificates can renew with the same key; the supervisor detects the certificate change and restarts only its owned Linux child. Read the [exact preparation constraints](../docs/architecture/initial-provisioning.md) and [integrated guide evidence contract](../docs/architecture/setup-checkpoints.md). None of this has been validated on a real UNO Q.
 
 ## API
 

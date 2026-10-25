@@ -184,11 +184,21 @@ class PairingTests(unittest.TestCase):
         self.assertEqual(self.request("/v1/control-lease", {"lease_ms": 1500}, new)[0], 200)
         self.assertFalse(self.companion.state()["health"]["safe_state"])
 
+    def test_management_exports_only_the_certificate_not_an_accidentally_concatenated_private_key(self):
+        from tinkercrew_companion.management import PairingManagement
+        original = self.cert.read_bytes()
+        self.cert.write_bytes(original + (self.root / "tls.key").read_bytes())
+        (self.root / "data/companion.json").write_text(json.dumps({"auth_mode": "tbp", "board_id": BOARD, "tls_name": "localhost", "tls_cert": str(self.cert)}))
+        management = PairingManagement(self.root, ssh_directory=self.root / ".ssh", inspect=lambda: {"serial": "42", "username": "arduino"}, boot_id="test-boot")
+        result = management.dispatch({"operation": "inspect", "expected_serial": "42"})
+        self.assertEqual(result["certificate_pem"], original.decode())
+        self.assertNotIn("PRIVATE KEY", result["certificate_pem"])
+
     def test_fixed_management_bootstrap_binds_board_and_never_exposes_a_shell(self):
         from tinkercrew_companion.management import PairingManagement
         config = self.root / "data/companion.json"
         config.write_text(json.dumps({"auth_mode": "tbp", "board_id": BOARD, "tls_name": "localhost", "tls_cert": str(self.cert)}))
-        management = PairingManagement(self.root, ssh_directory=self.root / ".ssh", inspect=lambda: {"serial": "42", "username": "arduino"}, clock=lambda: self.clock, boot_id="test-boot")
+        management = PairingManagement(self.root, ssh_directory=self.root / ".ssh", inspect=lambda: {"serial": "42", "username": "arduino"}, clock=lambda: self.clock, boot_id="test-boot", read_ssh_host=lambda: self.registration["ssh_public_key"].encode())
         with self.assertRaises(AuthError) as wrong:
             management.dispatch({"operation": "pair_begin", "expected_serial": "43", "registration": self.registration})
         self.assertEqual(wrong.exception.code, "identity_mismatch")
@@ -204,6 +214,11 @@ class PairingTests(unittest.TestCase):
         with self.assertRaises(AuthError) as forbidden:
             management.dispatch({"operation": "revoke", "expected_serial": "42", "installation_id": INSTALLATION}, ssh_installation=INSTALLATION)
         self.assertEqual(forbidden.exception.code, "authentication_failed")
+        host = management.dispatch({"operation": "ssh_identity", "expected_serial": "42"})
+        self.assertEqual(host["host_key"], self.registration["ssh_public_key"].split()[1])
+        self.assertEqual(host["board_id"], BOARD)
+        with self.assertRaises(AuthError):
+            management.dispatch({"operation": "ssh_identity", "expected_serial": "42"}, ssh_installation=INSTALLATION)
         from unittest.mock import patch
         with patch("os.geteuid", return_value=0):
             with self.assertRaises(AuthError) as permissions:

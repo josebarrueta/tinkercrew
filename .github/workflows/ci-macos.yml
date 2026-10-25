@@ -45,6 +45,10 @@ jobs:
           python3 -m venv .venv
           .venv/bin/python -m pip install --disable-pip-version-check -r companion/python/requirements-auth.txt
           echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
+      - name: Prepare OpenSSL 3 for temporary identity provisioning tests
+        run: |
+          brew list openssl@3 >/dev/null || brew install openssl@3
+          echo "$(brew --prefix openssl@3)/bin" >> "$GITHUB_PATH"
       - name: Verify supervised TLS runtime health before expensive native compilation
         run: PYTHONPATH=companion/python:companion/tests python3 -m unittest test_deployment.DeploymentTests.test_real_tls_health_binds_the_candidate_nonce_before_commit -v
       - name: Run software checks and build native app

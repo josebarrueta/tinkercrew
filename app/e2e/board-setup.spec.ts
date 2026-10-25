@@ -43,6 +43,27 @@ async function mockManagement(
             return registered
               ? [{ boardId: "known-board", name: "Registered test UNO Q" }]
               : [];
+          if (command === "initial_companion_package")
+            return { release: "e".repeat(64), bytes: 2048 };
+          if (command === "inspect_initial_companion")
+            return { phase: "absent", offset: 0, started: false };
+          if (command === "request_verified_board_restart")
+            return { state: "reboot_scheduled" };
+          if (command === "verify_board_restart")
+            return {
+              message:
+                "Mock new kernel and pinned LAN/USB verified; no physical run.",
+            };
+          if (command === "renew_companion_identity")
+            return {
+              message: "Mock same-key renewal verified; no firmware operation.",
+            };
+          if (command === "prepare_initial_companion")
+            return {
+              phase: "identity_ready",
+              message:
+                "Mock preparation only: no app was started and no firmware was written.",
+            };
           if (command === "app_update_info") return { version: "0.1.0" };
           if (command === "open_app_releases") return null;
           if (command === "runtime_bundle_info")
@@ -155,6 +176,116 @@ async function managementCalls(page: Page) {
       ).__managementCalls,
   );
 }
+
+test("tracked restart distinguishes scheduling from explicit authenticated LAN and USB observation", async ({
+  page,
+}) => {
+  const management = await mockManagement(page, "idle", true);
+  await management
+    .getByLabel("Linux password (this request only)")
+    .fill("fixture-only-password");
+  await management
+    .getByRole("button", { name: "Authenticate selected Board", exact: true })
+    .click();
+  await management
+    .getByText("Restart, pairing cleanup, and factory recovery", {
+      exact: true,
+    })
+    .click();
+  await management
+    .getByLabel("Type RESTART 42", { exact: true })
+    .fill("RESTART 42");
+  await management
+    .getByLabel("Linux password for a tracked restart", { exact: true })
+    .fill("fixture-only-password");
+  await management
+    .getByRole("button", {
+      name: "Schedule tracked paired-Board restart",
+      exact: true,
+    })
+    .click();
+  await expect(
+    management.getByText(/This is not proof of a completed reboot/),
+  ).toBeVisible();
+  const verify = management.getByRole("button", {
+    name: "Verify new kernel and authenticated LAN + USB",
+    exact: true,
+  });
+  await expect(verify).toBeDisabled();
+  await management
+    .getByLabel("Board LAN address after restart", { exact: true })
+    .fill("192.168.88.42");
+  await management
+    .getByRole("checkbox", {
+      name: "Allow the app to contact this explicit local-network endpoint for restart verification",
+      exact: true,
+    })
+    .check();
+  await verify.click();
+  await expect(
+    management.getByText(
+      "Mock new kernel and pinned LAN/USB verified; no physical run.",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  const calls = await managementCalls(page);
+  expect(
+    calls.find((call) => call.command === "verify_board_restart")?.args,
+  ).toEqual({
+    serial: "USB_TEST",
+    boardId: "known-board",
+    lanHost: "192.168.88.42",
+    lanPort: 7443,
+    localConsent: true,
+  });
+  expect(calls.some((call) => call.command === "start_factory_restore")).toBe(
+    false,
+  );
+});
+
+test("initial Companion preparation has exact hardware consent and cannot claim firmware or wizard completion", async ({
+  page,
+}) => {
+  const management = await mockManagement(page);
+  await management
+    .getByText("Prepare initial Companion files and identity", { exact: true })
+    .click();
+  await management
+    .getByRole("button", { name: "Inspect initial preparation", exact: true })
+    .click();
+  await expect(
+    management.getByText(/Initial preparation: absent/),
+  ).toBeVisible();
+  const prepare = management.getByRole("button", {
+    name: "Prepare / resume initial Companion",
+    exact: true,
+  });
+  await expect(prepare).toBeDisabled();
+  await management
+    .getByLabel("Type PREPARE 42", { exact: true })
+    .fill("PREPARE 42");
+  await prepare.click();
+  await expect(
+    management.getByText(
+      "Mock preparation only: no app was started and no firmware was written.",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  expect(
+    (await managementCalls(page)).find(
+      (call) => call.command === "prepare_initial_companion",
+    )?.args,
+  ).toEqual({ serial: "USB_TEST", confirmation: "PREPARE 42" });
+  expect(
+    (await managementCalls(page)).some((call) =>
+      [
+        "start_factory_restore",
+        "update_companion_runtime",
+        "pair_installed_companion",
+      ].includes(call.command),
+    ),
+  ).toBe(false);
+});
 
 test("Mac app upgrades are parent-approved manual replacements, separate from Board updates", async ({
   page,

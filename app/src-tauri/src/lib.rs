@@ -6,10 +6,13 @@ mod file_lock;
 mod management;
 mod pairing;
 mod progress;
+mod provisioning;
+mod reboot;
 mod recovery;
 mod runtime_update;
 mod session;
 mod setup;
+mod setup_hardware;
 
 use tauri::Manager;
 
@@ -26,7 +29,7 @@ pub fn run() {
             std::fs::create_dir_all(&recovery_directory)?;
             use std::os::unix::fs::PermissionsExt;
             std::fs::set_permissions(&recovery_directory, std::fs::Permissions::from_mode(0o700))?;
-            let connections = connection::Connections::new(directory);
+            let connections = connection::Connections::new(directory.clone());
             if recovery_directory
                 .join("factory-restore-active.json")
                 .exists()
@@ -38,7 +41,8 @@ pub fn run() {
             app.manage(connections);
             app.manage(management::Management::default());
             app.manage(recovery::Recovery::new(recovery_directory));
-            app.manage(setup::SetupStore::default());
+            app.manage(setup::SetupStore::new(directory));
+            app.manage(setup_hardware::SetupHardware::default());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -51,6 +55,11 @@ pub fn run() {
             connection::disconnect_board,
             discovery::board_candidates,
             setup::load_setup,
+            setup_hardware::start_setup_hardware,
+            setup_hardware::poll_setup_hardware,
+            setup_hardware::finish_setup_hardware,
+            setup_hardware::cancel_setup_hardware,
+            setup_hardware::finish_setup_crew,
             setup::save_setup,
             setup::inspect_setup_usb,
             setup::open_official_setup,
@@ -70,6 +79,13 @@ pub fn run() {
             pairing::pair_installed_companion,
             pairing::list_board_pairings,
             pairing::revoke_board_pairing,
+            provisioning::initial_companion_package,
+            provisioning::inspect_initial_companion,
+            provisioning::prepare_initial_companion,
+            provisioning::cancel_initial_companion,
+            provisioning::renew_companion_identity,
+            reboot::request_verified_board_restart,
+            reboot::verify_board_restart,
             app_updates::app_update_info,
             app_updates::open_app_releases,
             runtime_update::runtime_bundle_info,

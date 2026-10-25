@@ -199,9 +199,16 @@
   />
   <details bind:open={setupOpen}>
     <summary>Set up a UNO Q — resumable official-tool handoff guide</summary>
-    {#if setupOpen}<SetupWizard
-        onUseProvisioned={() => {
+    {#if setupOpen && visible}<SetupWizard
+        beforeChange={useSimulator}
+        onProofRefresh={async (boardId) => {
+          boards = await invoke("list_boards");
+          if (boardId && boards.some((board) => board.boardId === boardId))
+            selected = boardId;
+        }}
+        onUseProvisioned={async () => {
           setupOpen = false;
+          if (native) boards = await invoke("list_boards");
         }}
       />{/if}
   </details>

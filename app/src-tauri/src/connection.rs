@@ -800,6 +800,64 @@ mod tests {
     }
 
     #[test]
+    fn renewed_certificate_keeps_working_with_the_existing_pinned_identity() {
+        use std::io::{BufRead, BufReader};
+        struct Peer(std::process::Child);
+        impl Drop for Peer {
+            fn drop(&mut self) {
+                let _ = self.0.kill();
+                let _ = self.0.wait();
+            }
+        }
+        let directory = tempfile::tempdir().unwrap();
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let mut peer = Peer(
+            std::process::Command::new("python3")
+                .arg(root.join("companion/tests/renewal_fixture.py"))
+                .arg(directory.path())
+                .env("PYTHONPATH", root.join("companion/python"))
+                .stdout(std::process::Stdio::piped())
+                .spawn()
+                .unwrap(),
+        );
+        let mut line = String::new();
+        BufReader::new(peer.0.stdout.as_mut().unwrap())
+            .read_line(&mut line)
+            .unwrap();
+        let fixture: Value = serde_json::from_str(&line).unwrap();
+        let profile = BoardProfile {
+            board_id: fixture["boardId"].as_str().unwrap().into(),
+            name: "Renewal fixture".into(),
+            adb_serial: "FIXTURE".into(),
+            tls_name: fixture["tlsName"].as_str().unwrap().into(),
+            certificate_pem: fixture["previousCertificate"].as_str().unwrap().into(),
+            api_token: "fixture-only-renewal-token-32-characters".into(),
+            installation_id: None,
+            last_address: None,
+        };
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        runtime.block_on(async {
+            let port = fixture["port"].as_u64().unwrap() as u16;
+            let candidate = Candidate::new("127.0.0.1", port).unwrap();
+            let (client, _) = secure_client(&profile, &candidate).await.unwrap();
+            let auth = crate::session::GameplayAuth::legacy(&profile.api_token);
+            let hello = request(
+                &client,
+                &profile,
+                port,
+                Method::GET,
+                "/v1/hello",
+                None,
+                &auth,
+            )
+            .await
+            .unwrap();
+            assert_eq!(hello["protocol"], "1.0");
+            assert_eq!(hello["board"]["board_id"], profile.board_id);
+        });
+    }
+
+    #[test]
     fn real_tls_companion_checks_certificate_identity_authentication_and_commands() {
         use std::io::{BufRead, BufReader};
         struct Fixture(std::process::Child);

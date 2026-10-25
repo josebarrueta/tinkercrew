@@ -9,7 +9,7 @@ import sys
 import threading
 import time
 
-from .deployment import DeploymentError, RuntimeDeployment, _atomic
+from .deployment import DeploymentError, RuntimeDeployment, _atomic, _file, _digest
 
 
 def run(root):
@@ -19,6 +19,7 @@ def run(root):
     stopped = threading.Event()
     child = None
     current = None
+    current_certificate = None
     nonce = None
     failed = None
     for number in (signal.SIGTERM, signal.SIGINT):
@@ -53,9 +54,14 @@ def run(root):
                 _atomic(store.directory / "observed.json", {"boot": store.boot, "seen": time.monotonic(), "state": "blocked", "release": current, "nonce": nonce, "trial": None})
                 stopped.wait(0.1)
                 continue
-            if spec["release"] != current:
+            try:
+                certificate = _digest(_file(root / "data/board.crt", 8192))
+            except (DeploymentError, OSError):
+                certificate = None
+            if spec["release"] != current or certificate != current_certificate:
                 terminate()
                 current = spec["release"]
+                current_certificate = certificate
                 nonce = secrets.token_urlsafe(16)
                 failed = None
             if child is None and failed != current:
@@ -64,8 +70,9 @@ def run(root):
                 environment["TC_RUNTIME_RELEASE"] = current
                 environment["TC_RUNTIME_NONCE"] = nonce
                 environment["TC_RUNTIME_STATE"] = str(store.directory)
+                environment["TC_RUNTIME_CERTIFICATE_SHA256"] = current_certificate or ""
                 child = subprocess.Popen([sys.executable, "-B", "-X", "pycache_prefix=/dev/null", "-m", "tinkercrew_companion.server"], cwd=root, env=environment, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            _atomic(store.directory / "observed.json", {"boot": store.boot, "seen": time.monotonic(), "state": "launched" if child is not None else "child_exited", "release": current, "nonce": nonce, "trial": spec["trial"]})
+            _atomic(store.directory / "observed.json", {"boot": store.boot, "seen": time.monotonic(), "state": "launched" if child is not None else "child_exited", "release": current, "nonce": nonce, "trial": spec["trial"], "certificate_sha256": current_certificate})
             stopped.wait(0.1)
     finally:
         terminate()

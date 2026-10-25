@@ -42,8 +42,15 @@
   let ssid = $state("");
   let wifiPassword = $state("");
   let restartConfirmation = $state("");
+  let restartLanHost = $state("");
+  let restartLocalConsent = $state(false);
   let forgetConfirmation = $state("");
   let trustConfirmation = $state("");
+  let initialRelease = $state("");
+  let initialStatus = $state("");
+  let prepareConfirmation = $state("");
+  let cancelPrepareConfirmation = $state("");
+  let renewIdentityConfirmation = $state("");
   let appVersion = $state("native app required");
   let runtimeConfirmation = $state("");
   let runtimeAbortConfirmation = $state("");
@@ -170,6 +177,14 @@
   }
   onMount(() => {
     void pollRestore();
+    if (native)
+      void invoke<{ release: string }>("initial_companion_package")
+        .then((value) => {
+          initialRelease = value.release;
+        })
+        .catch(() => {
+          initialRelease = "unavailable";
+        });
     if (native)
       void invoke<{ version: string }>("app_update_info")
         .then((value) => {
@@ -418,6 +433,127 @@
     >
   </fieldset>
   <details>
+    <summary>Prepare initial Companion files and identity</summary>
+    <p>
+      After official first-time account setup, this prepares the fixed Companion
+      source and a private Board-generated TBP TLS identity on a supported
+      Debian 13 / arduino UID-1000 baseline. Transfers resume by verified offset
+      and publish only into an absent reserved app directory. Existing or
+      different apps, credentials and keys are never overwritten or migrated.
+    </p>
+    <p>
+      Source release: <span class="digest"
+        >{initialRelease || "native app required"}</span
+      >. No Arduino CLI, app start, MCU upload, OS flash or reboot is run by
+      this preparation button.
+    </p>
+    <fieldset
+      disabled={!native || busy || restorePending || !board || !usbConfirmed}
+    >
+      <button
+        onclick={() =>
+          task(async () => {
+            const result = await invoke<{ phase: string; offset: number }>(
+              "inspect_initial_companion",
+              { serial },
+            );
+            initialStatus = `${result.phase}; ${result.offset} bytes transferred`;
+          })}>Inspect initial preparation</button
+      >
+      <label
+        >Type PREPARE {board?.serial ?? "hardware-serial"}<input
+          autocomplete="off"
+          bind:value={prepareConfirmation}
+        /></label
+      >
+      <button
+        disabled={prepareConfirmation !== `PREPARE ${board?.serial}`}
+        onclick={async () => {
+          const confirmation = prepareConfirmation;
+          prepareConfirmation = "";
+          await task(async () => {
+            const result = await invoke<{ phase: string; message: string }>(
+              "prepare_initial_companion",
+              { serial, confirmation },
+            );
+            initialStatus = result.phase;
+            message = result.message;
+          }, true);
+        }}>Prepare / resume initial Companion</button
+      >
+      <label
+        >Type ABORT PREPARE {board?.serial ?? "hardware-serial"}<input
+          autocomplete="off"
+          bind:value={cancelPrepareConfirmation}
+        /></label
+      >
+      <button
+        disabled={cancelPrepareConfirmation !==
+          `ABORT PREPARE ${board?.serial}`}
+        onclick={async () => {
+          const confirmation = cancelPrepareConfirmation;
+          cancelPrepareConfirmation = "";
+          await task(async () => {
+            const result = await invoke<{ phase: string; message: string }>(
+              "cancel_initial_companion",
+              { serial, confirmation },
+            );
+            initialStatus = result.phase;
+            message = result.message;
+          }, true);
+        }}>Cancel partial initial transfer (keeps published files)</button
+      >
+    </fieldset>
+    {#if initialStatus}<p role="status">
+        Initial preparation: {initialStatus}. Not proof of a running app or
+        completed setup.
+      </p>{/if}
+    <fieldset
+      disabled={!native ||
+        busy ||
+        restorePending ||
+        !board ||
+        !usbConfirmed ||
+        !pairedBoardId}
+    >
+      <p>
+        For this exact registered, prepared baseline, certificate renewal
+        preserves its key and registrations. The supervisor restarts only its
+        Linux child; verification uses the prior TLS anchor before refreshing
+        the saved certificate. Pending runtime work, unknown baselines or
+        changed keys are refused.
+      </p>
+      <label
+        >Type RENEW TLS {board?.serial ?? "hardware-serial"}<input
+          autocomplete="off"
+          bind:value={renewIdentityConfirmation}
+        /></label
+      >
+      <button
+        disabled={renewIdentityConfirmation !== `RENEW TLS ${board?.serial}`}
+        onclick={async () => {
+          const confirmation = renewIdentityConfirmation;
+          renewIdentityConfirmation = "";
+          await task(async () => {
+            const result = await invoke<{ message: string }>(
+              "renew_companion_identity",
+              { serial, boardId: pairedBoardId, confirmation },
+            );
+            message = result.message;
+          }, true);
+        }}>Renew prepared Board certificate (same key)</button
+      >
+    </fieldset>
+    <p>
+      Next, explicitly start this app in official Arduino App Lab. Start/build
+      can download dependencies, upload the STM32 sketch and stop another app:
+      review the selected target, back up needed data and disconnect unsafe
+      loads first. Tinkeroo does not perform that firmware-affecting step
+      automatically. Return here for installation Pairing after the app is
+      actually running; preparation alone cannot complete the guide.
+    </p>
+  </details>
+  <details>
     <summary>Installation Pairing and lost-Mac revocation</summary>
     <p>
       This requires an updated, already installed Companion explicitly
@@ -462,7 +598,7 @@
             pairConfirmation = "";
             await onForgot();
             message =
-              "Installation public keys registered and a signed gameplay session verified. Select the paired Board and Connect below. This did not deploy the Companion, verify SSH login, or complete hardware/setup acceptance.";
+              "Installation keys, restricted dedicated-key SSH and signed pinned-TLS authentication were verified for the same Board/kernel. Select the paired Board and Connect explicitly. This alone did not deploy the Companion or complete later runtime/restart/hardware/Crew checkpoints or physical acceptance.";
           }, true)}>Register this Mac with the installed TBP Companion</button
       >
       <button
@@ -653,6 +789,76 @@
               }),
             true,
           )}>Schedule Board restart</button
+      >
+      <label
+        >Linux password for a tracked restart<input
+          type="password"
+          autocomplete="off"
+          bind:value={password}
+        /></label
+      >
+      <button
+        disabled={!password ||
+          !pairedBoardId ||
+          restartConfirmation !== `RESTART ${board?.serial}`}
+        onclick={() =>
+          task(async () => {
+            const result = await invoke<{ state: string }>(
+              "request_verified_board_restart",
+              {
+                serial,
+                boardId: pairedBoardId,
+                password,
+                confirmation: restartConfirmation,
+              },
+            );
+            authenticated = false;
+            message = `${result.state}: intent saved before scheduling. This is not proof of a completed reboot; wait and verify the new kernel over LAN and USB.`;
+          }, true)}>Schedule tracked paired-Board restart</button
+      >
+    </fieldset>
+    <fieldset
+      disabled={!native ||
+        busy ||
+        restorePending ||
+        !board ||
+        !usbConfirmed ||
+        !pairedBoardId}
+    >
+      <p>
+        For a tracked restart, wait for the Board to return, reinspect its exact
+        USB identity, and enter its current LAN IP/hostname. A lost transport or
+        an old image is not restart evidence. Unknown scheduling outcomes block
+        duplicate tracked requests; use explicit official recovery if needed,
+        never factory erase merely to clear this state.
+      </p>
+      <label
+        >Board LAN address after restart<input
+          autocomplete="off"
+          bind:value={restartLanHost}
+        /></label
+      >
+      <label class="check"
+        ><input type="checkbox" bind:checked={restartLocalConsent} />Allow the
+        app to contact this explicit local-network endpoint for restart
+        verification</label
+      >
+      <button
+        disabled={!restartLanHost.trim() || !restartLocalConsent}
+        onclick={() =>
+          task(async () => {
+            const result = await invoke<{ message: string }>(
+              "verify_board_restart",
+              {
+                serial,
+                boardId: pairedBoardId,
+                lanHost: restartLanHost.trim(),
+                lanPort: 7443,
+                localConsent: restartLocalConsent,
+              },
+            );
+            message = result.message;
+          }, true)}>Verify new kernel and authenticated LAN + USB</button
       >
     </fieldset>
     <h3>Forget Tinkeroo records — this Mac only</h3>
