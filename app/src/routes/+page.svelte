@@ -13,11 +13,11 @@
   type Screen =
     "Home Base" | "World Map" | "Mission" | "Hardware Lab" | "Board Setup";
   const screens: { name: Screen; icon: string }[] = [
+    { name: "Board Setup", icon: "☰" },
     { name: "Home Base", icon: "⌂" },
     { name: "World Map", icon: "✦" },
     { name: "Mission", icon: "◆" },
     { name: "Hardware Lab", icon: "⚙" },
-    { name: "Board Setup", icon: "☰" },
   ];
   const simulator = new SimulatorBoardClient();
   let board = $state.raw<BoardClient>(simulator);

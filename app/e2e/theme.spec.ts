@@ -1,5 +1,31 @@
 import { expect, test } from "@playwright/test";
 
+test("Board Setup is first in the menu without changing the default Home Base screen", async ({
+  page,
+}) => {
+  await page.goto("/");
+  const menu = page.getByRole("navigation", { name: "Main navigation" });
+  const buttons = menu.getByRole("button");
+  await expect(buttons).toHaveText([
+    "☰Board Setup",
+    "⌂Home Base",
+    "✦World Map",
+    "◆Mission",
+    "⚙Hardware Lab",
+  ]);
+  await expect(
+    menu.getByRole("button", { name: "⌂ Home Base", exact: true }),
+  ).toHaveAttribute("aria-current", "page");
+  await buttons.first().focus();
+  await buttons.first().press("Enter");
+  await expect(
+    page.getByRole("heading", { name: "Board Setup", level: 1, exact: true }),
+  ).toBeVisible();
+  await expect(buttons.first()).toHaveAttribute("aria-current", "page");
+  await menu.getByRole("button", { name: "⌂ Home Base", exact: true }).click();
+  await expect(page.getByTestId("start-mission")).toBeVisible();
+});
+
 function contrast(foreground: string, background: string) {
   const luminance = (rgb: string) => {
     const channels = rgb
