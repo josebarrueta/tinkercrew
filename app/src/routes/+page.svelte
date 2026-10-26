@@ -135,7 +135,7 @@
         <h1>{active}</h1>
       </div>
       <div class="crew">
-        <span>🧭</span><span>🧰</span><span>💻</span><b>Dragon Crew</b>
+        <span>🧭</span><span>🧰</span><span>💻</span><b>Your Crew</b>
       </div>
     </header>
     {#if active === "Home Base"}
@@ -148,9 +148,15 @@
             class="primary"
             data-testid="start-mission"
             onclick={() => (active = "Mission")}
-            >Continue Treasure Guardian →</button
+            >Open Treasure Guardian →</button
           >
-          <p class="gentle-note">No rush. Try things. Make them yours.</p>
+          <p class="gentle-note">
+            Start or resume your saved Mission. Real Board outputs stay off
+            until you explicitly enable Mission controls.
+          </p>
+          <button onclick={() => (active = "Board Setup")}
+            >Connect or set up your Board</button
+          >
         </div>
         <div class="maker-mark" aria-hidden="true">
           <img src="/icon.svg" alt="" width="152" height="152" /><span
@@ -191,8 +197,8 @@
         <span class="eyebrow">ADVENTURE PATH</span>
         <h2>Follow your curiosity.</h2>
         <p>
-          Start with Treasure Guardian, then turn your discoveries into a Free
-          Build.
+          Treasure Guardian is the playable Mission today. Other adventures are
+          marked coming later. Afterward, try a Free Build invitation.
         </p>
         <div class="mission-path">
           {#each world.stops as stop, index}
@@ -225,6 +231,8 @@
       {#key board}<MissionPanel
           {board}
           simulation={board === simulator ? simulator.controls : undefined}
+          onSetup={() => (active = "Board Setup")}
+          onHome={() => (active = "Home Base")}
         />{/key}
     {:else if active === "Hardware Lab"}
       <section class="panel">
@@ -284,6 +292,7 @@
     {/if}
     <ConnectionPanel
       visible={active === "Board Setup"}
+      onMission={() => (active = "Mission")}
       onConnected={(client) => {
         board = client;
       }}
@@ -414,7 +423,7 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    min-height: 112px;
+    min-height: 88px;
     border-bottom: 1px solid var(--border);
   }
   h1,

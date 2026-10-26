@@ -72,6 +72,7 @@ export async function connectBoard(
           if (
             [
               "authentication_failed",
+              "authentication_busy",
               "pairing_required",
               "protocol_incompatible",
               "maintenance_active",
@@ -85,6 +86,7 @@ export async function connectBoard(
       if (
         [
           "authentication_failed",
+          "authentication_busy",
           "pairing_required",
           "protocol_incompatible",
           "maintenance_active",

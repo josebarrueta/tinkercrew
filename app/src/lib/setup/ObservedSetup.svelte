@@ -1,6 +1,7 @@
 <script lang="ts">
   import { invoke, isTauri } from "@tauri-apps/api/core";
   import { onMount, onDestroy } from "svelte";
+  import { errorMessage } from "../errors";
   import { MissionSession } from "../missions/session";
   import { ProgressRepository } from "../missions/storage";
   import { treasureGuardian } from "../missions/catalog";
@@ -81,7 +82,7 @@
           crewRoles = crew.map((member) => member.role);
         })
         .catch((cause) => {
-          error = `Saved Crew/progress could not be opened; it was not reset: ${String(cause)}`;
+          error = `Saved Crew/progress could not be opened; it was not reset: ${errorMessage(cause)}`;
         });
     }
   });
@@ -95,12 +96,10 @@
       await action();
       if (!disposed) await onRefresh();
     } catch (cause) {
-      error =
-        typeof cause === "string"
-          ? cause
-          : cause instanceof Error
-            ? cause.message
-            : "Native proof failed; no completion was assumed.";
+      error = errorMessage(
+        cause,
+        "Native proof failed; no completion was assumed.",
+      );
     } finally {
       password = "";
       busy = false;
@@ -140,7 +139,7 @@
         })
         .catch((cause) => {
           running = false;
-          error = String(cause);
+          error = errorMessage(cause);
         })
         .finally(() => {
           polling = false;

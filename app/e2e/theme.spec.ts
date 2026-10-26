@@ -54,7 +54,7 @@ test("Tinkeroo keeps a clear next action, keyboard focus, and calm reduced-motio
   await expect(page).toHaveTitle(/Tinkeroo/);
   await expect(page.getByRole("img", { name: "Tinkeroo" })).toBeVisible();
   const action = page.getByTestId("start-mission");
-  await expect(action).toHaveText("Continue Treasure Guardian →");
+  await expect(action).toHaveText("Open Treasure Guardian →");
   await action.focus();
   const styles = await action.evaluate((element) => {
     const style = getComputedStyle(element);

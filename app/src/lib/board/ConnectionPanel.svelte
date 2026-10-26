@@ -1,6 +1,6 @@
 <script lang="ts">
   import { invoke, isTauri } from "@tauri-apps/api/core";
-  import { onMount } from "svelte";
+  import { onMount, tick } from "svelte";
   import {
     connectBoard,
     connectionError,
@@ -18,17 +18,26 @@
     onConnected,
     onSimulator,
     onState,
+    onMission = () => {},
   }: {
     visible: boolean;
     onConnected: (client: BoardClient) => void;
     onSimulator: () => void;
     onState: (state: ConnectionState) => void;
+    onMission?: () => void;
   } = $props();
   let boards = $state<{ boardId: string; name: string }[]>([]);
   let selected = $state("");
   let record = $state("");
   let usbConfirmed = $state(false);
   let setupOpen = $state(false);
+  let maintenanceOpen = $state(false);
+  let maintenanceSection: HTMLDetailsElement | undefined;
+  async function openParentSetup() {
+    maintenanceOpen = true;
+    await tick();
+    maintenanceSection?.scrollIntoView({ block: "start" });
+  }
   let localConsent = $state(false);
   let manualHost = $state("");
   let manualPort = $state(7443);
@@ -97,6 +106,7 @@
           if (
             [
               "authentication_failed",
+              "authentication_busy",
               "pairing_required",
               "identity_mismatch",
               "protocol_incompatible",
@@ -116,6 +126,7 @@
       if (
         [
           "authentication_failed",
+          "authentication_busy",
           "pairing_required",
           "protocol_incompatible",
           "maintenance_active",
@@ -178,27 +189,103 @@
 </script>
 
 <section hidden={!visible} class="connections">
-  <h2>Board Setup</h2>
+  <h2>Connect &amp; play</h2>
   <p>
-    One place for Board connections, Linux configuration, restart, and explicit
-    recovery. Destructive actions are for an adult and are separate from Mission
-    play.
+    Already paired? Connect your Board below, then continue to your Mission. No
+    Linux password or repeated setup is needed.
   </p>
-  <HardwareSafety />
-  <BoardManagement
-    {visible}
-    pairedBoardId={selected}
-    beforeChange={useSimulator}
-    onForgot={async () => {
-      boards = await invoke("list_boards");
-      selected = "";
-    }}
-    onBusyChange={(value) => {
-      managementBusy = value;
-    }}
-  />
+  <p>
+    Using the simulator instead? It is practice only and never drives the
+    connected Board.
+  </p>
+  {#if !native}<p>
+      Board connections are available in the native macOS app. This browser
+      preview stays in simulator mode.
+    </p>{/if}
+  <p role="status">
+    {#if connection.phase === "searching"}Looking for the selected Board: {connection.stage}…
+    {:else if connection.phase === "connected"}Connected to {boards.find(
+        (board) => board.boardId === connectedBoardId,
+      )?.name ?? "your Board"} via
+      {connection.transport === "usb" ? "USB" : "a verified local connection"}.
+    {:else if connection.phase === "failed"}{connection.error.code}: {connection
+        .error.message}
+    {:else}Simulator mode is active.{/if}
+  </p>
+  {#if message}<p role="status">{message}</p>{/if}
+  {#if managementBusy}<p role="status">
+      Parent maintenance is active or needs recovery. Gameplay stays paused;
+      open Parent setup &amp; advanced maintenance below to inspect it.
+    </p>{/if}
+  <fieldset disabled={!native || busy || managementBusy}>
+    <legend>Your saved Board</legend>
+    <label
+      >Paired Board
+      <select bind:value={selected}>
+        <option value="">Select a Board identity</option>
+        {#each boards as board}<option value={board.boardId}
+            >{board.name} · {board.boardId.slice(-6)}</option
+          >{/each}
+      </select>
+    </label>
+    <details>
+      <summary>Connection options (optional)</summary>
+      <label class="check"
+        ><input type="checkbox" bind:checked={localConsent} />Allow checking up
+        to eight cached local neighbors after Bonjour fails (no subnet scan)</label
+      >
+      <label
+        >Manual local IP or hostname (optional)<input
+          bind:value={manualHost}
+          placeholder="192.168.1.42 or dragon.local"
+        /></label
+      >
+      <label
+        >Companion port<input
+          type="number"
+          min="1"
+          max="65535"
+          bind:value={manualPort}
+        /></label
+      >
+      <p>
+        Try USB if local-network or VPN settings block the Board. The same
+        pinned identity checks apply to every route.
+      </p>
+    </details>
+    <button disabled={!selected} onclick={() => connect()}
+      >Connect / retry selected Board</button
+    >
+    <button onclick={() => useSimulator()}
+      >Use simulator / stop reconnecting</button
+    >
+  </fieldset>
+  <button
+    class="primary"
+    disabled={busy ||
+      managementBusy ||
+      connection.phase === "searching" ||
+      connection.phase === "failed"}
+    onclick={onMission}>Continue to Mission</button
+  >
+  <button onclick={openParentSetup}>Add / pair a Board</button>
+  {#if native && boards.length === 0}<p>
+      No saved Board yet. Pair this Mac once, then use Connect &amp; play for
+      later sessions.
+    </p>{/if}
+  <p>
+    Opening a Mission does not enable physical lights or sound. Mission controls
+    need a separate explicit action.
+  </p>
   <details bind:open={setupOpen}>
     <summary>Set up a UNO Q — resumable official-tool handoff guide</summary>
+    <p>
+      Use this for a new Board, not every play session. Already paired Boards
+      can use Connect &amp; play above.
+    </p>
+    <button onclick={openParentSetup}
+      >Open parent setup and Pairing controls</button
+    >
     {#if setupOpen && visible}<SetupWizard
         beforeChange={useSimulator}
         onProofRefresh={async (boardId) => {
@@ -212,74 +299,36 @@
         }}
       />{/if}
   </details>
-  <p>
-    Simulator mode needs no account or internet. Connected play uses a
-    provisioned Companion, TLS verification, and a Board-specific credential
-    held in macOS Keychain.
-  </p>
-  {#if !native}<p>
-      Board connections are available in the native macOS app. This browser
-      preview stays in simulator mode.
-    </p>{/if}
-  <p role="status">
-    {#if connection.phase === "searching"}Looking for the selected Board: {connection.stage}…
-    {:else if connection.phase === "connected"}Connected to {connectedBoardId} through
-      {connection.transport}.
-    {:else if connection.phase === "failed"}{connection.error.code}: {connection
-        .error.message}
-    {:else}Simulator mode is active.{/if}
-  </p>
-  {#if message}<p role="status">{message}</p>{/if}
-  <fieldset disabled={!native || busy || managementBusy}>
-    <legend>Companion gameplay connection — choose the exact Board</legend>
-    <label
-      >Paired Board
-      <select bind:value={selected}>
-        <option value="">Select a Board identity</option>
-        {#each boards as board}<option value={board.boardId}
-            >{board.name} — {board.boardId}</option
-          >{/each}
-      </select>
-    </label>
-    <label class="check"
-      ><input type="checkbox" bind:checked={localConsent} />Allow checking up to
-      eight cached local neighbors after Bonjour fails (no subnet scan)</label
-    >
-    <label
-      >Manual local IP or hostname (optional)<input
-        bind:value={manualHost}
-        placeholder="192.168.1.42 or dragon.local"
-      /></label
-    >
-    <label
-      >Companion port<input
-        type="number"
-        min="1"
-        max="65535"
-        bind:value={manualPort}
-      /></label
-    >
-    <button disabled={!selected} onclick={() => connect()}
-      >Connect / retry selected Board</button
-    >
-    <button onclick={() => useSimulator()}
-      >Use simulator / stop reconnecting</button
-    >
-  </fieldset>
-  <p>
-    The connection order is last validated address → Bonjour → parent-approved
-    local neighbors → serial-targeted USB/ADB → manual entry. TLS and Board
-    identity checks apply to every path, including USB. If a VPN blocks local
-    routing, allow local-network access in its settings or use USB.
-  </p>
+  <details bind:open={maintenanceOpen} bind:this={maintenanceSection}>
+    <summary>Parent setup &amp; advanced maintenance</summary>
+    <p>
+      Pair a new Board here. Linux passwords, Wi-Fi changes, updates and
+      recovery are separate adult-only tasks; they are not prerequisites for
+      opening a Mission.
+    </p>
+    <BoardManagement
+      visible={visible && maintenanceOpen}
+      pairedBoardId={selected}
+      beforeChange={useSimulator}
+      onForgot={async () => {
+        boards = await invoke("list_boards");
+        selected = boards.length === 1 ? boards[0].boardId : "";
+        message =
+          "Your saved Board list is up to date. Select a Board and Connect; Pairing alone does not connect it.";
+      }}
+      onBusyChange={(value) => {
+        managementBusy = value;
+      }}
+    />
+  </details>
+  <HardwareSafety />
   <details>
     <summary>Import an already provisioned Board (development bridge)</summary>
     <p>
-      This is not automatic first-time Pairing. Copy the record directly from
-      the selected Board over physical USB; never accept a certificate or
-      credential learned only from Wi-Fi discovery. Official Arduino setup
-      remains the fallback. Full TBP USB key registration and short-lived
-      sessions remain integration work.
+      Legacy development import only. Most families should use Add / pair a
+      Board instead. Copy a legacy record only from the selected Board over
+      physical USB; never accept credentials or certificates learned only
+      through Wi-Fi discovery.
     </p>
     <fieldset disabled={!native || busy || managementBusy}>
       <label
@@ -306,8 +355,13 @@
 </section>
 
 <style>
+  .primary {
+    background: var(--primary);
+    color: white;
+    font-weight: 800;
+  }
   .connections {
-    margin-top: 30px;
+    margin-top: 24px;
     max-width: 1000px;
   }
   h2 {

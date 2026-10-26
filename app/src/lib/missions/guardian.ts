@@ -1,4 +1,5 @@
 import type { BoardClient, BoardEvent } from "../board/types";
+import { errorMessage } from "../errors";
 import type { Check } from "./definition";
 import {
   defaultRules,
@@ -170,7 +171,9 @@ export class GuardianRuntime {
       if (!this.unsubscribe || generation !== this.generation) return;
       try {
         await this.board.renewControl();
+        if (generation !== this.generation) return;
         const snapshot = await this.board.getSnapshot();
+        if (generation !== this.generation) return;
         const { distanceMillimeters: distance, distanceAgeMs: age } =
           snapshot.observables;
         if (
@@ -216,8 +219,10 @@ export class GuardianRuntime {
             operation: "outputs.clear",
             arguments: {},
           });
+          if (generation !== this.generation) return;
           if (this.silenced) this.silenceObserved = true;
           await this.board.renewControl();
+          if (generation !== this.generation) return;
         }
         if (this.armed) {
           const color =
@@ -230,6 +235,7 @@ export class GuardianRuntime {
             operation: "pixels.set",
             arguments: { color, brightness: 0.35 },
           });
+          if (generation !== this.generation) return;
           if (
             this.state === "alert" &&
             previous !== "alert" &&
@@ -239,6 +245,7 @@ export class GuardianRuntime {
               operation: "buzzer.play",
               arguments: { frequencyHz: 880, durationMs: this.rules.alarmMs },
             });
+            if (generation !== this.generation) return;
             this.signals = true;
           }
           this.zones.add(this.state);
@@ -249,7 +256,7 @@ export class GuardianRuntime {
         this.outputDirty = false;
         this.error = null;
       } catch (cause) {
-        this.error = String(cause);
+        this.error = errorMessage(cause);
         this.armed = false;
         this.state = "safe_state";
         this.outputDirty = true;
@@ -268,8 +275,12 @@ export class GuardianRuntime {
     this.generation++;
     this.unsubscribe?.();
     this.unsubscribe = null;
-    await this.inFlight;
     this.armed = false;
+    this.state = "disarmed";
+    this.resetEvidence();
+    this.outputDirty = true;
+    this.renderedSilence = false;
+    await this.inFlight;
     await this.board.releaseControl();
   }
 }

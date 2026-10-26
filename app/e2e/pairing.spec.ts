@@ -7,6 +7,9 @@ test("installation registration and remote revocation stay separate from local c
   await page
     .getByRole("button", { name: "☰ Board Setup", exact: true })
     .click();
+  await page
+    .getByText("Parent setup & advanced maintenance", { exact: true })
+    .click();
   const management = page.getByRole("region", {
     name: "Board configuration and recovery",
   });

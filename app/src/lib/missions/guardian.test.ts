@@ -3,6 +3,46 @@ import { SimulatorBoardClient } from "../board/simulator";
 import { GuardianRuntime } from "./guardian";
 
 describe("Treasure Guardian on a Board adapter", () => {
+  it("does not send new output effects when stopped during an in-flight sensor read", async () => {
+    const simulator = new SimulatorBoardClient();
+    const effects: string[] = [];
+    let deferred = false;
+    let releaseRead: (() => void) | undefined;
+    let entered: (() => void) | undefined;
+    const reading = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+    const board = {
+      async getSnapshot() {
+        if (deferred) {
+          entered!();
+          await new Promise<void>((resolve) => {
+            releaseRead = resolve;
+          });
+        }
+        return simulator.getSnapshot();
+      },
+      subscribe: simulator.subscribe.bind(simulator),
+      renewControl: simulator.renewControl.bind(simulator),
+      releaseControl: simulator.releaseControl.bind(simulator),
+      async command(command: Parameters<SimulatorBoardClient["command"]>[0]) {
+        effects.push(command.operation);
+        await simulator.command(command);
+      },
+    };
+    const guardian = new GuardianRuntime(board);
+    await guardian.start();
+    effects.length = 0;
+    simulator.controls.pressButton(0);
+    deferred = true;
+    const tick = guardian.tick();
+    await reading;
+    const stopping = guardian.stop();
+    releaseRead!();
+    await Promise.all([tick, stopping]);
+    expect(effects.filter((effect) => effect !== "outputs.clear")).toEqual([]);
+    expect(guardian.getStatus().armed).toBe(false);
+  });
   it("requires fresh self-test inputs and human light/sound confirmation", async () => {
     const board = new SimulatorBoardClient();
     const guardian = new GuardianRuntime(board);

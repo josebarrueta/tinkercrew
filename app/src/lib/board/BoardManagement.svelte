@@ -1,6 +1,7 @@
 <script lang="ts">
   import { invoke, isTauri } from "@tauri-apps/api/core";
   import { onMount, onDestroy } from "svelte";
+  import { errorMessage } from "../errors";
   import type { UsbDevice } from "../setup/session";
 
   type Identity = {
@@ -119,12 +120,10 @@
       if (changing) await beforeChange();
       await action();
     } catch (cause) {
-      error =
-        typeof cause === "string"
-          ? cause
-          : cause instanceof Error
-            ? cause.message
-            : "Board operation failed. Check identity, credentials, and supported tooling; success has not been assumed.";
+      error = errorMessage(
+        cause,
+        "Board operation failed. Check identity, credentials, and supported tooling; success has not been assumed.",
+      );
     } finally {
       password = "";
       wifiPassword = "";
@@ -259,12 +258,13 @@
       never automatically upgrades Board firmware or the Companion.
     </p>
   </details>
-  <h3>Configure an existing UNO Q</h3>
+  <h3>Parent setup and maintenance</h3>
   <p>
-    Use your Linux username/password over a serial-targeted USB → SSH
-    connection. Wi-Fi is not required for management. Passwords are used for the
-    current request, then cleared; they are never saved to progress or browser
-    storage. Management pauses gameplay.
+    Start by selecting and inspecting the physical USB Board. Installation
+    Pairing does not need a Linux password. The separate Linux sign-in is only
+    for tasks such as changing Wi-Fi or hostname; it is not part of normal
+    Mission play. Passwords are used for one request and then cleared.
+    Management pauses gameplay.
   </p>
   {#if !native}<p class="notice">
       Browser preview only. Configuration, restart, and factory restore are

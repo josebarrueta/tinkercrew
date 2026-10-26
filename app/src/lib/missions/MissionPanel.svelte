@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import { errorMessage } from "../errors";
   import type { BoardClient, BoardSnapshot } from "../board/types";
   import type { SimulatorBoardClient } from "../board/simulator";
   import { treasureGuardian as mission } from "./catalog";
@@ -12,8 +13,14 @@
   let {
     board,
     simulation,
-  }: { board: BoardClient; simulation?: SimulatorBoardClient["controls"] } =
-    $props();
+    onSetup = () => {},
+    onHome = () => {},
+  }: {
+    board: BoardClient;
+    simulation?: SimulatorBoardClient["controls"];
+    onSetup?: () => void;
+    onHome?: () => void;
+  } = $props();
   const repository = new ProgressRepository();
   let session: MissionSession;
   let runtime: GuardianRuntime;
@@ -21,6 +28,10 @@
   let live = $state<ReturnType<GuardianRuntime["getStatus"]> | null>(null);
   let snapshot = $state<BoardSnapshot | null>(null);
   let error = $state("");
+  let hardwareError = $state("");
+  let disposed = false;
+  let controlsStarted = false;
+  let controlsTask: Promise<void> = Promise.resolve();
   let status = $state("Loading local progress…");
   let busy = $state(false);
   let polling = false;
@@ -49,8 +60,49 @@
     }
   }
 
+  function enableMissionControls(): Promise<void> {
+    if (!progress || busy || disposed) return Promise.resolve();
+    busy = true;
+    hardwareError = "";
+    controlsStarted = true;
+    controlsTask = (async () => {
+      try {
+        await runtime.start();
+        if (disposed) return;
+        await refreshLive();
+        if (live?.error) throw new Error(live.error);
+        ready = true;
+      } catch (cause) {
+        ready = false;
+        hardwareError = errorMessage(
+          cause,
+          "Reconnect your Board in Board Setup, then enable Mission controls again.",
+        );
+        await runtime.stop().catch(() => {});
+        controlsStarted = false;
+      } finally {
+        busy = false;
+      }
+    })();
+    return controlsTask;
+  }
+
+  async function stopMissionControls() {
+    if (busy) return;
+    busy = true;
+    try {
+      await runtime.stop();
+      live = runtime.getStatus();
+    } catch (cause) {
+      hardwareError = errorMessage(cause);
+    } finally {
+      ready = false;
+      controlsStarted = false;
+      busy = false;
+    }
+  }
+
   onMount(() => {
-    let disposed = false;
     let timer: ReturnType<typeof setInterval> | undefined;
     const initialization = (async () => {
       try {
@@ -67,30 +119,41 @@
         status = "Progress saved on this Mac only.";
         runtime = new GuardianRuntime(board, progress.guardianRules);
         if (progress.completion) return;
-        await runtime.start();
-        ready = true;
-        await refreshLive();
+        if (simulation) {
+          await enableMissionControls();
+        } else {
+          // Opening a story is not consent to a physical output lease.
+          try {
+            snapshot = await board.getSnapshot();
+          } catch (cause) {
+            hardwareError = errorMessage(cause);
+          }
+        }
         if (disposed) return;
         timer = setInterval(() => {
-          if (polling || busy || progress?.completion) return;
+          if (!ready || polling || busy || progress?.completion) return;
           polling = true;
           void refreshLive()
-            .catch((cause) => {
-              error = String(cause);
+            .catch(async (cause) => {
+              hardwareError = errorMessage(cause);
+              ready = false;
+              controlsStarted = false;
+              await runtime.stop().catch(() => {});
+              live = runtime.getStatus();
             })
             .finally(() => {
               polling = false;
             });
         }, 250);
       } catch (cause) {
-        error = `Could not open this Mission: ${String(cause)}. Existing saves have not been replaced.`;
+        error = `Could not open this Mission: ${errorMessage(cause)}. Existing saves have not been replaced.`;
       }
     })();
     return () => {
       disposed = true;
       clearInterval(timer);
-      void initialization
-        .then(() => runtime?.stop())
+      void Promise.all([initialization, controlsTask])
+        .then(() => (controlsStarted ? runtime?.stop() : undefined))
         .catch(() => {
           /* Board watchdog clears outputs if unavailable. */
         });
@@ -101,20 +164,26 @@
     if (!progress || busy) return;
     busy = true;
     error = "";
+    let changedProgress = false;
     try {
       await action();
+      changedProgress = true;
       progress = session.getProgress();
       status = "Saving…";
       await repository.save(progress);
       status = "Progress saved on this Mac only.";
       if (progress.completion) {
         ready = false;
-        await runtime.stop();
+        if (controlsStarted) {
+          await runtime.stop();
+          controlsStarted = false;
+        }
       }
     } catch (cause) {
-      error = String(cause);
-      status =
-        "Check the message above. Use Save again to retry an unsaved change.";
+      error = errorMessage(cause);
+      status = changedProgress
+        ? "Your latest change is not saved yet. Use Save again to retry; existing saves have not been replaced."
+        : "This step was not completed. Follow the message and try again; existing saves have not been replaced.";
     } finally {
       busy = false;
     }
@@ -142,12 +211,61 @@
   }
 </script>
 
+{#snippet missionControls()}
+  {#if progress && stage && !progress.completion}
+    <section class="control-status" aria-label="Mission Board connection">
+      <p>
+        <strong
+          >{simulation
+            ? "Practice simulator — no physical outputs"
+            : "Connected Board"}</strong
+        >{#if !ready}
+          · <strong>Mission controls are off.</strong>{/if}
+      </p>
+      <details
+        open={stage.condition.kind === "observable" ||
+          stage.condition.kind === "remix" ||
+          !!hardwareError}
+      >
+        <summary>Mission hardware controls (lights &amp; sound)</summary>
+        {#if !ready}
+          <p>
+            Your story and saved progress are available. Enable controls only
+            when the connected components are ready for lights and sound.
+            Reconnecting never reenables them automatically.
+          </p>
+          <button disabled={busy} onclick={enableMissionControls}
+            >Enable Mission controls</button
+          >
+        {:else}
+          <p>
+            Mission controls enabled. Press A to arm the guardian, B to silence,
+            C to disarm.
+          </p>
+          <button disabled={busy} onclick={stopMissionControls}
+            >Stop Mission controls</button
+          >
+        {/if}
+      </details>
+      {#if hardwareError}<p role="alert" class="error">{hardwareError}</p>
+        <button onclick={onSetup}>Reconnect in Board Setup</button>{/if}
+    </section>
+  {/if}
+{/snippet}
+
 <section class="mission">
-  <p class="eyebrow">{mission.world} / MISSION 05</p>
+  <div class="mission-navigation">
+    <button onclick={onHome}>Back to Home Base</button>
+    <button onclick={onSetup}>Open Board Setup</button>
+  </div>
   <h2>{mission.title}</h2>
-  <p>{mission.narrative}</p>
+  <details class="mission-intro">
+    <summary>About this Mission · {mission.world}</summary>
+    <p>{mission.narrative}</p>
+  </details>
   <p role="status">{status}</p>
   {#if error}<p class="error" role="alert">{error}</p>{/if}
+  {#if stage && stage.condition.kind !== "human"}{@render missionControls()}{/if}
   {#if progress && stage}
     <progress
       aria-label="Mission progress"
@@ -206,6 +324,11 @@
     {#if progress.completion}
       <article>
         <h3>Mission complete — your invention, your rules!</h3>
+        <p>
+          This is your Crew's saved Mission progress, not proof of physical
+          Board acceptance. Simulator practice does not verify connected
+          hardware.
+        </p>
         <p>{progress.remix}</p>
         <p>Changed: {progress.reflection?.changed}</p>
         <p>Surprised us: {progress.reflection?.failed}</p>
@@ -223,7 +346,9 @@
         <p>Stage {progress.stageIndex + 1} of {mission.stages.length}</p>
         <h3>{stage.title}</h3>
         <p>{stage.goal}</p>
-        {#if stage.id === "build"}<HardwareSafety />{/if}
+        {#if stage.id === "build"}<details>
+            <summary>Wiring safety details</summary><HardwareSafety />
+          </details>{/if}
         <p>
           Required: {mission.components.required.join(", ")}. Optional: {mission.components.optional.join(
             ", ",
@@ -317,8 +442,10 @@
                 >Restart behavior challenge</button
               >
             {/if}
-            <button class="primary" onclick={() => act(continueMission)}
-              >Check and continue →</button
+            <button
+              class="primary"
+              disabled={!ready}
+              onclick={() => act(continueMission)}>Check and continue →</button
             >
           {/if}
           <button
@@ -333,141 +460,156 @@
             </p>{/each}
         </fieldset>
       </article>
-      <fieldset disabled={!ready || busy}>
-        <legend>Live guardian — {snapshot?.mode ?? "Board"}</legend>
-        <p aria-live="polite">
-          <strong data-testid="guardian-state"
-            >{live?.state ?? "starting"}</strong
-          >
-          · {snapshot?.observables.distanceMillimeters ?? "—"} mm · {live?.silenced
-            ? "silenced"
-            : "sound enabled"}
-        </p>
-        {#if live?.error}<p class="error" role="alert">{live.error}</p>{/if}
-        <div class="outputs">
-          <span
-            class="pixel"
-            style:background={snapshot?.outputs.pixels?.color ?? "#777"}
-          ></span>
-          <span>Pixels: {snapshot?.outputs.pixels?.color ?? "off"}</span>
-          <span
-            >Buzzer: {snapshot?.outputs.buzzer
-              ? `${snapshot.outputs.buzzer.frequencyHz} Hz / ${snapshot.outputs.buzzer.durationMs} ms`
-              : "off"}</span
-          >
-        </div>
-        {#if simulation}
-          <label
-            >Simulated distance (mm)<input
-              type="range"
-              min="20"
-              max="1000"
-              step="10"
-              value={snapshot?.observables.distanceMillimeters ?? 600}
-              oninput={(event) => {
-                simulation?.setDistance(Number(event.currentTarget.value));
-              }}
-            /></label
-          >
-          {#each ["A — Arm", "B — Silence", "C — Disarm"] as label, index}
-            <button onclick={() => simulation?.pressButton(index)}
-              >{label}</button
+      {#if stage.condition.kind === "human"}{@render missionControls()}{/if}
+      {#if ready}
+        <fieldset disabled={busy}>
+          <legend>Live guardian — {snapshot?.mode ?? "Board"}</legend>
+          <p aria-live="polite">
+            <strong data-testid="guardian-state"
+              >{live?.state ?? "starting"}</strong
             >
-          {/each}
-          <label class="check"
-            ><input
-              type="checkbox"
-              onchange={(event) =>
-                simulation?.freezeDistance(event.currentTarget.checked)}
-            />Freeze distance readings (safety experiment)</label
-          >
-        {:else}
-          <p>
-            Move an object in front of the distance sensor and use the Board's
-            A, B, and C buttons.
+            · {snapshot?.observables.distanceMillimeters ?? "—"} mm · {live?.silenced
+              ? "silenced"
+              : "sound enabled"}
           </p>
-        {/if}
-        <details>
-          <summary>Inventor — adjust the rules</summary>
-          <div class="crew-grid">
-            <label
-              >Intruder boundary (mm)<input
-                type="number"
-                min="20"
-                max="3800"
-                bind:value={intruderMm}
-              /></label
-            >
-            <label
-              >Warning boundary (mm)<input
-                type="number"
-                min="40"
-                max="4000"
-                bind:value={warningMm}
-              /></label
-            >
-            <label
-              >Warning color<input
-                type="color"
-                bind:value={warningColor}
-              /></label
-            >
-            <label
-              >Alarm duration (ms)<input
-                type="number"
-                min="100"
-                max="1000"
-                bind:value={alarmMs}
-              /></label
+          {#if live?.error}<p class="error" role="alert">{live.error}</p>{/if}
+          <div class="outputs">
+            <span
+              class="pixel"
+              style:background={snapshot?.outputs.pixels?.color ?? "#777"}
+            ></span>
+            <span>Pixels: {snapshot?.outputs.pixels?.color ?? "off"}</span>
+            <span
+              >Buzzer: {snapshot?.outputs.buzzer
+                ? `${snapshot.outputs.buzzer.frequencyHz} Hz / ${snapshot.outputs.buzzer.durationMs} ms`
+                : "off"}</span
             >
           </div>
-          <button
-            onclick={() =>
-              act(() =>
-                applyRules({
-                  ...runtime.getStatus().rules,
-                  intruderMm,
-                  warningMm,
-                  warningColor,
-                  alarmMs,
-                }),
-              )}>Apply and test rules</button
-          >
-        </details>
-        <details>
-          <summary>Hacker — bounded rule configuration & event log</summary>
-          <p>
-            This JSON is data, never executable code. Only the six displayed
-            rules are accepted.
-          </p>
-          <label
-            >Guardian rule JSON<textarea rows="10" bind:value={ruleText}
-            ></textarea></label
-          >
-          <button onclick={() => act(() => applyRules(JSON.parse(ruleText)))}
-            >Validate and apply JSON</button
-          >
-          <pre>{live?.log.join("\n") ?? "Waiting for input events…"}</pre>
-        </details>
-        <details>
-          <summary>Live evidence</summary>
-          <pre>{JSON.stringify(live?.evidence, null, 2)}</pre>
-        </details>
-      </fieldset>
+          {#if simulation}
+            <label
+              >Simulated distance (mm)<input
+                type="range"
+                min="20"
+                max="1000"
+                step="10"
+                value={snapshot?.observables.distanceMillimeters ?? 600}
+                oninput={(event) => {
+                  simulation?.setDistance(Number(event.currentTarget.value));
+                }}
+              /></label
+            >
+            {#each ["A — Arm", "B — Silence", "C — Disarm"] as label, index}
+              <button onclick={() => simulation?.pressButton(index)}
+                >{label}</button
+              >
+            {/each}
+            <label class="check"
+              ><input
+                type="checkbox"
+                onchange={(event) =>
+                  simulation?.freezeDistance(event.currentTarget.checked)}
+              />Freeze distance readings (safety experiment)</label
+            >
+          {:else}
+            <p>
+              Move an object in front of the distance sensor and use the Board's
+              A, B, and C buttons.
+            </p>
+          {/if}
+          <details>
+            <summary>Inventor — adjust the rules</summary>
+            <div class="crew-grid">
+              <label
+                >Intruder boundary (mm)<input
+                  type="number"
+                  min="20"
+                  max="3800"
+                  bind:value={intruderMm}
+                /></label
+              >
+              <label
+                >Warning boundary (mm)<input
+                  type="number"
+                  min="40"
+                  max="4000"
+                  bind:value={warningMm}
+                /></label
+              >
+              <label
+                >Warning color<input
+                  type="color"
+                  bind:value={warningColor}
+                /></label
+              >
+              <label
+                >Alarm duration (ms)<input
+                  type="number"
+                  min="100"
+                  max="1000"
+                  bind:value={alarmMs}
+                /></label
+              >
+            </div>
+            <button
+              onclick={() =>
+                act(() =>
+                  applyRules({
+                    ...runtime.getStatus().rules,
+                    intruderMm,
+                    warningMm,
+                    warningColor,
+                    alarmMs,
+                  }),
+                )}>Apply and test rules</button
+            >
+          </details>
+          <details>
+            <summary>Hacker — bounded rule configuration & event log</summary>
+            <p>
+              This JSON is data, never executable code. Only the six displayed
+              rules are accepted.
+            </p>
+            <label
+              >Guardian rule JSON<textarea rows="10" bind:value={ruleText}
+              ></textarea></label
+            >
+            <button onclick={() => act(() => applyRules(JSON.parse(ruleText)))}
+              >Validate and apply JSON</button
+            >
+            <pre>{live?.log.join("\n") ?? "Waiting for input events…"}</pre>
+          </details>
+          <details>
+            <summary>Live evidence</summary>
+            <pre>{JSON.stringify(live?.evidence, null, 2)}</pre>
+          </details>
+        </fieldset>
+      {/if}
     {/if}
     <button disabled={busy} onclick={() => act(() => {})}>Save again</button>
   {/if}
 </section>
 
 <style>
-  .mission {
-    margin-top: 30px;
-    max-width: 1100px;
+  .mission-navigation {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
   }
-  .eyebrow {
-    color: var(--primary);
-    font-weight: 800;
-    letter-spacing: 0.1em;
+  .mission-intro {
+    margin-bottom: 12px;
+  }
+  .control-status {
+    padding: 12px 16px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    margin-bottom: 16px;
+  }
+  .control-status p {
+    margin: 8px 0;
+  }
+  .mission {
+    margin-top: 20px;
+    max-width: 1100px;
   }
   h2 {
     font-size: 38px;
@@ -477,6 +619,7 @@
   }
   h3 {
     font-size: 24px;
+    margin: 8px 0 12px;
   }
   fieldset {
     border: 1px solid var(--border);

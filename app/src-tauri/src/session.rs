@@ -344,9 +344,26 @@ async fn post_authorized(
         header.set_sensitive(true);
         request = request.header(reqwest::header::AUTHORIZATION, header);
     }
-    let mut response = request.send().await.map_err(|_| failure())?;
-    if !response.status().is_success() {
+    let mut response = request.send().await.map_err(|_| ConnectionError::new(
+        "companion_unavailable",
+        "The Companion did not answer securely. Keep your saved Pairing. Check Board power and USB; after a Board restart, start the installed Companion through official App Lab before retrying. This may compile/upload firmware and needs parent approval.",
+    ))?;
+    if response.status() == reqwest::StatusCode::UNAUTHORIZED
+        || response.status() == reqwest::StatusCode::FORBIDDEN
+    {
         return Err(failure());
+    }
+    if response.status() == reqwest::StatusCode::TOO_MANY_REQUESTS {
+        return Err(ConnectionError::new(
+            "authentication_busy",
+            "The Board is limiting authentication attempts. Keep your saved Pairing, wait one minute, then reconnect.",
+        ));
+    }
+    if !response.status().is_success() {
+        return Err(ConnectionError::new(
+            "companion_unavailable",
+            "The Companion service could not complete authentication. Keep your saved Pairing and retry after checking the running app; no credentials were replaced.",
+        ));
     }
     let mut bytes = Zeroizing::new(Vec::new());
     while let Some(chunk) = response.chunk().await.map_err(|_| failure())? {
@@ -362,6 +379,105 @@ async fn post_authorized(
 mod tests {
     use super::*;
     use std::io::{BufRead, BufReader, Write};
+
+    #[test]
+    fn unreachable_companion_is_not_reported_as_rejected_installation_keys() {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        drop(listener);
+        let client = reqwest::Client::builder()
+            .no_proxy()
+            .connect_timeout(Duration::from_millis(100))
+            .timeout(Duration::from_millis(200))
+            .build()
+            .unwrap();
+        let error = tauri::async_runtime::block_on(post(
+            &client,
+            "127.0.0.1",
+            port,
+            "/v1/sessions/challenge",
+            &json!({"fixture":"no credentials"}),
+        ))
+        .unwrap_err();
+        assert_eq!(error.code, "companion_unavailable");
+        assert!(error.message.contains("Pairing"));
+    }
+
+    #[test]
+    fn authentication_transport_distinguishes_unavailable_busy_and_rejected_peers() {
+        use std::io::Read;
+        for (status, expected) in [
+            (503, "companion_unavailable"),
+            (429, "authentication_busy"),
+            (401, "authentication_failed"),
+        ] {
+            let cert = rcgen::generate_simple_self_signed(vec!["127.0.0.1".into()]).unwrap();
+            let root = reqwest::Certificate::from_der(cert.cert.der()).unwrap();
+            let mut acceptor = openssl::ssl::SslAcceptor::mozilla_intermediate(
+                openssl::ssl::SslMethod::tls_server(),
+            )
+            .unwrap();
+            acceptor
+                .set_certificate(&openssl::x509::X509::from_der(cert.cert.der()).unwrap())
+                .unwrap();
+            acceptor
+                .set_private_key(
+                    &openssl::pkey::PKey::private_key_from_der(&cert.signing_key.serialize_der())
+                        .unwrap(),
+                )
+                .unwrap();
+            let acceptor = acceptor.build();
+            let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+            let port = listener.local_addr().unwrap().port();
+            let peer = std::thread::spawn(move || {
+                let (socket, _) = listener.accept().unwrap();
+                socket
+                    .set_read_timeout(Some(Duration::from_secs(2)))
+                    .unwrap();
+                let mut stream = acceptor.accept(socket).unwrap();
+                let mut reader = BufReader::new(&mut stream);
+                let mut length = 0;
+                loop {
+                    let mut line = String::new();
+                    reader.read_line(&mut line).unwrap();
+                    if line == "\r\n" {
+                        break;
+                    }
+                    if line.to_lowercase().starts_with("content-length:") {
+                        length = line
+                            .split(':')
+                            .nth(1)
+                            .unwrap()
+                            .trim()
+                            .parse::<usize>()
+                            .unwrap();
+                    }
+                }
+                assert!(length < 4096);
+                let mut body = vec![0; length];
+                reader.read_exact(&mut body).unwrap();
+                drop(reader);
+                write!(stream,"HTTP/1.1 {status} Fixture\r\nContent-Length: 2\r\nConnection: close\r\n\r\n{{}}").unwrap();
+                stream.flush().unwrap();
+            });
+            let client = reqwest::Client::builder()
+                .https_only(true)
+                .no_proxy()
+                .tls_certs_only([root])
+                .timeout(Duration::from_secs(2))
+                .build()
+                .unwrap();
+            let result = tauri::async_runtime::block_on(post(
+                &client,
+                "127.0.0.1",
+                port,
+                "/v1/sessions/challenge",
+                &json!({"fixture":"not credentials"}),
+            ));
+            peer.join().unwrap();
+            assert_eq!(result.unwrap_err().code, expected);
+        }
+    }
 
     #[test]
     fn dedicated_ssh_memory_key_matches_the_registered_key_and_is_not_gameplay_authority() {

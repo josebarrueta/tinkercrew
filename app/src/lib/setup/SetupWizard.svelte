@@ -7,7 +7,7 @@
     type SetupProgress,
     type UsbDevice,
   } from "./session";
-  import { connectionError } from "../board/connection";
+  import { errorMessage } from "../errors";
   import ObservedSetup, { type Observation } from "./ObservedSetup.svelte";
 
   let {
@@ -106,12 +106,10 @@
         "Setup checkpoints saved in Keychain. Human handoffs are recorded as human confirmations, not automatic verification.";
     } catch (cause) {
       confirmed = false;
-      error =
-        typeof cause === "string"
-          ? cause
-          : cause instanceof Error
-            ? cause.message
-            : connectionError(cause).message;
+      error = errorMessage(
+        cause,
+        "Setup could not be saved. Retry without deleting existing checkpoints.",
+      );
       status =
         "Check the message above; retry saving if a checkpoint was not saved. No Linux configuration was changed by this guide.";
     } finally {
