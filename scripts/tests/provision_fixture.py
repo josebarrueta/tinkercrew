@@ -16,4 +16,13 @@ def request(operation, **body):
 job = request("begin", release=package["release"], sha256=hashlib.sha256(raw).hexdigest(), size=len(raw))
 for offset in range(0, len(raw), 8192):
     request("chunk", token=job["token"], offset=offset, data=base64.b64encode(raw[offset:offset + 8192]).decode())
-print(json.dumps(request("publish", token=job["token"])))
+request("publish", token=job["token"])
+# Substitute only official App CLI metadata handling, never compilation/upload.
+# v0.9.0 migrateRemoveRouterBridgeIfNeeded removes the explicit Bridge library
+# on an unversioned zephyr profile when the installed core is newer than 0.54.1.
+# Receipt integrity must still hold after the supported first-start handling.
+profile = apps / "tinkercrew-companion/sketch/sketch.yaml"
+text = profile.read_text()
+if "platform: arduino:zephyr\n" in text:
+    profile.write_text("\n".join(line for line in text.splitlines() if line.strip() != "- Arduino_RouterBridge") + "\n")
+print(json.dumps(request("inspect")))

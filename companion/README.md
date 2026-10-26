@@ -8,7 +8,11 @@ Connect Modulino Buttons, Pixels, Buzzer, and Distance through the UNO Q Qwiic c
 
 ## Install and start on UNO Q
 
-Copy this directory to `/home/arduino/ArduinoApps/tinkercrew-companion`, then use the version of `arduino-app-cli` installed on the Board:
+For a **clean, absent target only**, copy this directory to `/home/arduino/ArduinoApps/tinkercrew-companion`, then use the version of `arduino-app-cli` installed on the Board. Never overlay an owned preparation or replace its identity/receipt by hand. Prefer the fixed native preparation flow below.
+
+The current profile pins Zephyr **0.55.0** and its complete explicit library dependency chain. [Real compile-only evidence](../docs/qa/uno-q-2026-10-26-compile-only.md) confirms compilation, not upload/start/runtime. Do not remove the platform pin: measured App CLI **0.9.0** otherwise rewrites the Bridge dependency and breaks preparation integrity. The already-prepared owner Board still has the old profile; its first start remains blocked by **#29** until an approved recoverable identity-preserving correction exists.
+
+The commands below are firmware-capable official-tool handoffs, **not compile-only instructions**; do not run them without separate owner approval:
 
 ```sh
 arduino-app-cli app build tinkercrew-companion
@@ -47,7 +51,7 @@ The installation commands above are **not** this update primitive: official app 
 
 ## Initial files, identity and renewal
 
-On a supported configured Debian 13 / `arduino` UID-1000 Board, native Board Setup can prepare only its fixed initial source and private TBP identity into an absent app directory. Existing app/configuration/key data is not overwritten. The owner then explicitly starts the app in official App Lab; start may upload the sketch or stop another app, so preparation never claims that firmware/start succeeded. Pairing now verifies the restricted dedicated SSH key against a USB-read host identity before remembering the Board. Prepared certificates can renew with the same key; the supervisor detects the certificate change and restarts only its owned Linux child. Read the [exact preparation constraints](../docs/architecture/initial-provisioning.md) and [integrated guide evidence contract](../docs/architecture/setup-checkpoints.md). None of this has been validated on a real UNO Q.
+On a supported configured Debian 13 / `arduino` UID-1000 Board, native Board Setup can prepare only its fixed initial source and private TBP identity into an absent app directory. Existing app/configuration/key data is not overwritten. The owner then explicitly starts the app in official App Lab; start may upload the sketch or stop another app, so preparation never claims that firmware/start succeeded. Pairing now verifies the restricted dedicated SSH key against a USB-read host identity before remembering the Board. Prepared certificates can renew with the same key; the supervisor detects the certificate change and restarts only its owned Linux child. Read the [exact preparation constraints](../docs/architecture/initial-provisioning.md) and [integrated guide evidence contract](../docs/architecture/setup-checkpoints.md). Real UNO Q acceptance covers only read-only inspection, initial absent-target source/private identity preparation and the separate temporary compile-only check; app startup/container dependencies, Pairing, renewal during execution and full setup remain unverified. See the [read-only report](../docs/qa/uno-q-2026-10-25-read-only.md) and [compile-only report](../docs/qa/uno-q-2026-10-26-compile-only.md).
 
 ## API
 
