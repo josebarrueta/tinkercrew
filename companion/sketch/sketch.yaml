@@ -1,8 +1,20 @@
 profiles:
   default:
     platforms:
-      - platform: arduino:zephyr
+      - platform: arduino:zephyr (0.55.0)
     libraries:
-      - Arduino_Modulino
-      - Arduino_RouterBridge
+      - ArduinoGraphics (1.1.5)
+      - Arduino_HS300x (1.0.0)
+      - Arduino_LPS22HB (1.0.2)
+      - Arduino_LSM6DSOX (1.1.2)
+      - Arduino_LTR381RGB (1.0.1)
+      - Arduino_Modulino (0.8.0)
+      - Arduino_RPClite (0.2.1)
+      - Arduino_RouterBridge (0.4.1)
+      - ArxContainer (0.7.0)
+      - ArxTypeTraits (0.3.2)
+      - DebugLog (0.8.4)
+      - MsgPack (0.4.2)
+      - STM32duino VL53L4CD (1.0.5)
+      - STM32duino VL53L4ED (1.0.1)
 default_profile: default

@@ -505,6 +505,36 @@ mod tests {
     use std::io::Write;
 
     #[test]
+    fn initial_package_matches_the_recorded_compile_only_sketch_contract() {
+        let (_, bytes) = baseline_bundle().unwrap();
+        let package: Value = serde_json::from_slice(&bytes).unwrap();
+        // Independent owner-approved compiler evidence, not a recomputed snapshot.
+        // Revalidate the compile-only contract before changing these expected hashes.
+        for (name, wanted) in [
+            (
+                "sketch/sketch.ino",
+                "4e587a4772876fa67a4bee0d8f07b691b2cd5643dfbc08843a87aed632b0e457",
+            ),
+            (
+                "sketch/sketch.yaml",
+                "4819667d3cc834ddf3cc5d72a2431717ab7e027865fc8ed8304df20319877cd2",
+            ),
+        ] {
+            let source = STANDARD
+                .decode(package["files"][name].as_str().unwrap())
+                .unwrap();
+            let actual: String = Sha256::digest(source)
+                .iter()
+                .map(|byte| format!("{byte:02x}"))
+                .collect();
+            assert_eq!(
+                actual, wanted,
+                "Compiled package drifted from the documented compile-only evidence: {name}"
+            );
+        }
+    }
+
+    #[test]
     fn initial_package_is_accepted_by_the_fixed_provisioner_without_starting_firmware() {
         let directory = tempfile::tempdir().unwrap();
         let (release, bytes) = baseline_bundle().unwrap();
