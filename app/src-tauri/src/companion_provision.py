@@ -1,7 +1,8 @@
-"""Fixed initial Companion source/identity provisioning. Never runs Arduino CLI or firmware writers."""
+"""Fixed source/identity preparation and owned unstarted profile correction. No compile/start/stop/firmware operations."""
 import base64
 from contextlib import contextmanager
 import fcntl
+import ctypes
 import hashlib
 import hmac
 import json
@@ -18,6 +19,10 @@ import uuid
 
 SOURCE_FILES = ("app.yaml", "sketch/sketch.ino", "sketch/sketch.yaml", "python/main.py", "python/management.py", "python/requirements.txt", "python/requirements-auth.txt", *("python/tinkercrew_companion/" + name + ".py" for name in ("__init__", "auth", "core", "discovery", "hardware", "server", "management", "deployment", "supervisor")))
 MAX_PACKAGE = 2 * 1024 * 1024
+CORRECTION_OLD = "63e90d374bc27c69b2fd810f851fed9a51d00abaaa82ce6369ba4b7cac7feef3"
+CORRECTION_NEW = "d3c762374833ecce711fdd4a0b3c2727a846c443a34c2ba426de457610c6b6fe"
+IDENTITY_FILES = ("identity-provision.json", "companion.json", "board.key", "board.crt")
+CORRECTED_PROFILE = b"profiles:\n  default:\n    platforms:\n      - platform: arduino:zephyr (0.55.0)\n    libraries:\n      - ArduinoGraphics (1.1.5)\n      - Arduino_HS300x (1.0.0)\n      - Arduino_LPS22HB (1.0.2)\n      - Arduino_LSM6DSOX (1.1.2)\n      - Arduino_LTR381RGB (1.0.1)\n      - Arduino_Modulino (0.8.0)\n      - Arduino_RPClite (0.2.1)\n      - Arduino_RouterBridge (0.4.1)\n      - ArxContainer (0.7.0)\n      - ArxTypeTraits (0.3.2)\n      - DebugLog (0.8.4)\n      - MsgPack (0.4.2)\n      - STM32duino VL53L4CD (1.0.5)\n      - STM32duino VL53L4ED (1.0.1)\ndefault_profile: default\n"
 
 
 class ProvisionError(Exception):
@@ -111,8 +116,44 @@ def boot_identity():
         return subprocess.run(["/usr/sbin/sysctl", "-n", "kern.bootsessionuuid"], check=True, capture_output=True, text=True, timeout=2).stdout.strip()
 
 
+def inspect_app_state():
+    """Only read-only official-tool queries; no start/build/stop/firmware command."""
+    def query(arguments):
+        environment = {"HOME": "/home/arduino", "USER": "arduino", "LOGNAME": "arduino", "PATH": "/usr/bin:/bin", "LC_ALL": "C", "ARDUINO_APP_CLI__APPS_DIR": "/home/arduino/ArduinoApps"}
+        result = subprocess.run(["/usr/bin/arduino-app-cli", *arguments, "--format", "json"], stdin=subprocess.DEVNULL, capture_output=True, timeout=8, env=environment)
+        if result.returncode or len(result.stdout) > 131072 or len(result.stderr) > 8192:
+            raise ProvisionError("unsupported_app_inspection")
+        return json.loads(result.stdout, object_pairs_hook=unique)
+    version = query(["version"])
+    if version.get("version") != "0.9.0" or version.get("daemon_version") != "0.9.0":
+        raise ProvisionError("unsupported_app_inspection")
+    apps = query(["app", "list"])
+    matches = [app for app in apps.get("apps", []) if app.get("id") == "dXNlcjp0aW5rZXJjcmV3LWNvbXBhbmlvbg"]
+    if len(matches) != 1:
+        raise ProvisionError("unsupported_app_inspection")
+    return matches[0].get("status")
+
+
+def exchange_directories(first, second):
+    """Atomic same-filesystem exchange; no two-rename/non-atomic fallback."""
+    library = ctypes.CDLL(None, use_errno=True)
+    if sys.platform == "linux":
+        function = library.renameat2
+        function.argtypes = [ctypes.c_int, ctypes.c_char_p, ctypes.c_int, ctypes.c_char_p, ctypes.c_uint]
+        arguments = (-100, os.fsencode(first), -100, os.fsencode(second), 2)
+    elif sys.platform == "darwin":  # Public filesystem seam exercised by Mac temporary-tree tests.
+        function = library.renamex_np
+        function.argtypes = [ctypes.c_char_p, ctypes.c_char_p, ctypes.c_uint]
+        arguments = (os.fsencode(first), os.fsencode(second), 2)
+    else:
+        raise ProvisionError("unsupported_atomic_exchange")
+    function.restype = ctypes.c_int
+    if function(*arguments) != 0:
+        raise ProvisionError("atomic_exchange_not_confirmed")
+
+
 class CompanionProvisioning:
-    def __init__(self, apps, *, inspect=inspect_host, openssl="/usr/bin/openssl", clock=time.monotonic, boot=None):
+    def __init__(self, apps, *, inspect=inspect_host, openssl="/usr/bin/openssl", clock=time.monotonic, boot=None, app_state=inspect_app_state, exchange=exchange_directories):
         no_links(Path(apps))
         self.apps = Path(apps).resolve()
         self.root = self.apps / "tinkercrew-companion"
@@ -121,6 +162,8 @@ class CompanionProvisioning:
         self.openssl = openssl
         self.clock = clock
         self.boot = boot or boot_identity()
+        self.app_state = app_state
+        self.exchange = exchange
 
     @contextmanager
     def locked(self):
@@ -169,7 +212,160 @@ class CompanionProvisioning:
                 read_file(certificate, 8192)
                 public_pem = self.tool(["x509", "-in", str(certificate), "-outform", "PEM"]).decode()
                 result["identity"] = {"board_id": config.get("board_id"), "tls_name": config.get("tls_name"), "certificate_pem": public_pem}
+        correction = self.directory / "profile-correction.json"
+        if correction.exists() or correction.is_symlink():
+            phase = read_json(correction).get("phase")
+            if phase not in {"staging", "exchange_pending", "corrected", "restore_pending", "restored"}:
+                raise ProvisionError("corrupt_profile_correction")
+            result["correctionPhase"] = phase
         return result
+
+    def correction_tree(self, root, release):
+        """Exact never-started layout only; no caches, registries, links or foreign data."""
+        expected = set(SOURCE_FILES) | {".tinkercrew-install.json"} | {"data/" + name for name in IDENTITY_FILES}
+        directories = {"python", "python/tinkercrew_companion", "sketch", "data"}
+        no_links(root)
+        paths = [root]
+        for path in root.rglob("*"):
+            if len(paths) >= 32:
+                raise ProvisionError("not_a_never_started_preparation")
+            paths.append(path)
+        for path in paths:
+            no_links(path)
+            metadata = path.stat()
+            if metadata.st_uid != os.geteuid() or metadata.st_mode & 0o077:
+                raise ProvisionError("unsupported_prepared_storage")
+            if not path.is_dir() and (not path.is_file() or metadata.st_nlink != 1):
+                raise ProvisionError("unsupported_prepared_storage")
+        actual_files = {str(path.relative_to(root)) for path in paths[1:] if not path.is_dir()}
+        actual_directories = {str(path.relative_to(root)) for path in paths[1:] if path.is_dir()}
+        if actual_files != expected or actual_directories != directories:
+            raise ProvisionError("not_a_never_started_preparation")
+        source = {name: read_file(root / name) for name in SOURCE_FILES}
+        if release_id(source) != release or read_json(root / ".tinkercrew-install.json") != {"format": 1, "release": release}:
+            raise ProvisionError("different_or_modified_baseline")
+        return source
+
+    def correction_identity(self, root, release, serial):
+        # All four identity files must already exist: this must never generate/renew anything.
+        self.correction_tree(root, release)
+        other = CompanionProvisioning(root.parent, inspect=self.inspect, openssl=self.openssl, clock=self.clock, boot=self.boot)
+        other.root = root
+        result = other.identity_metadata(release, serial)
+        return {"boardId": result["board_id"], "spkiSha256": result["spki_sha256"], "certificateSha256": digest(result["certificate_pem"].encode()), "configSha256": digest(read_file(root / "data/companion.json", 8192))}
+
+    def profile_correction(self, release, serial, restore=False):
+        if hex_id(release) != CORRECTION_NEW:
+            raise ProvisionError("unsupported_prepared_correction")
+        stage = self.directory / "prepared-profile-backup"
+        journal = self.directory / "profile-correction.json"
+        phase = "restored" if restore else "corrected"
+        wanted = CORRECTION_OLD if restore else CORRECTION_NEW
+        state = read_json(journal) if journal.exists() or journal.is_symlink() else None
+        if state is not None and (not isinstance(state, dict) or set(state) != {"format", "serial", "phase", "boardId", "spkiSha256", "certificateSha256", "configSha256"} or state["format"] != 1 or state["serial"] != serial or state["phase"] not in {"staging", "exchange_pending", "corrected", "restore_pending", "restored"}):
+            raise ProvisionError("corrupt_profile_correction")
+        current = self.installed()["release"]
+        if state and current == wanted and state["phase"] == phase:
+            if self.correction_identity(self.root, current, serial) != {key: state[key] for key in ("boardId", "spkiSha256", "certificateSha256", "configSha256")}:
+                raise ProvisionError("identity_changed")
+            backup_release = CORRECTION_NEW if restore else CORRECTION_OLD
+            if self.correction_identity(stage, backup_release, serial) != {key: state[key] for key in ("boardId", "spkiSha256", "certificateSha256", "configSha256")}:
+                raise ProvisionError("identity_changed")
+            return dict(self.status(), serial=serial, correctionPhase=phase)
+        if self.app_state() != "uninitialized":
+            raise ProvisionError("prepared_app_must_be_uninitialized")
+        if state is None:
+            if restore or current != CORRECTION_OLD or stage.exists() or stage.is_symlink():
+                raise ProvisionError("unsupported_prepared_correction")
+            original = self.correction_tree(self.root, CORRECTION_OLD)
+            job = self.job()
+            if not job or job["phase"] != "published" or job["release"] != CORRECTION_OLD:
+                raise ProvisionError("unsupported_prepared_ownership")
+            identity = self.correction_identity(self.root, CORRECTION_OLD, serial)
+            candidate = dict(original, **{"sketch/sketch.yaml": CORRECTED_PROFILE})
+            if release_id(candidate) != CORRECTION_NEW:
+                raise ProvisionError("unsupported_prepared_correction")
+            if shutil.disk_usage(self.apps).free < 4 * MAX_PACKAGE:
+                raise ProvisionError("insufficient_storage")
+            state = dict(format=1, serial=serial, phase="staging", **identity)
+            atomic(journal, state)  # Durable intent precedes even private staging.
+        expected_identity = {key: state[key] for key in ("boardId", "spkiSha256", "certificateSha256", "configSha256")}
+        if state["phase"] == "staging":
+            if current != CORRECTION_OLD:
+                raise ProvisionError("corrupt_profile_correction")
+            source = self.correction_tree(self.root, CORRECTION_OLD)
+            if self.correction_identity(self.root, CORRECTION_OLD, serial) != expected_identity:
+                raise ProvisionError("identity_changed")
+            source["sketch/sketch.yaml"] = CORRECTED_PROFILE
+            content = dict(source)
+            content.update({"data/" + name: read_file(self.root / "data" / name, 8192) for name in IDENTITY_FILES})
+            identity_journal = json.loads(content["data/identity-provision.json"], object_pairs_hook=unique)
+            identity_journal["release"] = CORRECTION_NEW
+            content["data/identity-provision.json"] = json.dumps(identity_journal, sort_keys=True, separators=(",", ":")).encode()
+            content[".tinkercrew-install.json"] = json.dumps({"format": 1, "release": CORRECTION_NEW}, sort_keys=True, separators=(",", ":")).encode()
+            no_links(stage)
+            stage.mkdir(mode=0o700, exist_ok=True)
+            # A crash may leave prefixes of files we were writing. Unknown content is preserved/refused.
+            staged_paths = [stage]
+            for path in stage.rglob("*"):
+                if len(staged_paths) >= 32:
+                    raise ProvisionError("unexpected_staging_files")
+                staged_paths.append(path)
+            for path in staged_paths:
+                no_links(path)
+                metadata = path.stat()
+                if metadata.st_uid != os.geteuid() or metadata.st_mode & 0o077:
+                    raise ProvisionError("unsupported_prepared_storage")
+                if path.is_dir():
+                    if path != stage and str(path.relative_to(stage)) not in {"python", "python/tinkercrew_companion", "sketch", "data"}:
+                        raise ProvisionError("unexpected_staging_files")
+                else:
+                    name = str(path.relative_to(stage))
+                    if not path.is_file() or metadata.st_nlink != 1 or name not in content or not content[name].startswith(read_file(path)):
+                        raise ProvisionError("unexpected_staging_files")
+            for name, value in content.items():
+                path = stage / name
+                path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+                descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o600)
+                with os.fdopen(descriptor, "wb") as handle:
+                    handle.write(value)
+                    handle.flush()
+                    os.fsync(handle.fileno())
+            for path in sorted((path for path in stage.rglob("*") if path.is_dir()), key=lambda path: len(path.parts), reverse=True):
+                sync_directory(path)
+            sync_directory(stage)
+            sync_directory(self.directory)
+            if self.correction_identity(stage, CORRECTION_NEW, serial) != expected_identity:
+                raise ProvisionError("identity_changed")
+            state["phase"] = "exchange_pending"
+            atomic(journal, state)
+        if current not in {CORRECTION_OLD, CORRECTION_NEW}:
+            raise ProvisionError("different_or_modified_baseline")
+        opposite = CORRECTION_OLD if current == CORRECTION_NEW else CORRECTION_NEW
+        for root, value in ((self.root, current), (stage, opposite)):
+            if self.correction_identity(root, value, serial) != expected_identity:
+                raise ProvisionError("identity_changed")
+        if current != wanted:
+            if self.app_state() != "uninitialized":
+                raise ProvisionError("prepared_app_must_be_uninitialized")
+            state["phase"] = "restore_pending" if restore else "exchange_pending"
+            atomic(journal, state)
+            self.exchange(self.root, stage)
+            sync_directory(self.apps)
+            sync_directory(self.directory)
+        sync_directory(self.apps)
+        sync_directory(self.directory)
+        # Retrying after an interrupted exchange verifies the actual directories, never guesses.
+        if self.correction_identity(self.root, wanted, serial) != expected_identity:
+            raise ProvisionError("identity_changed")
+        self.correction_tree(stage, CORRECTION_NEW if restore else CORRECTION_OLD)
+        if self.app_state() != "uninitialized":
+            raise ProvisionError("concurrent_official_start_detected")
+        bundle = build_package(self.root)
+        atomic(self.directory / "job.json", dict(phase="published", release=wanted, sha256=digest(bundle["bytes"]), size=len(bundle["bytes"]), offset=len(bundle["bytes"]), boot=self.boot, expires=0, token_hash=digest(secrets.token_bytes(32))))
+        state["phase"] = phase
+        atomic(journal, state)
+        return dict(self.status(), serial=serial, correctionPhase=phase)
 
     def authorized(self, job, token):
         if not job or job["phase"] == "aborted" or not isinstance(token, str) or len(token) != 43 or not hmac.compare_digest(job["token_hash"], digest(token.encode())) or job["boot"] != self.boot or type(job["expires"]) not in {float, int} or not self.clock() < job["expires"]:
@@ -289,7 +485,7 @@ class CompanionProvisioning:
         return {"phase": "identity_ready", "serial": serial, "release": release, "board_id": identity["board_id"], "tls_name": identity["tls_name"], "certificate_pem": self.tool(["x509", "-in", str(cert_path), "-outform", "PEM"]).decode(), "spki_sha256": digest(key_der), "started": False}
 
     def dispatch(self, body):
-        fields = {"cancel": {"release"}, "identity": {"release"}, "renew_identity": {"release"}, "inspect": set(), "begin": {"release", "sha256", "size"}, "chunk": {"token", "offset", "data"}, "publish": {"token"}}
+        fields = {"cancel": {"release"}, "identity": {"release"}, "renew_identity": {"release"}, "inspect": set(), "begin": {"release", "sha256", "size"}, "chunk": {"token", "offset", "data"}, "publish": {"token"}, "correct_prepared_profile": {"release"}, "restore_prepared_profile": {"release"}}
         operation = body.get("operation")
         if not isinstance(operation, str) or operation not in fields or set(body) != {"operation", "expectedSerial"} | fields[operation]:
             raise ProvisionError("invalid_request")
@@ -301,6 +497,11 @@ class CompanionProvisioning:
         if not self.apps.is_dir():
             raise ProvisionError("unsupported_storage")
         with self.locked():
+            if operation in {"correct_prepared_profile", "restore_prepared_profile"}:
+                return self.profile_correction(body["release"], identity["serial"], restore=operation == "restore_prepared_profile")
+            correction = self.directory / "profile-correction.json"
+            if correction.exists() and read_json(correction).get("phase") not in {"corrected", "restored"}:
+                raise ProvisionError("profile_correction_pending")
             installed = self.installed()
             job = self.job()
             if operation == "cancel":

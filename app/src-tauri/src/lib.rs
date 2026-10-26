@@ -83,6 +83,8 @@ pub fn run() {
             provisioning::initial_companion_package,
             provisioning::inspect_initial_companion,
             provisioning::prepare_initial_companion,
+            provisioning::correct_prepared_companion,
+            provisioning::restore_prepared_companion,
             provisioning::cancel_initial_companion,
             provisioning::renew_companion_identity,
             reboot::request_verified_board_restart,

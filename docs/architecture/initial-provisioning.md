@@ -1,6 +1,6 @@
 # Initial Companion preparation, dedicated SSH and certificate renewal (#11)
 
-Status: **hybrid preparation/identity and wizard evidence software implemented; real UNO Q compatibility NOT RUN**. The [resumable guide](setup-checkpoints.md) now consumes observed Pairing/runtime/restart/hardware evidence and persisted Crew confirmation; preparation alone never completes it. Unsupported whole-baseline migrations remain separate #11 work. Physical/family verification remains #21. No live Board was configured, paired, deployed, rebooted, reset or flashed during development.
+Status: **hybrid preparation/identity and wizard evidence software implemented; real absent-target preparation/identity and isolated compile-only subsets passed, not full UNO Q compatibility**. The [resumable guide](setup-checkpoints.md) now consumes observed Pairing/runtime/restart/hardware evidence and persisted Crew confirmation; preparation alone never completes it. Unsupported whole-baseline migrations remain separate #11 work. Physical/family verification remains #21. The owner approved initial source/private identity preparation and a separate temporary compile-only check; no Companion startup, Pairing, firmware upload, reboot or reset has occurred. See the [compile-only report](../qa/uno-q-2026-10-26-compile-only.md).
 
 ## Supported hybrid boundary
 
@@ -16,7 +16,7 @@ Board Setup → **Prepare initial Companion files and identity** requires a fres
 6. Existing data/configuration without the owned journal, legacy bearer configuration, missing keys or changed identity fail with a handoff. Retries reuse the identity/key, never silently rekey or migrate credentials.
 7. The owner reviews the selected app, backups, dependencies and disconnected unsafe loads, then starts it in official App Lab. **Preparation is not proof of an app running, firmware compatibility, Pairing, hardware readiness or setup completion.**
 
-`ABORT PREPARE <SoC serial>` resolves only the inspected partial transfer and invalidates its capability. It never deletes already published app files or private identity. A different/unsupported whole-baseline upgrade still uses the explicit supported official-tool handoff; compatible Linux runtime updates remain the separate [runtime-only path](runtime-updates.md). Neither path may be described as an atomic Linux+MCU firmware rollback.
+`ABORT PREPARE <SoC serial>` resolves only the inspected partial transfer and invalidates its capability. It never deletes already published app files or private identity. The [single allowlisted owned-unstarted profile correction](prepared-profile-correction.md) is a separately confirmed identity-preserving exception for #29, not an automatic overwrite or general migration. Other different/unsupported whole-baseline upgrades still use an explicit supported handoff; compatible Linux runtime updates remain the separate [runtime-only path](runtime-updates.md). Neither path may be described as an atomic Linux+MCU firmware rollback.
 
 ## Dedicated-key SSH verification
 

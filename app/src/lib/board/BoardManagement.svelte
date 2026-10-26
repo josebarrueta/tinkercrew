@@ -50,6 +50,8 @@
   let initialStatus = $state("");
   let prepareConfirmation = $state("");
   let cancelPrepareConfirmation = $state("");
+  let correctPreparedConfirmation = $state("");
+  let restorePreparedConfirmation = $state("");
   let renewIdentityConfirmation = $state("");
   let appVersion = $state("native app required");
   let runtimeConfirmation = $state("");
@@ -453,11 +455,12 @@
       <button
         onclick={() =>
           task(async () => {
-            const result = await invoke<{ phase: string; offset: number }>(
-              "inspect_initial_companion",
-              { serial },
-            );
-            initialStatus = `${result.phase}; ${result.offset} bytes transferred`;
+            const result = await invoke<{
+              phase: string;
+              offset: number;
+              correctionPhase?: string;
+            }>("inspect_initial_companion", { serial });
+            initialStatus = `${result.phase}; ${result.offset} bytes transferred${result.correctionPhase ? `; source correction ${result.correctionPhase}` : ""}`;
           })}>Inspect initial preparation</button
       >
       <label
@@ -480,6 +483,58 @@
             message = result.message;
           }, true);
         }}>Prepare / resume initial Companion</button
+      >
+      <p>
+        Narrow #29 correction only: the exact owned, never-started preparation
+        can switch to the compile-validated pinned profile while preserving its
+        UUID, private TLS key, certificate and configuration. A private copy of
+        the original is retained for recovery. Unknown, changed, cached or
+        previously started apps are refused. Close official App Lab and do not
+        start/build/stop the app concurrently. This does not upload or start it.
+      </p>
+      <label
+        >Type CORRECT PREPARED {board?.serial ?? "hardware-serial"}<input
+          autocomplete="off"
+          bind:value={correctPreparedConfirmation}
+        /></label
+      >
+      <button
+        disabled={correctPreparedConfirmation !==
+          `CORRECT PREPARED ${board?.serial}`}
+        onclick={async () => {
+          const confirmation = correctPreparedConfirmation;
+          correctPreparedConfirmation = "";
+          await task(async () => {
+            const result = await invoke<{
+              correctionPhase: string;
+              message: string;
+            }>("correct_prepared_companion", { serial, confirmation });
+            initialStatus = result.correctionPhase;
+            message = result.message;
+          }, true);
+        }}>Correct / resume owned unstarted profile (keeps identity)</button
+      >
+      <label
+        >Type RESTORE PREPARED {board?.serial ?? "hardware-serial"}<input
+          autocomplete="off"
+          bind:value={restorePreparedConfirmation}
+        /></label
+      >
+      <button
+        disabled={restorePreparedConfirmation !==
+          `RESTORE PREPARED ${board?.serial}`}
+        onclick={async () => {
+          const confirmation = restorePreparedConfirmation;
+          restorePreparedConfirmation = "";
+          await task(async () => {
+            const result = await invoke<{
+              correctionPhase: string;
+              message: string;
+            }>("restore_prepared_companion", { serial, confirmation });
+            initialStatus = result.correctionPhase;
+            message = result.message;
+          }, true);
+        }}>Restore original unstarted files (not safe for first start)</button
       >
       <label
         >Type ABORT PREPARE {board?.serial ?? "hardware-serial"}<input
