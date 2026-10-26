@@ -535,6 +535,28 @@ mod tests {
     }
 
     #[test]
+    fn initial_package_supports_the_owned_unstarted_identity_preserving_profile_correction() {
+        let directory = tempfile::tempdir().unwrap();
+        let (release, bytes) = baseline_bundle().unwrap();
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let mut process = std::process::Command::new("python3")
+            .arg(root.join("scripts/tests/provision_correction_fixture.py"))
+            .arg(directory.path())
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .spawn()
+            .unwrap();
+        process.stdin.take().unwrap().write_all(&bytes).unwrap();
+        let output = process.wait_with_output().unwrap();
+        assert!(output.status.success());
+        let result: Value = serde_json::from_slice(&output.stdout).unwrap();
+        assert_eq!(result["release"].as_str(), Some(release.as_str()));
+        assert_eq!(result["correctionPhase"], "corrected");
+        assert_eq!(result["identityPreserved"], true);
+        assert_eq!(result["started"], false);
+    }
+
+    #[test]
     fn initial_package_is_accepted_by_the_fixed_provisioner_without_starting_firmware() {
         let directory = tempfile::tempdir().unwrap();
         let (release, bytes) = baseline_bundle().unwrap();

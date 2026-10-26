@@ -64,6 +64,18 @@ async function mockManagement(
               message:
                 "Mock preparation only: no app was started and no firmware was written.",
             };
+          if (
+            command === "correct_prepared_companion" ||
+            command === "restore_prepared_companion"
+          )
+            return {
+              correctionPhase:
+                command === "correct_prepared_companion"
+                  ? "corrected"
+                  : "restored",
+              message:
+                "Mock source correction only: identity preserved, no app start or firmware upload.",
+            };
           if (command === "app_update_info") return { version: "0.1.0" };
           if (command === "open_app_releases") return null;
           if (command === "runtime_bundle_info")
@@ -282,6 +294,65 @@ test("initial Companion preparation has exact hardware consent and cannot claim 
         "start_factory_restore",
         "update_companion_runtime",
         "pair_installed_companion",
+      ].includes(call.command),
+    ),
+  ).toBe(false);
+});
+
+test("owned unstarted correction and restore require separate exact hardware confirmations without starting firmware", async ({
+  page,
+}) => {
+  const management = await mockManagement(page);
+  await management
+    .getByText("Prepare initial Companion files and identity", { exact: true })
+    .click();
+  const correct = management.getByRole("button", {
+    name: "Correct / resume owned unstarted profile (keeps identity)",
+    exact: true,
+  });
+  const restore = management.getByRole("button", {
+    name: "Restore original unstarted files (not safe for first start)",
+    exact: true,
+  });
+  await expect(correct).toBeDisabled();
+  await expect(restore).toBeDisabled();
+  await management
+    .getByLabel("Type CORRECT PREPARED 42", { exact: true })
+    .fill("CORRECT PREPARED 41");
+  await expect(correct).toBeDisabled();
+  await management
+    .getByLabel("Type CORRECT PREPARED 42", { exact: true })
+    .fill("CORRECT PREPARED 42");
+  await correct.click();
+  await expect(
+    management.getByText(
+      "Mock source correction only: identity preserved, no app start or firmware upload.",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  await expect(
+    management.getByLabel("Type CORRECT PREPARED 42", { exact: true }),
+  ).toHaveValue("");
+  await expect(restore).toBeDisabled();
+  await management
+    .getByLabel("Type RESTORE PREPARED 42", { exact: true })
+    .fill("RESTORE PREPARED 42");
+  await restore.click();
+  const calls = await managementCalls(page);
+  expect(
+    calls.find((call) => call.command === "correct_prepared_companion")?.args,
+  ).toEqual({ serial: "USB_TEST", confirmation: "CORRECT PREPARED 42" });
+  expect(
+    calls.find((call) => call.command === "restore_prepared_companion")?.args,
+  ).toEqual({ serial: "USB_TEST", confirmation: "RESTORE PREPARED 42" });
+  expect(
+    calls.some((call) =>
+      [
+        "prepare_initial_companion",
+        "update_companion_runtime",
+        "start_factory_restore",
+        "pair_installed_companion",
+        "request_verified_board_restart",
       ].includes(call.command),
     ),
   ).toBe(false);

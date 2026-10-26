@@ -22,10 +22,13 @@ fn usb(serial: &str, soc: &str, mut body: Value) -> Result<Value, String> {
         "python3 -c 'import base64;exec(base64.b64decode(\"{}\"))'",
         STANDARD.encode(HELPER)
     );
+    if command.len() > 60_000 {
+        return Err("The fixed source helper exceeds the supported ADB service bound; no Board operation was requested.".into());
+    }
     let input = Zeroizing::new(
         serde_json::to_vec(&body).map_err(|_| "Invalid initial preparation request.")?,
     );
-    let bytes = Zeroizing::new(crate::adb_transport::request(&adb, serial, &command, &input, Duration::from_secs(60)).map_err(|_| "Initial preparation is unsupported or interrupted. Reinspect the same Board; existing apps were not overwritten and no start/firmware operation was requested.")?);
+    let bytes = Zeroizing::new(crate::adb_transport::request(&adb, serial, &command, &input, Duration::from_secs(60)).map_err(|_| "Preparation or source correction is unsupported or interrupted. Reinspect the same Board and resume the same operation; preserve the private backup and journals. Do not assume publication succeeded or that files stayed unchanged. No start/firmware operation was requested.")?);
     let response: Value =
         serde_json::from_slice(&bytes).map_err(|_| "Incompatible initial preparation response.")?;
     if response["status"] != "ok" || response["result"]["serial"].as_str() != Some(soc) {
@@ -91,6 +94,61 @@ pub async fn prepare_initial_companion(
         prepared["message"] = "Verified initial source and private TLS identity were prepared. No app was started and no MCU firmware was written. Use official App Lab for the first start (which can upload the sketch); then return for observed Pairing/connection/self-test proof. This is not setup completion.".into();
         Ok(prepared)
     }).await.map_err(|_| "Initial preparation stopped. Reinspect and resume; success has not been assumed.")?
+}
+
+async fn change_prepared_profile(
+    state: tauri::State<'_, Connections>,
+    serial: String,
+    confirmation: String,
+    restore: bool,
+) -> Result<Value, String> {
+    let _permit = state.begin_maintenance()?;
+    connection::disconnect_board(state)
+        .await
+        .map_err(|error| error.message)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let identity = management::inspect(&serial)?;
+        let verb = if restore { "RESTORE PREPARED" } else { "CORRECT PREPARED" };
+        if confirmation != format!("{verb} {}",identity.serial) {
+            return Err(format!("Type {verb} followed by the inspected hardware serial. This only exchanges the exact owned unstarted source profile; no app start or firmware operation is authorized."));
+        }
+        let before = usb(&serial,&identity.serial,json!({"operation":"inspect"}))?;
+        let (release,_) = runtime_update::baseline_bundle()?;
+        let operation = if restore { "restore_prepared_profile" } else { "correct_prepared_profile" };
+        let mut result = usb(&serial,&identity.serial,json!({"operation":operation,"release":release}))?;
+        if result["started"] != false || result["correctionPhase"] != if restore { "restored" } else { "corrected" }
+            || (!restore && result["release"].as_str() != Some(&release))
+            || result["identity"]["board_id"] != before["identity"]["board_id"]
+            || result["identity"]["tls_name"] != before["identity"]["tls_name"]
+            || result["identity"]["certificate_pem"] != before["identity"]["certificate_pem"]
+            || !result["identity"]["board_id"].is_string() {
+            return Err("Prepared source correction was not fully confirmed. Preserve the private backup/journal and re-inspect; do not start or upload.".into());
+        }
+        result["message"] = if restore {
+            "The exact original unstarted source was restored with the same Board identity. Its old unversioned profile remains unsuitable for first start; correct it again before startup. The newer copy remains in the private backup. No app was started and no firmware was uploaded."
+        } else {
+            "The exact owned unstarted source now uses the compile-validated pinned profile. UUID, private TLS key, certificate and configuration were preserved; the original source/identity copy remains in a private recoverable backup. No app was started and no firmware was uploaded. Keep official App Lab closed during this operation; first startup requires separate approval."
+        }.into();
+        Ok(result)
+    }).await.map_err(|_| "Source correction stopped. Reinspect and resume the same operation; do not assume completion.")?
+}
+
+#[tauri::command]
+pub async fn correct_prepared_companion(
+    state: tauri::State<'_, Connections>,
+    serial: String,
+    confirmation: String,
+) -> Result<Value, String> {
+    change_prepared_profile(state, serial, confirmation, false).await
+}
+
+#[tauri::command]
+pub async fn restore_prepared_companion(
+    state: tauri::State<'_, Connections>,
+    serial: String,
+    confirmation: String,
+) -> Result<Value, String> {
+    change_prepared_profile(state, serial, confirmation, true).await
 }
 
 fn same_identity_key(previous: &str, current: &str) -> Result<bool, String> {

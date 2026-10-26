@@ -32,6 +32,199 @@ class ProvisionTests(unittest.TestCase):
             self.request("chunk", token=job["token"], offset=offset, data=base64.b64encode(self.bundle["bytes"][offset:offset + 8192]).decode())
         return job["token"]
 
+    def old_owned_preparation(self):
+        original = self.bundle
+        package = json.loads(original["bytes"])
+        files = {name: base64.b64decode(value) for name, value in package["files"].items()}
+        files["sketch/sketch.yaml"] = b"profiles:\n  default:\n    platforms:\n      - platform: arduino:zephyr\n    libraries:\n      - Arduino_Modulino\n      - Arduino_RouterBridge\ndefault_profile: default\n"
+        release = provision.release_id(files)
+        self.assertEqual(release, "63e90d374bc27c69b2fd810f851fed9a51d00abaaa82ce6369ba4b7cac7feef3")
+        package.update(release=release, files={name: base64.b64encode(value).decode() for name, value in files.items()})
+        self.bundle = {"release": release, "bytes": json.dumps(package, sort_keys=True, separators=(",", ":")).encode()}
+        token = self.transfer()
+        self.request("publish", token=token)
+        identity = self.request("identity", release=release)
+        self.bundle = original
+        self.store.app_state = lambda: "uninitialized"
+        return identity
+
+    def test_owned_unstarted_profile_correction_preserves_identity_and_can_restore_exact_old_source(self):
+        self.store.app_state = lambda: "uninitialized"  # External official CLI boundary only.
+        identity = self.old_owned_preparation()
+        root = self.apps / "tinkercrew-companion"
+        before = {name: (root / "data" / name).read_bytes() for name in ("board.key", "board.crt", "companion.json")}
+        unrelated = self.apps / "unrelated-app"
+        unrelated.mkdir()
+        (unrelated / "keep").write_text("untouched")
+        result = self.request("correct_prepared_profile", release=self.bundle["release"])
+        self.assertEqual(result["correctionPhase"], "corrected")
+        self.assertEqual(result["release"], self.bundle["release"])
+        self.assertFalse(result["started"])
+        after = self.request("identity", release=self.bundle["release"])
+        for field in ("board_id", "tls_name", "spki_sha256", "certificate_pem"):
+            self.assertEqual(after[field], identity[field])
+        for name, value in before.items():
+            self.assertEqual((root / "data" / name).read_bytes(), value)
+        self.assertEqual(self.request("correct_prepared_profile", release=self.bundle["release"])["correctionPhase"], "corrected")
+        restored = self.request("restore_prepared_profile", release=self.bundle["release"])
+        self.assertEqual(restored["correctionPhase"], "restored")
+        self.assertEqual(restored["release"], identity["release"])
+        self.assertEqual(self.request("identity", release=identity["release"]), identity)
+        self.assertEqual((unrelated / "keep").read_text(), "untouched")
+
+    def test_profile_correction_recovers_before_and_after_atomic_exchange_without_rekeying(self):
+        identity = self.old_owned_preparation()
+        native_exchange = self.store.exchange
+        def interrupted_before(first, second):
+            raise OSError("fixture filesystem interruption before exchange")
+        self.store.exchange = interrupted_before
+        with self.assertRaises(OSError):
+            self.request("correct_prepared_profile", release=self.bundle["release"])
+        self.assertEqual(self.request("inspect")["release"], identity["release"])
+        def interrupted_after(first, second):
+            native_exchange(first, second)
+            raise OSError("fixture filesystem interruption after exchange")
+        self.store.exchange = interrupted_after
+        with self.assertRaises(OSError):
+            self.request("correct_prepared_profile", release=self.bundle["release"])
+        self.assertEqual(self.request("inspect")["release"], self.bundle["release"])
+        with self.assertRaises(provision.ProvisionError):
+            self.request("identity", release=self.bundle["release"])
+        self.store.exchange = native_exchange
+        self.assertEqual(self.request("correct_prepared_profile", release=self.bundle["release"])["correctionPhase"], "corrected")
+        self.assertEqual(self.request("identity", release=self.bundle["release"])["spki_sha256"], identity["spki_sha256"])
+        self.store.exchange = interrupted_after
+        with self.assertRaises(OSError):
+            self.request("restore_prepared_profile", release=self.bundle["release"])
+        self.store.exchange = native_exchange
+        self.assertEqual(self.request("restore_prepared_profile", release=self.bundle["release"])["correctionPhase"], "restored")
+        self.assertEqual(self.request("identity", release=identity["release"]), identity)
+
+    def test_profile_correction_resumes_only_its_known_partial_staging(self):
+        from unittest.mock import patch
+        identity = self.old_owned_preparation()
+        original_open = provision.os.open
+        def interrupted(path, *args, **kwargs):
+            if str(path).endswith("prepared-profile-backup/python/main.py"):
+                raise OSError("fixture interrupted staging write")
+            return original_open(path, *args, **kwargs)
+        with patch("os.open", side_effect=interrupted):
+            with self.assertRaises(OSError):
+                self.request("correct_prepared_profile", release=self.bundle["release"])
+        self.assertEqual(self.request("inspect")["release"], identity["release"])
+        stage = self.apps / ".tinkercrew-provision/prepared-profile-backup"
+        unknown = stage / "unowned"
+        unknown.write_text("preserve unknown content")
+        with self.assertRaises(provision.ProvisionError):
+            self.request("correct_prepared_profile", release=self.bundle["release"])
+        self.assertEqual(unknown.read_text(), "preserve unknown content")
+        unknown.unlink()  # Test-owned fixture cleanup only; production never removes unknown files.
+        self.assertEqual(self.request("correct_prepared_profile", release=self.bundle["release"])["correctionPhase"], "corrected")
+
+    def test_restore_after_partial_staging_leaves_original_root_in_place(self):
+        from unittest.mock import patch
+        identity = self.old_owned_preparation()
+        original_open = provision.os.open
+        def interrupted(path, *args, **kwargs):
+            if str(path).endswith("prepared-profile-backup/python/main.py"):
+                raise OSError("fixture partial staging")
+            return original_open(path, *args, **kwargs)
+        with patch("os.open", side_effect=interrupted):
+            with self.assertRaises(OSError):
+                self.request("correct_prepared_profile", release=self.bundle["release"])
+        def no_exchange(first, second):
+            self.fail("Original root must not move when backing out partial staging")
+        self.store.exchange = no_exchange
+        self.assertEqual(self.request("restore_prepared_profile", release=self.bundle["release"])["correctionPhase"], "restored")
+        self.assertEqual(self.request("identity", release=identity["release"]), identity)
+
+    def test_started_or_state_changed_app_is_never_corrected_or_restored(self):
+        identity = self.old_owned_preparation()
+        for status in ("running", "stopped", "starting", None):
+            self.store.app_state = lambda status=status: status
+            with self.assertRaises(provision.ProvisionError):
+                self.request("correct_prepared_profile", release=self.bundle["release"])
+            self.assertEqual(self.request("inspect")["release"], identity["release"])
+        states = iter(("uninitialized", "running"))
+        self.store.app_state = lambda: next(states)
+        with self.assertRaises(provision.ProvisionError):
+            self.request("correct_prepared_profile", release=self.bundle["release"])
+        self.assertEqual(self.request("inspect")["release"], identity["release"])
+        self.store.app_state = lambda: "uninitialized"
+        self.request("correct_prepared_profile", release=self.bundle["release"])
+        self.store.app_state = lambda: "running"
+        with self.assertRaises(provision.ProvisionError):
+            self.request("restore_prepared_profile", release=self.bundle["release"])
+        self.assertEqual(self.request("inspect")["release"], self.bundle["release"])
+
+    def test_extra_registry_cache_and_changed_source_cannot_enter_profile_correction(self):
+        identity = self.old_owned_preparation()
+        root = self.apps / "tinkercrew-companion"
+        for path in (root / "data/pairings.json", root / ".cache/used"):
+            path.parent.mkdir(mode=0o700, exist_ok=True)
+            path.write_text("preserve existing state")
+            with self.assertRaises(provision.ProvisionError):
+                self.request("correct_prepared_profile", release=self.bundle["release"])
+            self.assertEqual(path.read_text(), "preserve existing state")
+            path.unlink()
+            if path.parent.name == ".cache":
+                path.parent.rmdir()
+        original = (root / "sketch/sketch.ino").read_bytes()
+        (root / "sketch/sketch.ino").write_text("modified source")
+        with self.assertRaises(provision.ProvisionError):
+            self.request("correct_prepared_profile", release=self.bundle["release"])
+        self.assertEqual((root / "sketch/sketch.ino").read_text(), "modified source")
+        (root / "sketch/sketch.ino").write_bytes(original)
+        self.assertEqual(self.request("identity", release=identity["release"]), identity)
+
+    def test_profile_correction_refuses_foreign_stage_symlinks_and_hardlinked_private_storage(self):
+        identity = self.old_owned_preparation()
+        stage = self.apps / ".tinkercrew-provision/prepared-profile-backup"
+        victim = self.apps / "other-private-data"
+        victim.mkdir(mode=0o700)
+        (victim / "keep").write_text("not ours")
+        stage.symlink_to(victim, target_is_directory=True)
+        with self.assertRaises(provision.ProvisionError):
+            self.request("correct_prepared_profile", release=self.bundle["release"])
+        self.assertEqual((victim / "keep").read_text(), "not ours")
+        stage.unlink()
+        import os
+        os.link(self.apps / "tinkercrew-companion/data/board.key", victim / "key-link")
+        with self.assertRaises(provision.ProvisionError):
+            self.request("correct_prepared_profile", release=self.bundle["release"])
+        self.assertEqual(self.request("inspect")["release"], identity["release"])
+
+    def test_damaged_private_backup_is_never_reported_as_recoverable_or_restored(self):
+        identity = self.old_owned_preparation()
+        self.request("correct_prepared_profile", release=self.bundle["release"])
+        backup_source = self.apps / ".tinkercrew-provision/prepared-profile-backup/python/main.py"
+        backup_source.write_text("unknown backup modification")
+        for operation in ("correct_prepared_profile", "restore_prepared_profile"):
+            with self.assertRaises(provision.ProvisionError):
+                self.request(operation, release=self.bundle["release"])
+        self.assertEqual(backup_source.read_text(), "unknown backup modification")
+        self.assertEqual(self.request("identity", release=self.bundle["release"])["spki_sha256"], identity["spki_sha256"])
+        self.assertEqual(self.request("inspect")["release"], self.bundle["release"])
+
+    def test_unknown_cli_versions_fail_closed_using_only_read_only_commands(self):
+        from types import SimpleNamespace
+        from unittest.mock import patch
+        identity = self.old_owned_preparation()
+        self.store.app_state = provision.inspect_app_state
+        def external_cli(args, **kwargs):
+            self.assertEqual(args, ["/usr/bin/arduino-app-cli", "version", "--format", "json"])
+            self.assertIs(kwargs["stdin"], provision.subprocess.DEVNULL)
+            self.assertEqual(kwargs["env"]["HOME"], "/home/arduino")
+            self.assertEqual(kwargs["env"]["ARDUINO_APP_CLI__APPS_DIR"], "/home/arduino/ArduinoApps")
+            self.assertNotIn("DOCKER_HOST", kwargs["env"])
+            self.assertNotIn("ARDUINO_APP_CLI__DATA_DIR", kwargs["env"])
+            return SimpleNamespace(returncode=0, stdout=b'{"version":"0.10.0","daemon_version":"0.10.0"}', stderr=b"")
+        with patch("subprocess.run", side_effect=external_cli):
+            with self.assertRaises(provision.ProvisionError):
+                self.request("correct_prepared_profile", release=self.bundle["release"])
+        self.assertEqual(self.request("inspect")["release"], identity["release"])
+        self.assertFalse((self.apps / ".tinkercrew-provision/profile-correction.json").exists())
+
     def test_interrupted_publication_retries_and_existing_credentials_are_not_migrated(self):
         from unittest.mock import patch
         token = self.transfer()
