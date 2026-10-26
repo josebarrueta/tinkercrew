@@ -607,6 +607,10 @@
   .control-status p {
     margin: 8px 0;
   }
+  .control-status strong {
+    display: inline;
+    margin: 0;
+  }
   .mission {
     margin-top: 20px;
     max-width: 1100px;
