@@ -13,7 +13,9 @@ import { CreationRuntime } from "../src/lib/creations/runtime";
 
 // Approved BoardClient -> real Companion HTTPS seam. Only generated fixture TLS,
 // private Unix ingress and MemoryHardware; no hardware/Keychain or success-only RPC mocks.
-test("the actual preview path can clear, acquire, test both outputs and stop on one authenticated session", async () => {
+test("the actual preview path can clear, acquire, test both outputs and stop on one authenticated session", async ({
+  page,
+}) => {
   const repository = resolve(import.meta.dirname, "../..");
   const directory = mkdtempSync(join(tmpdir(), "tc-ui-"));
   const cert = join(directory, "cert.pem"),
@@ -199,6 +201,78 @@ test("the actual preview path can clear, acquire, test both outputs and stop on 
     await actor.stop(true);
     expect((await client.getSnapshot()).health).toBe("safe_state");
     expect(failures).toEqual([]);
+    client.close();
+    operations.splice(0);
+    // Replay the owner's rendered UI path too, with both input readings absent.
+    // Only the fixed IPC carrier is intercepted; every gameplay request reaches
+    // this same real TLS Companion and its actual command/lease implementation.
+    let delayStateOnce = false,
+      delayedStateStarted = false;
+    await page.exposeFunction(
+      "__moduleNative",
+      async (name: string, args: Record<string, unknown> = {}) => {
+        if (name === "load_progress") return null;
+        if (name === "usb_play_boards") return [{ serial: "fixture-usb" }];
+        if (name === "connect_usb_play")
+          return { handle: 1, boardId: started.grant.board_id };
+        if (name === "board_request") {
+          const operation = args.operation as Parameters<GameplayTransport>[1];
+          if (operation.operation === "state" && delayStateOnce) {
+            delayStateOnce = false;
+            const response = await transport(1, operation);
+            delayedStateStarted = true;
+            await new Promise((resolve) => setTimeout(resolve, 500));
+            return response;
+          }
+          return transport(1, operation);
+        }
+        return {};
+      },
+    );
+    await page.addInitScript(() => {
+      const host = window as unknown as {
+        isTauri: boolean;
+        __moduleNative: (
+          name: string,
+          args?: Record<string, unknown>,
+        ) => Promise<unknown>;
+        __TAURI_INTERNALS__: {
+          invoke: (
+            name: string,
+            args?: Record<string, unknown>,
+          ) => Promise<unknown>;
+        };
+      };
+      host.isTauri = true;
+      host.__TAURI_INTERNALS__ = {
+        invoke: (name, args) => host.__moduleNative(name, args),
+      };
+    });
+    await page.goto("/");
+    await page
+      .getByRole("button", { name: "Connect Board", exact: true })
+      .click();
+    await expect(
+      page.getByText("Real Board · authenticated connection", { exact: true }),
+    ).toBeVisible();
+    delayStateOnce = true;
+    await expect.poll(() => delayedStateStarted).toBe(true);
+    await page.getByRole("button", { name: "Try blue", exact: true }).click();
+    await expect(page.getByTestId("creation-pixels")).toHaveText("#4986ff");
+    await page
+      .getByRole("button", { name: "Stop outputs", exact: true })
+      .click();
+    await expect(page.getByTestId("creation-pixels")).toHaveText("off");
+    await page.getByRole("button", { name: "Try chirp", exact: true }).click();
+    await expect
+      .poll(() => operations.filter((op) => op === "buzzer").length)
+      .toBe(1);
+    await expect(
+      page.getByText("Real Board · authenticated connection", { exact: true }),
+    ).toBeVisible();
+    await page
+      .getByRole("button", { name: "Stop outputs", exact: true })
+      .click();
   } finally {
     await actor?.stop();
     client?.close();

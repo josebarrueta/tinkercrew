@@ -82,6 +82,8 @@ export class ConnectedBoardClient implements BoardClient {
   private uptime = 0;
   private uptimeAt = 0;
   private failed = false;
+  private failure: ConnectionError | undefined;
+  private pendingSnapshot: Promise<BoardSnapshot> | undefined;
 
   private constructor(
     private handle: number,
@@ -113,11 +115,13 @@ export class ConnectedBoardClient implements BoardClient {
 
   private async request(operation: GameplayRequest) {
     if (this.failed)
-      throw {
-        code: "disconnected",
-        message:
-          "This connection is no longer active. Reconnect the selected Board.",
-      };
+      throw (
+        this.failure ?? {
+          code: "disconnected",
+          message:
+            "This connection is no longer active. Reconnect the selected Board.",
+        }
+      );
     try {
       return await this.transport(this.handle, operation);
     } catch (cause) {
@@ -135,12 +139,27 @@ export class ConnectedBoardClient implements BoardClient {
   private fail(cause: unknown) {
     if (this.failed) return;
     this.failed = true;
+    this.failure = connectionError(cause);
     clearInterval(this.timer);
     this.emit({ type: "health.changed", health: "disconnected" });
-    this.onFailure(connectionError(cause));
+    this.onFailure(this.failure);
   }
 
-  async getSnapshot(): Promise<BoardSnapshot> {
+  getSnapshot(): Promise<BoardSnapshot> {
+    // Page refresh, module preview and a running Creation share one wire read.
+    // Otherwise a late IPC response can move uptime backwards and falsely look
+    // like a Board restart. Transit age still covers the complete shared read.
+    if (this.pendingSnapshot) return this.pendingSnapshot;
+    const pending = this.readSnapshot();
+    this.pendingSnapshot = pending;
+    const clear = () => {
+      if (this.pendingSnapshot === pending) this.pendingSnapshot = undefined;
+    };
+    void pending.then(clear, clear);
+    return pending;
+  }
+
+  private async readSnapshot(): Promise<BoardSnapshot> {
     try {
       if (!this.hello || performance.now() - this.helloAt > 1000) {
         this.hello = helloSchema.parse(
