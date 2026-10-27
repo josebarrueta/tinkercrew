@@ -1109,9 +1109,11 @@
     padding: 6px;
   }
   .workbench .invention > span {
-    font-size: 22px;
-    letter-spacing: 8px;
-    padding-left: 8px;
+    font-size: 18px;
+    letter-spacing: 4px;
+    padding-left: 4px;
+    white-space: nowrap;
+    line-height: 1;
   }
   .workbench .lamp {
     width: 38px;
