@@ -32,8 +32,12 @@ _Avoid_: Mission app, board server, agent
 The revocable trust relationship between one TinkerCrew installation and one Board, established with physical USB access.
 _Avoid_: Login, sign-in, Bluetooth pairing
 
+**USB play**:
+Temporary permission to play with a physically selected Board, without saving Mac credentials or establishing a permanent installation Pairing.
+_Avoid_: Guest account, unauthenticated mode, password bypass
+
 **Control session**:
-A short-lived authenticated connection through which TinkerCrew observes and controls a paired Board.
+A short-lived authenticated connection through which TinkerCrew observes and controls a Board trusted through USB play or Pairing.
 _Avoid_: Login session, socket
 
 **Capability**:

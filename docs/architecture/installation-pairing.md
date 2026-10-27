@@ -2,6 +2,8 @@
 
 Status: **software implemented; real USB/SSH/UNO Q compatibility and acceptance NOT RUN**. This is the authentication subset of the [TBP proposal](secure-board-protocol.md), not completion of all-in-one setup. Outstanding acceptance belongs to #21; missing deployment/setup code remains #11.
 
+Normal play now uses [temporary USB play](usb-play.md) without persistent installation registration or Keychain. This document describes the preserved optional parent/network path; it is no longer a prerequisite for USB gameplay.
+
 ## Available surface
 
 Board Setup → **Installation Pairing and lost-Mac revocation** operates on an **already installed and explicitly TBP-configured Companion**. It does not create Linux credentials, generate the Board TLS identity, install/upgrade an app, or finish the twelve-stage setup guide. The separate [resumable guide](setup-checkpoints.md) now records its Pairing checkpoint only after the combined USB/dedicated-key SSH/signed-TLS proof; registration alone does not complete the later software/restart/hardware/Crew checkpoints.

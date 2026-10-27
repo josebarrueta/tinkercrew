@@ -36,6 +36,10 @@ class ProvisionTests(unittest.TestCase):
         original = self.bundle
         package = json.loads(original["bytes"])
         files = {name: base64.b64decode(value) for name, value in package["files"].items()}
+        # Freeze the historic correction target, not the evolving runtime bundle.
+        files['python/tinkercrew_companion/server.py'] = (Path(__file__).parent/'fixtures/companion-pre-usb-server.py').read_bytes()
+        corrected = dict(package, release=provision.release_id(files), files={name:base64.b64encode(value).decode() for name,value in files.items()})
+        original = {'release':corrected['release'],'bytes':json.dumps(corrected,sort_keys=True,separators=(',',':')).encode()}
         files["sketch/sketch.yaml"] = b"profiles:\n  default:\n    platforms:\n      - platform: arduino:zephyr\n    libraries:\n      - Arduino_Modulino\n      - Arduino_RouterBridge\ndefault_profile: default\n"
         release = provision.release_id(files)
         self.assertEqual(release, "63e90d374bc27c69b2fd810f851fed9a51d00abaaa82ce6369ba4b7cac7feef3")

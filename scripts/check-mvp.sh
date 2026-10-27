@@ -5,6 +5,11 @@ root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$root"
 # Reuse explicitly installed project dependencies; this script never installs packages.
 if [[ -x "$root/.venv/bin/python3" ]]; then export PATH="$root/.venv/bin:$PATH"; fi
+# Board provisioning supports OpenSSL 3; don't accidentally test with Homebrew's
+# newer default major. Reuse an installed 3.x CLI without installing anything.
+for prefix in /opt/homebrew/opt/openssl@3 /usr/local/opt/openssl@3; do
+  if [[ -x "$prefix/bin/openssl" ]]; then export PATH="$prefix/bin:$PATH"; break; fi
+done
 build=0
 case "${1:-}" in
   "") ;;
@@ -25,6 +30,7 @@ workspace=clean
   printf -- '- npm: %s\n' "$(npm --version 2>/dev/null || printf unavailable)"
   printf -- '- Rust: %s\n' "$(rustc --version 2>/dev/null || printf unavailable)"
   printf -- '- Python: %s\n' "$(python3 --version 2>/dev/null || printf unavailable)"
+  printf -- '- OpenSSL CLI: %s\n' "$(openssl version 2>/dev/null || printf unavailable)"
   printf '\n| Software check | Result |\n| --- | --- |\n'
 } > "$report"
 
@@ -49,7 +55,7 @@ run_check 'Board management helper and release metadata tests' python3 -m unitte
 run_check 'Detached release signature and tamper checks' cargo test --locked --manifest-path tools/release-verify/Cargo.toml
 run_check 'Release verifier formatting' cargo fmt --manifest-path tools/release-verify/Cargo.toml --check
 run_check 'Release verifier lint' cargo clippy --locked --manifest-path tools/release-verify/Cargo.toml --all-targets -- -D warnings
-run_check 'Python compilation' python3 -m compileall -q companion/python companion/tests scripts app/src-tauri/src/board_management.py app/src-tauri/src/companion_provision.py
+run_check 'Python compilation' python3 -m compileall -q companion/python companion/tests scripts app/src-tauri/src/board_management.py app/src-tauri/src/companion_provision.py app/src-tauri/src/usb_play_bootstrap.py
 run_check 'Whitespace validation' git diff --check
 if [[ "$build" == 1 ]]; then
   run_check 'Production macOS app bundle' bash -c 'cd app && npm run build:app'

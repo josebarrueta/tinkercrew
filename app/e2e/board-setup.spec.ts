@@ -159,6 +159,19 @@ async function mockManagement(
   const management = page.getByRole("region", {
     name: "Board configuration and recovery",
   });
+  if (registered) {
+    await page
+      .getByText("Parent network connection — saved Pairing (optional)", {
+        exact: true,
+      })
+      .click();
+    await page
+      .getByRole("button", {
+        name: "Load saved Boards for network play",
+        exact: true,
+      })
+      .click();
+  }
   if (initialPhase !== "idle") return management;
   await management
     .getByRole("button", { name: "Refresh USB Boards", exact: true })
@@ -620,7 +633,7 @@ test("management uses transient credential requests and clears them on navigatio
     .getByText("Parent setup & advanced maintenance", { exact: true })
     .click();
   await page
-    .getByRole("button", { name: "Add / pair a Board", exact: true })
+    .getByRole("button", { name: "Parent setup (one time)", exact: true })
     .click();
   await expect(password).toHaveValue("");
   await password.fill("fixture-only-not-submitted");

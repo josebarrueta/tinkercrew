@@ -14,6 +14,7 @@ mod runtime_update;
 mod session;
 mod setup;
 mod setup_hardware;
+mod usb_play;
 
 use tauri::Manager;
 
@@ -52,8 +53,11 @@ pub fn run() {
             connection::register_board,
             connection::list_boards,
             connection::probe_board,
+            connection::connect_usb_play,
+            usb_play::usb_play_boards,
             connection::board_request,
             connection::disconnect_board,
+            connection::disconnect_play_handle,
             discovery::board_candidates,
             setup::load_setup,
             setup_hardware::start_setup_hardware,

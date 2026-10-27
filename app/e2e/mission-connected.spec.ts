@@ -19,11 +19,9 @@ async function connectedBoard(page: Page) {
     scope.__TAURI_INTERNALS__ = {
       invoke: async (command, args = {}) => {
         scope.__missionCalls.push({ command, args });
-        if (command === "list_boards")
-          return [{ boardId: "test-board", name: "Family UNO Q" }];
-        if (command === "board_candidates")
-          return [{ host: "127.0.0.1", port: 7443 }];
-        if (command === "probe_board") return 1;
+        if (command === "usb_play_boards") return [{ serial: "test-usb" }];
+        if (command === "connect_usb_play")
+          return { handle: 1, boardId: "test-board" };
         if (command === "load_progress") return saved;
         if (command === "save_progress") {
           saved = {
@@ -87,6 +85,12 @@ async function connectedBoard(page: Page) {
     };
   });
   await page.goto("/legacy");
+  await page
+    .getByRole("button", { name: "☰ Board Setup", exact: true })
+    .click();
+  await page
+    .getByRole("button", { name: "Detect USB Board", exact: true })
+    .click();
   await expect(
     page.getByText("Board connected", { exact: true }),
   ).toBeVisible();
@@ -113,7 +117,7 @@ test("native Mission failures show the actionable message rather than object Obj
   await expect(page.getByText("Stage 1 of 10", { exact: true })).toBeVisible();
 });
 
-test("paired families can go from connection to their saved Mission without maintenance screens", async ({
+test("USB families can go from connection to their saved Mission without maintenance screens", async ({
   page,
 }, testInfo) => {
   await connectedBoard(page);
@@ -125,7 +129,7 @@ test("paired families can go from connection to their saved Mission without main
   ).toBeVisible();
   await expect(
     page.getByRole("button", {
-      name: "Connect / retry selected Board",
+      name: "Connect / retry USB Board",
       exact: true,
     }),
   ).toBeVisible();

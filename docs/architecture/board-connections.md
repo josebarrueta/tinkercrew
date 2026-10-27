@@ -2,7 +2,11 @@
 
 Implemented for #7 before physical acceptance, at the owner's request. The native transport is macOS-only. Simulator play remains independent of credentials, internet, and Board availability.
 
-## Connection ladder
+## Default USB play
+
+Normal Connect uses [temporary USB play](usb-play.md), not this saved-profile ladder. It never reads Keychain or falls back to LAN, and requires explicit reconnect after failure. The ladder below remains behind optional **Parent network connection — saved Pairing**. Loading saved records is explicit even on the legacy screen.
+
+## Parent saved-profile connection ladder
 
 `app/src/lib/board/connection.ts` exposes observable searching/connected/failed states and attempts, in order:
 

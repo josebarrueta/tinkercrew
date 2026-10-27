@@ -32,6 +32,9 @@
     defer?: boolean;
     onParent?: () => void;
   } = $props();
+  let usbBoards = $state<{ serial: string }[]>([]);
+  let selectedUsb = $state("");
+  let usbHandle: number | undefined;
   let boards = $state<{ boardId: string; name: string }[]>([]);
   let selected = $state("");
   let record = $state("");
@@ -79,11 +82,11 @@
     clearTimeout(retry);
     if (reconnect && !disposed)
       retry = setTimeout(() => {
-        void connect(true);
+        void connectSaved(true);
       }, 5000);
   }
 
-  async function connect(retrying = false) {
+  async function connectSaved(retrying = false) {
     const boardId = retrying ? reconnectBoardId : selected;
     if (!native || !boardId || busy || managementBusy || disposed) return;
     const epoch = ++intent;
@@ -186,6 +189,60 @@
     }
   }
 
+  async function closeUsb(handle = usbHandle) {
+    if (handle === usbHandle) usbHandle = undefined;
+    if (native && handle !== undefined)
+      await invoke("disconnect_play_handle", { handle }).catch(() => {});
+  }
+
+  async function connectUsb() {
+    if (!native || !selectedUsb || busy || managementBusy || disposed) return;
+    const epoch = ++intent;
+    const current = () => !disposed && epoch === intent;
+    busy = true;
+    reconnect = false;
+    clearTimeout(retry);
+    message = "";
+    client?.close();
+    report({ phase: "searching", stage: "usb" });
+    try {
+      await invoke("disconnect_board");
+      if (!current()) return;
+      const result = await invoke<{ handle: number; boardId: string }>(
+        "connect_usb_play",
+        { serial: selectedUsb },
+      );
+      if (!current()) {
+        await closeUsb(result.handle);
+        return;
+      }
+      usbHandle = result.handle;
+      client = await ConnectedBoardClient.open(
+        result.handle,
+        result.boardId,
+        (handle, operation) => invoke("board_request", { handle, operation }),
+        (error) => {
+          if (!current()) return;
+          report({ phase: "failed", error });
+          void closeUsb();
+        },
+      );
+      if (!current()) {
+        client.close();
+        await closeUsb(result.handle);
+        return;
+      }
+      connectedBoardId = result.boardId;
+      onConnected(client);
+      report({ phase: "connected", transport: "usb" });
+    } catch (cause) {
+      await closeUsb();
+      if (current()) report({ phase: "failed", error: connectionError(cause) });
+    } finally {
+      busy = false;
+    }
+  }
+
   export async function useSimulator() {
     ++intent;
     reconnect = false;
@@ -215,6 +272,31 @@
   }
 
   export async function openConnection() {
+    if (!native || disposed || busy || loadingBoards || managementBusy) return;
+    const epoch = ++intent;
+    loadingBoards = true;
+    message = "";
+    try {
+      const detected = await invoke<typeof usbBoards>("usb_play_boards");
+      if (disposed || epoch !== intent) return;
+      usbBoards = detected;
+      if (detected.length === 1) {
+        selectedUsb = detected[0].serial;
+        loadingBoards = false;
+        await connectUsb();
+      } else if (!detected.length) {
+        message =
+          "No ready USB Board detected. Check the data cable and allow the Board to finish booting, then detect again.";
+      }
+    } catch (cause) {
+      if (!disposed && epoch === intent)
+        report({ phase: "failed", error: connectionError(cause) });
+    } finally {
+      loadingBoards = false;
+    }
+  }
+
+  async function openSavedBoards() {
     if (!native || disposed || busy || loadingBoards) return;
     const epoch = ++intent;
     loadingBoards = true;
@@ -222,10 +304,7 @@
       const saved = await invoke<typeof boards>("list_boards");
       if (disposed || epoch !== intent) return;
       boards = saved;
-      if (boards.length === 1) {
-        selected = boards[0].boardId;
-        await connect();
-      }
+      if (boards.length === 1) selected = boards[0].boardId;
     } catch (cause) {
       if (!disposed && epoch === intent)
         message = connectionError(cause).message;
@@ -234,29 +313,25 @@
     }
   }
   onMount(() => {
-    if (!defer) void openConnection();
+    // Even the legacy screen must not silently look up credentials or connect.
     return () => {
       disposed = true;
       ++intent;
       reconnect = false;
       clearTimeout(retry);
       client?.close();
+      void closeUsb();
     };
   });
 </script>
 
 <section hidden={!visible} class="connections">
   <h2>{advanced ? "Connect & play" : "Connect your Board"}</h2>
-  {#if !advanced}<p>
-      This Mac stores only its own Board permission in macOS secure storage, not
-      your other passwords. Approve Tinkeroo's expected OS prompt if shown. No
-      firmware, restart or reset runs from Connect.
-    </p>{/if}
   <p>
-    {advanced
-      ? "Already paired? Connect your Board below, then continue to your Mission."
-      : "Choose your saved Board and connect. New Board? Open parent setup once."}
-    No Linux password or repeated setup is needed.
+    Plug in a prepared UNO Q with a USB data cable. USB play uses temporary
+    permission in this app's memory — no Mac or Linux password, Keychain access,
+    or saved Pairing. Connect never resets, restarts or uploads firmware. A new
+    Board needs parent setup once.
   </p>
   <p>
     Using the simulator instead? It is practice only and never drives the
@@ -290,48 +365,80 @@
       open Parent setup &amp; advanced maintenance below to inspect it.
     </p>{/if}
   <fieldset disabled={!native || busy || loadingBoards || managementBusy}>
-    <legend>Your saved Board</legend>
+    <legend>USB play</legend>
     <label
-      >Paired Board
-      <select bind:value={selected}>
-        <option value="">Select a Board identity</option>
-        {#each boards as board}<option value={board.boardId}
-            >{board.name} · {board.boardId.slice(-6)}</option
+      >USB Board
+      <select bind:value={selectedUsb}>
+        <option value="">Select the connected USB Board</option>
+        {#each usbBoards as board}<option value={board.serial}
+            >{board.serial}</option
           >{/each}
       </select>
     </label>
-    <details>
-      <summary>Connection options (optional)</summary>
-      <label class="check"
-        ><input type="checkbox" bind:checked={localConsent} />Allow checking up
-        to eight cached local neighbors after Bonjour fails (no subnet scan)</label
-      >
-      <label
-        >Manual local IP or hostname (optional)<input
-          bind:value={manualHost}
-          placeholder="192.168.1.42 or dragon.local"
-        /></label
-      >
-      <label
-        >Companion port<input
-          type="number"
-          min="1"
-          max="65535"
-          bind:value={manualPort}
-        /></label
-      >
-      <p>
-        Try USB if local-network or VPN settings block the Board. The same
-        pinned identity checks apply to every route.
-      </p>
-    </details>
-    <button disabled={!selected} onclick={() => connect()}
-      >Connect / retry selected Board</button
-    >
-    <button onclick={() => useSimulator()}
-      >Use simulator / stop reconnecting</button
+    <button onclick={openConnection}>Detect USB Board</button>
+    <button disabled={!selectedUsb} onclick={connectUsb}
+      >Connect / retry USB Board</button
     >
   </fieldset>
+  <button onclick={() => useSimulator()}
+    >Use simulator / stop reconnecting</button
+  >
+  {#if advanced}<details>
+      <summary>Parent network connection — saved Pairing (optional)</summary>
+      <p>
+        Wi-Fi play uses saved Mac credentials and can require Keychain approval.
+        USB play above does not read those credentials or fall back to the
+        network.
+      </p>
+      <button
+        disabled={!native || busy || loadingBoards || managementBusy}
+        onclick={openSavedBoards}>Load saved Boards for network play</button
+      >
+      <fieldset disabled={!native || busy || loadingBoards || managementBusy}>
+        <legend>Your saved Board</legend>
+        <label
+          >Paired Board
+          <select bind:value={selected}>
+            <option value="">Select a Board identity</option>
+            {#each boards as board}<option value={board.boardId}
+                >{board.name} · {board.boardId.slice(-6)}</option
+              >{/each}
+          </select>
+        </label>
+        <details>
+          <summary>Connection options (optional)</summary>
+          <label class="check"
+            ><input type="checkbox" bind:checked={localConsent} />Allow checking
+            up to eight cached local neighbors after Bonjour fails (no subnet
+            scan)</label
+          >
+          <label
+            >Manual local IP or hostname (optional)<input
+              bind:value={manualHost}
+              placeholder="192.168.1.42 or dragon.local"
+            /></label
+          >
+          <label
+            >Companion port<input
+              type="number"
+              min="1"
+              max="65535"
+              bind:value={manualPort}
+            /></label
+          >
+          <p>
+            Try USB if local-network or VPN settings block the Board. The same
+            pinned identity checks apply to every route.
+          </p>
+        </details>
+        <button disabled={!selected} onclick={() => connectSaved()}
+          >Connect / retry selected Board</button
+        >
+        <button onclick={() => useSimulator()}
+          >Use simulator / stop reconnecting</button
+        >
+      </fieldset>
+    </details>{/if}
   {#if advanced}<button
       class="primary"
       disabled={busy ||
@@ -340,20 +447,12 @@
         connection.phase === "failed"}
       onclick={onMission}>Continue to Mission</button
     >{/if}
-  <button onclick={openParentSetup}>Add / pair a Board</button>
-  {#if native && boards.length === 0}<p>
-      No saved Board yet. Pair this Mac once, then use Connect &amp; play for
-      later sessions.
-    </p>{/if}
+  <button onclick={openParentSetup}>Parent setup (one time)</button>
   <p>
     Opening a Mission does not enable physical lights or sound. Mission controls
     need a separate explicit action.
   </p>
-  {#if advanced}<button
-      disabled={!native || busy || loadingBoards}
-      onclick={openConnection}>Load saved Boards to connect</button
-    >
-    <details bind:open={setupOpen}>
+  {#if advanced}<details bind:open={setupOpen}>
       <summary>Set up a UNO Q — resumable official-tool handoff guide</summary>
       <p>
         Use this for a new Board, not every play session. Already paired Boards
