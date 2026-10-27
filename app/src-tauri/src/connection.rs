@@ -794,10 +794,36 @@ mod tests {
             directory.is_dir() && !directory.is_symlink(),
             "Expected existing app data; no replacement storage created."
         );
+        // Fail closed if macOS requires interactive credential permission. Never leave
+        // an unattended acceptance run waiting on SecurityAgent, and never bypass its ACL.
+        #[link(name = "Security", kind = "framework")]
+        unsafe extern "C" {
+            fn SecKeychainSetUserInteractionAllowed(state: u8) -> i32;
+            fn SecKeychainGetUserInteractionAllowed(state: *mut u8) -> i32;
+        }
+        let mut previous_interaction = 1u8;
+        assert_eq!(
+            unsafe { SecKeychainGetUserInteractionAllowed(&mut previous_interaction) },
+            0,
+            "Could not read Keychain interaction policy."
+        );
+        struct RestoreInteraction(u8);
+        impl Drop for RestoreInteraction {
+            fn drop(&mut self) {
+                let _ = unsafe { SecKeychainSetUserInteractionAllowed(self.0) };
+            }
+        }
+        let _interaction = RestoreInteraction(previous_interaction);
+        assert_eq!(
+            unsafe { SecKeychainSetUserInteractionAllowed(0) },
+            0,
+            "Could not establish noninteractive Keychain failure mode."
+        );
         let state = Connections::new(directory);
         let _permit = state
             .begin_maintenance()
             .expect("Another operation is unresolved; diagnostic refused.");
+        println!("Owner read-only diagnostic phase: physical USB inspection");
         let physical =
             crate::management::inspect(&serial).expect("Exact physical Board inspection failed.");
         let observed = crate::pairing::usb(
@@ -808,9 +834,10 @@ mod tests {
         let board_id = observed["board_id"]
             .as_str()
             .expect("Missing USB Board identity.");
+        println!("Owner read-only diagnostic phase: existing Board Keychain record");
         let profile = state
             .profile(board_id)
-            .expect("Existing Pairing required; no new key/credential will be generated.");
+            .expect("Existing Board credentials are not accessible to this noninteractive diagnostic. Use Tinkeroo's normal Keychain prompt; do not delete or re-pair as a workaround.");
         assert!(
             profile.adb_serial == serial
                 && profile.installation_id.is_some()
@@ -825,9 +852,12 @@ mod tests {
         let forward = crate::pairing::Forward::new(&serial).expect("Fixed HTTPS forward failed.");
         let result=tauri::async_runtime::block_on(async {
             let candidate=Candidate::new("127.0.0.1",forward.port)?;
+            println!("Owner read-only diagnostic phase: pinned TLS client");
             let (client,_)=secure_client(&profile,&candidate).await?;
+            println!("Owner read-only diagnostic phase: existing installation Keychain keys");
             let auth=crate::session::GameplayAuth::from_profile(&profile,&state.directory)?;
             let observation=async {
+                println!("Owner read-only diagnostic phase: signed authenticated hello");
                 let hello=request(&client,&profile,forward.port,Method::GET,"/v1/hello",None,&auth).await?;
                 let sensors=request(&client,&profile,forward.port,Method::GET,"/v1/state",None,&auth).await?;
                 let events=request(&client,&profile,forward.port,Method::GET,"/v1/events?after=0",None,&auth).await?;
