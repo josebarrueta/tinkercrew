@@ -35,6 +35,14 @@ Thus the Board has booted since the earlier successful startup, and its non-defa
 
 Local sanitized lifecycle evidence: ignored `artifacts/qa/uno-q-mission-service-lifecycle.json`. The explicitly ignored `physical_authenticated_sensor_inspection_owner_only` diagnostic requires separate `read-only-sensors` scope, exact USB selection and a closed Tinkeroo UI; normal QA/CI never runs it or accesses live Keychain/Board data. Never run blanket `--ignored`.
 
+## Follow-up — 2026-10-27
+
+With renewed explicit owner scope for official startup and a brief bounded light/tone test, the reviewed official App CLI restart returned **0 / running**. Source receipt and prepared identity remained unchanged, on the same kernel boot; no reset, rekey or default-app change was requested. The attended worker was detached from ADB and never timed out/killed a firmware operation. Local ignored evidence: `artifacts/qa/uno-q-mission-start-session.json`.
+
+The subsequent isolated native read-only check waited indefinitely for macOS credential interaction and was stopped by the host command deadline **before any output request**. A noninteractive follow-up localized the block to access to the existing Board Keychain record. This is not proof that Pairing is missing or invalid. The optional diagnostic now disables interactive Keychain UI for its own process, restores the prior interaction policy on exit/unwind, and reports safe phase names; it never grants access or changes Keychain ACLs. If access is unavailable, use the normal Tinkeroo app and its expected OS prompt rather than deleting/re-Pairing or granting broad debug-binary access. The normal app's credential behavior is unchanged.
+
+No light/tone was sent, no fresh authenticated sensor witness was completed by that diagnostic, and no real Mission pass is claimed. Continue through the actual app's Connect & play / Hardware Lab / explicit Mission controls with the owner observing inputs and outputs.
+
 ## Remaining physical acceptance
 
 The only implemented Mission is Treasure Guardian; other map stops are not completed Missions. The complete simulated Mission/resume/remix flow passes software tests, but **a full real-board Mission has not passed**. A separately approved official Companion startup may compile/upload STM32 firmware. Then verify fresh signed sensor state, real A/B/C presses, Distance movement, and explicit bounded lights/sound with the owner witnessing outputs. Do not mark these from simulator events, historical button events or a public health response. #21 broad physical/family acceptance and #25/#12 publication gates remain incomplete.
