@@ -4,6 +4,9 @@ import hmac
 import json
 import os
 import ssl
+import socket
+import stat
+import errno
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -16,6 +19,167 @@ from .core import CommandError, Companion
 from .hardware import BridgeHardware, MemoryHardware
 
 MAX_BODY_BYTES = 65536
+
+
+class UsbPlayRegistry:
+    """Physical-USB-issued, loopback-only capabilities. Board stores hashes, never Mac keys.
+
+    Separate DB/namespace: no installation, SSH or existing Pairing mutation.
+    begin/refresh are host-bootstrap operations, never HTTP routes.
+    """
+    def __init__(self, directory, board_id, *, clock=time.monotonic, boot_id=None):
+        from .auth import AuthError, boot_identity
+        import uuid
+        if str(uuid.UUID(board_id)) != board_id:
+            raise AuthError('invalid_message')
+        self.directory = Path(directory)
+        self.board_id, self.clock, self.boot_id = board_id, clock, boot_id or boot_identity()
+        self.lock = threading.RLock()
+        if self.directory.is_symlink() or any(p.is_symlink() for p in self.directory.parents):
+            raise AuthError('unsupported_storage')
+        self.directory.mkdir(mode=0o700, parents=True, exist_ok=True)
+        if self.directory.stat().st_uid != os.geteuid() or self.directory.stat().st_mode & 0o077:
+            raise AuthError('unsupported_storage')
+        self.path = self.directory / 'usb-play.sqlite'
+        import stat
+        fd = os.open(self.path, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW | os.O_NONBLOCK, 0o600)
+        try:
+            if not stat.S_ISREG(os.fstat(fd).st_mode):
+                raise AuthError('unsupported_storage')
+        finally:
+            os.close(fd)
+        with self._db() as db:
+            if db.execute('PRAGMA user_version').fetchone()[0] not in (0, 1):
+                raise AuthError('unsupported_storage')
+            db.executescript('CREATE TABLE IF NOT EXISTS identity (singleton INTEGER PRIMARY KEY CHECK(singleton=1),board TEXT,epoch TEXT); CREATE TABLE IF NOT EXISTS grants (id TEXT PRIMARY KEY,digest TEXT,board TEXT,boot TEXT,epoch TEXT,expires REAL); CREATE TABLE IF NOT EXISTS sessions (digest TEXT PRIMARY KEY,id TEXT,board TEXT,boot TEXT,epoch TEXT,expires REAL,last_use REAL); PRAGMA user_version=1;')
+            db.execute('INSERT OR IGNORE INTO identity VALUES (1,?,?)', (self.board_id,''))
+            if db.execute('SELECT board FROM identity WHERE singleton=1').fetchone()[0] != self.board_id:
+                raise AuthError('identity_mismatch')
+
+    def _db(self):
+        from contextlib import contextmanager
+        import sqlite3
+        from .auth import AuthError
+        @contextmanager
+        def opened():
+            with self.lock:
+                import stat
+                info = self.path.lstat()
+                if not stat.S_ISREG(info.st_mode) or self.path.is_symlink() or info.st_uid != os.geteuid() or info.st_nlink != 1 or info.st_mode & 0o077:
+                    raise AuthError('unsupported_storage')
+                db = sqlite3.connect(self.path, timeout=0.2)
+                db.row_factory = sqlite3.Row
+                try:
+                    with db:
+                        yield db
+                finally:
+                    db.close()
+        return opened()
+
+    @staticmethod
+    def _digest(token, *, session=False):
+        import hashlib
+        import re
+        from .auth import AuthError
+        pattern = r'usb1\.[A-Za-z0-9_-]{43}' if session else r'[A-Za-z0-9_-]{43}'
+        if not isinstance(token, str) or not re.fullmatch(pattern, token):
+            raise AuthError()
+        return hashlib.sha256(token.encode()).hexdigest()
+
+    def _epoch(self, db):
+        from .auth import AuthError
+        epoch = db.execute('SELECT epoch FROM identity WHERE singleton=1 AND board=?', (self.board_id,)).fetchone()
+        if not epoch or not epoch[0]:
+            raise AuthError('usb_play_unavailable')
+        return epoch[0]
+
+    def _prune(self, db):
+        now, epoch = self.clock(), self._epoch(db)
+        db.execute('DELETE FROM grants WHERE board!=? OR boot!=? OR epoch!=? OR expires<=?', (self.board_id, self.boot_id, epoch, now))
+        db.execute('DELETE FROM sessions WHERE board!=? OR boot!=? OR epoch!=? OR expires<=? OR last_use<=?', (self.board_id, self.boot_id, epoch, now, now-60))
+
+    def start_runtime(self):
+        import uuid
+        with self._db() as db:
+            db.execute('BEGIN IMMEDIATE')
+            db.execute('UPDATE identity SET epoch=? WHERE singleton=1', (str(uuid.uuid4()),))
+            db.execute('DELETE FROM grants')
+            db.execute('DELETE FROM sessions')
+
+    def begin(self):
+        import secrets
+        import uuid
+        from .auth import AuthError
+        token, identity = secrets.token_urlsafe(32), str(uuid.uuid4())
+        with self._db() as db:
+            db.execute('BEGIN IMMEDIATE')
+            self._prune(db)
+            if db.execute('SELECT count(*) FROM grants').fetchone()[0] >= 4:
+                raise AuthError('session_limit')
+            db.execute('INSERT INTO grants VALUES (?,?,?,?,?,?)', (identity, self._digest(token), self.board_id, self.boot_id, self._epoch(db), self.clock()+30))
+        return {'board_id':self.board_id,'grant_id':identity,'grant_token':token}
+
+    def exchange(self, body, *, loopback=False):
+        import secrets
+        import uuid
+        from .auth import AuthError
+        if not loopback:
+            raise AuthError('usb_transport_required')
+        try:
+            if set(body) != {'board_id','grant_id','grant_token'} or body['board_id'] != self.board_id or str(uuid.UUID(body['grant_id'])) != body['grant_id']:
+                raise ValueError()
+            supplied = self._digest(body['grant_token'])
+        except (ValueError, TypeError, KeyError):
+            raise AuthError() from None
+        with self._db() as db:
+            db.execute('BEGIN IMMEDIATE')
+            self._prune(db)
+            row = db.execute('SELECT * FROM grants WHERE id=?', (body['grant_id'],)).fetchone()
+            db.execute('DELETE FROM grants WHERE id=?', (body['grant_id'],))
+        if not row or not hmac.compare_digest(row['digest'], supplied):
+            raise AuthError()
+        token, identity = 'usb1.'+secrets.token_urlsafe(32), str(uuid.uuid4())
+        with self._db() as db:
+            db.execute('BEGIN IMMEDIATE')
+            self._prune(db)
+            if db.execute('SELECT count(*) FROM sessions').fetchone()[0] >= 2:
+                raise AuthError('session_limit')
+            if row['epoch'] != self._epoch(db):
+                raise AuthError()
+            db.execute('INSERT INTO sessions VALUES (?,?,?,?,?,?,?)', (self._digest(token,session=True),identity,self.board_id,self.boot_id,self._epoch(db),self.clock()+150,self.clock()))
+        return {'board_id':self.board_id,'boot_id':self.boot_id,'session_id':identity,'session_token':token,'expires_in_seconds':150,'idle_timeout_seconds':60,'usb_play_version':1}
+
+    def authenticate(self, token, *, loopback=False, touch=True):
+        from .auth import AuthError
+        import sqlite3
+        if not loopback:
+            return None
+        try:
+            digest = self._digest(token,session=True)
+            with self._db() as db:
+                self._prune(db)
+                row = db.execute('SELECT id FROM sessions WHERE digest=?', (digest,)).fetchone()
+                if not row:
+                    return None
+                if touch:
+                    db.execute('UPDATE sessions SET last_use=? WHERE digest=? AND last_use<=?', (self.clock(),digest,self.clock()-1))
+                return 'usb:'+row['id']
+        except (AuthError, sqlite3.Error, OSError):
+            return None
+
+    def refresh(self, token):
+        from .auth import AuthError
+        digest = self._digest(token,session=True)
+        with self._db() as db:
+            db.execute('BEGIN IMMEDIATE')
+            self._prune(db)
+            if db.execute('UPDATE sessions SET expires=? WHERE digest=?', (self.clock()+150,digest)).rowcount != 1:
+                raise AuthError('usb_session_expired')
+        return {'board_id':self.board_id,'boot_id':self.boot_id,'usb_play_version':1}
+
+    def close_session(self, token):
+        with self._db() as db:
+            db.execute('DELETE FROM sessions WHERE digest=?', (self._digest(token,session=True),))
 
 
 def load_config() -> dict:
@@ -73,6 +237,52 @@ class CompanionHTTPServer(ThreadingHTTPServer):
             worker.join(timeout=0.25)
 
 
+class CompanionUSBServer(CompanionHTTPServer):
+    """Private filesystem listener: ADB can forward it, LAN TCP cannot reach it.
+
+    The app directory is bind-mounted into the official Docker container. Unix
+    socket identity survives that boundary; source-IP assumptions do not.
+    """
+    address_family = socket.AF_UNIX
+
+    def server_bind(self):
+        path = Path(self.server_address)
+        if path.parent.is_symlink() or path.parent.stat().st_uid != os.geteuid() or path.parent.stat().st_mode & 0o077:
+            raise ValueError('Unsafe USB socket directory')
+        if path.exists() or path.is_symlink():
+            previous = path.lstat()
+            if not stat.S_ISSOCK(previous.st_mode) or previous.st_uid != os.geteuid() or previous.st_nlink != 1:
+                raise ValueError('Unknown USB socket target')
+            with socket.socket(socket.AF_UNIX) as probe:
+                try:
+                    probe.connect(str(path))
+                except OSError as error:
+                    if error.errno != errno.ECONNREFUSED:
+                        raise
+                else:
+                    raise ValueError('USB socket is already owned by a live listener')
+            if path.lstat().st_ino != previous.st_ino:
+                raise ValueError('USB socket ownership changed')
+            path.unlink()
+        TCPServer.server_bind(self)
+        path.chmod(0o600)
+        self.owned_socket_inode = path.lstat().st_ino
+        self.server_name, self.server_port = 'usb-play', 0
+
+    def serve_forever(self, poll_interval=0.1):
+        # The shared main TCP server owns the single control watchdog.
+        TCPServer.serve_forever(self, poll_interval=poll_interval)
+
+    def server_close(self):
+        super().server_close()
+        path = Path(self.server_address)
+        try:
+            if path.lstat().st_ino == getattr(self, 'owned_socket_inode', None) and stat.S_ISSOCK(path.lstat().st_mode):
+                path.unlink()
+        except FileNotFoundError:
+            pass
+
+
 def runtime_maintenance(directory):
     """Fixed private runtime metadata; errors deny gameplay, never trust an incomplete trial."""
     try:
@@ -94,11 +304,19 @@ def runtime_maintenance(directory):
         return True
 
 
-def make_handler(companion: Companion, token: str | None = None, *, auth=None, rate_clock=time.monotonic, maintenance=None, control_clock=time.monotonic):
+def make_handler(companion: Companion, token: str | None = None, *, auth=None, usb_play=None, rate_clock=time.monotonic, maintenance=None, control_clock=time.monotonic):
     if (auth is None) == (token is None):
         raise ValueError("Select exactly one authentication mode")
     if auth is not None:
         auth.start_runtime()
+    if usb_play is not None:
+        if auth is None:
+            raise ValueError('USB play requires the prepared TBP identity')
+        usb_play.start_runtime()
+    def authenticate(value, *, touch=True, loopback=False):
+        if usb_play is not None and isinstance(value, str) and value.startswith('usb1.'):
+            return usb_play.authenticate(value, touch=touch, loopback=loopback)
+        return auth.authenticate(value, touch=touch) if auth is not None else None
     command_times = deque()
     authentication_times = deque()
     rate_lock = threading.RLock()
@@ -112,7 +330,7 @@ def make_handler(companion: Companion, token: str | None = None, *, auth=None, r
                 if not companion.hello()["health"]["safe_state"]:
                     companion.enter_safe_state("maintenance_active")
                 control_token = None
-            if control_token and (control_clock() >= control_until or not auth.authenticate(control_token, touch=False)):
+            if control_token and (control_clock() >= control_until or not authenticate(control_token, touch=False, loopback=True)):
                 companion.enter_safe_state("control_session_ended")
                 control_token = None
         companion.check_watchdog()
@@ -126,7 +344,7 @@ def make_handler(companion: Companion, token: str | None = None, *, auth=None, r
 
         def log_request(self, code="-", size="-"):
             route = urlparse(getattr(self, "path", "")).path
-            allowed = {"/v1/health/public", "/v1/hello", "/v1/state", "/v1/events", "/v1/commands", "/v1/control-lease", "/v1/self-tests", "/v1/pairings", "/v1/sessions/challenge", "/v1/sessions", "/v1/sessions/current"}
+            allowed = {"/v1/health/public", "/v1/hello", "/v1/state", "/v1/events", "/v1/commands", "/v1/control-lease", "/v1/self-tests", "/v1/pairings", "/v1/sessions/challenge", "/v1/sessions", "/v1/sessions/current", "/v1/usb-sessions"}
             print(json.dumps({"event": "http", "method": getattr(self, "command", "other") if getattr(self, "command", None) in {"GET", "POST", "DELETE"} else "other", "route": route if route in allowed else "other", "status": code}))
 
         def _send(self, status: int, body: dict | list) -> None:
@@ -138,13 +356,18 @@ def make_handler(companion: Companion, token: str | None = None, *, auth=None, r
             self.end_headers()
             self.wfile.write(encoded)
 
+        def _loopback(self):
+            # Only the protected ADB-forwarded Unix listener, never TCP, even
+            # localhost or spoofed forwarded headers. Docker NAT is irrelevant.
+            return self.server.address_family == socket.AF_UNIX
+
         def _authorized(self) -> bool:
             provided = self.headers.get("Authorization", "")
             if len(self.headers.get_all("Authorization", [])) != 1 or len(provided) > 1024:
                 return False
             if auth is not None:
                 tick()
-                return provided.startswith("Bearer ") and auth.authenticate(provided[7:]) is not None
+                return provided.startswith("Bearer ") and authenticate(provided[7:], loopback=self._loopback()) is not None
             return hmac.compare_digest(provided.encode(), f"Bearer {token}".encode())
 
         def _require_auth(self) -> bool:
@@ -203,7 +426,7 @@ def make_handler(companion: Companion, token: str | None = None, *, auth=None, r
 
         def do_POST(self):
             nonlocal control_token, control_until
-            authentication = auth is not None and self.path in {"/v1/pairings", "/v1/sessions/challenge", "/v1/sessions"}
+            authentication = auth is not None and self.path in {"/v1/pairings", "/v1/sessions/challenge", "/v1/sessions", "/v1/usb-sessions"}
             if not authentication and not self._require_auth():
                 return
             with rate_lock:
@@ -219,11 +442,16 @@ def make_handler(companion: Companion, token: str | None = None, *, auth=None, r
             try:
                 body = self._json_body(16384 if authentication else MAX_BODY_BYTES)
                 if authentication:
-                    if self.path == "/v1/sessions":
+                    if self.path == '/v1/usb-sessions':
+                        if usb_play is None:
+                            self._send(404, {'status':'error','error':{'code':'usb_play_unavailable'}})
+                            return
+                        result = usb_play.exchange(body, loopback=self._loopback())
+                    elif self.path == "/v1/sessions":
                         with rate_lock:
                             previous = self.headers.get("Authorization", "")
                             previous = previous[7:] if len(self.headers.get_all("Authorization", [])) == 1 and previous.startswith("Bearer ") and len(previous) <= 135 else None
-                            owner = auth.authenticate(previous, touch=False) if previous else None
+                            owner = authenticate(previous, touch=False, loopback=self._loopback()) if previous else None
                             result = auth.create_session(body, replace_token=previous)
                             if result["replaced_session"] and owner == body["installation_id"] and control_token == previous:
                                 control_token = result["session_token"]
@@ -240,7 +468,7 @@ def make_handler(companion: Companion, token: str | None = None, *, auth=None, r
                         tick()
                         current = self.headers["Authorization"][7:]
                         # Recheck after taking the control lock, including revocation during body read.
-                        if not auth.authenticate(current):
+                        if not authenticate(current, loopback=self._loopback()):
                             raise AuthError()
                         if self.path in {"/v1/commands", "/v1/self-tests", "/v1/control-lease"}:
                             if control_token is not None and control_token != current:
@@ -281,7 +509,8 @@ def make_handler(companion: Companion, token: str | None = None, *, auth=None, r
             if not self._require_auth():
                 return
             if auth is not None and self.path == "/v1/sessions/current":
-                auth.close_session(self.headers["Authorization"][7:])
+                value = self.headers['Authorization'][7:]
+                (usb_play if usb_play is not None and value.startswith('usb1.') else auth).close_session(value)
                 tick()
                 self._send(200, {"status": "ok"})
             else:
@@ -308,9 +537,12 @@ def run() -> None:
         from .auth import PairingRegistry
         directory = Path(os.environ.get("TC_CONFIG", "data/companion.json")).parent
         auth = PairingRegistry(directory, board_id)
+    usb_play = UsbPlayRegistry(directory, board_id) if mode == 'tbp' else None
     runtime_directory = os.environ.get("TC_RUNTIME_STATE")
     maintenance = (lambda: runtime_maintenance(runtime_directory)) if runtime_directory else None
-    server = CompanionHTTPServer((host, port), make_handler(companion, token if auth is None else None, auth=auth, maintenance=maintenance))
+    handler = make_handler(companion, token if auth is None else None, auth=auth, usb_play=usb_play, maintenance=maintenance)
+    server = CompanionHTTPServer((host, port), handler)
+    usb_server = CompanionUSBServer(str(directory / 'usb-play.sock'), handler) if usb_play is not None else None
 
     certificate = setting(config, "TC_TLS_CERT", "tls_cert")
     private_key = setting(config, "TC_TLS_KEY", "tls_key")
@@ -320,8 +552,13 @@ def run() -> None:
         context.minimum_version = ssl.TLSVersion.TLSv1_2
         context.load_cert_chain(certificate, private_key)
         server.socket = context.wrap_socket(server.socket, server_side=True)
-    elif not development_http:
+        if usb_server is not None:
+            usb_server.socket = context.wrap_socket(usb_server.socket, server_side=True)
+    elif usb_server is not None or not development_http:
         raise SystemExit("TLS certificate/key are required unless loopback development HTTP is explicitly enabled")
+
+    if usb_server is not None:
+        threading.Thread(target=usb_server.serve_forever, daemon=True).start()
 
     from .discovery import advertise
     advertisement = None if host in {"127.0.0.1", "localhost", "::1"} else advertise(board_id, port, str(setting(config, "TC_ADVERTISE_HOST", "advertise_host", "")))
@@ -333,6 +570,9 @@ def run() -> None:
     finally:
         companion.enter_safe_state("server_stopped")
         server.server_close()
+        if usb_server is not None:
+            usb_server.shutdown()
+            usb_server.server_close()
         if advertisement is not None:
             advertisement.close()
 

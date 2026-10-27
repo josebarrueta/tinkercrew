@@ -10,9 +10,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "app/src-tauri/src"
 from companion_provision import CompanionProvisioning, release_id
 
 package = json.loads(sys.stdin.buffer.read(2 * 1024 * 1024 + 1))
-wanted = package["release"]
 files = {name: base64.b64decode(value, validate=True) for name, value in package["files"].items()}
-assert release_id(files) == wanted == "d3c762374833ecce711fdd4a0b3c2727a846c443a34c2ba426de457610c6b6fe"
+assert release_id(files) == package['release']
+# This historical correction is deliberately NOT an update to current runtime code.
+files['python/tinkercrew_companion/server.py'] = (Path(__file__).parent/'fixtures/companion-pre-usb-server.py').read_bytes()
+wanted = release_id(files)
+assert wanted == "d3c762374833ecce711fdd4a0b3c2727a846c443a34c2ba426de457610c6b6fe"
 files["sketch/sketch.yaml"] = b"profiles:\n  default:\n    platforms:\n      - platform: arduino:zephyr\n    libraries:\n      - Arduino_Modulino\n      - Arduino_RouterBridge\ndefault_profile: default\n"
 old = release_id(files)
 assert old == "63e90d374bc27c69b2fd810f851fed9a51d00abaaa82ce6369ba4b7cac7feef3"

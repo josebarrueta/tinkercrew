@@ -89,6 +89,9 @@ pub struct BoardProfile {
 }
 impl BoardProfile {
     pub(crate) fn validate(&self) -> Result<()> {
+        self.validate_identity(false)
+    }
+    fn validate_identity(&self, usb_play: bool) -> Result<()> {
         if self.board_id == "unprovisioned"
             || self.board_id.len() < 8
             || self.board_id.len() > 64
@@ -105,16 +108,22 @@ impl BoardProfile {
                 .adb_serial
                 .bytes()
                 .all(|c| c.is_ascii_alphanumeric() || b"-_.:".contains(&c))
-            || match &self.installation_id {
-                Some(id) => {
-                    !crate::session::valid_id(id)
-                        || !crate::session::valid_id(&self.board_id)
-                        || !self.api_token.is_empty()
-                }
-                None => {
-                    self.api_token.len() < 32
-                        || self.api_token.len() > 512
-                        || self.api_token.contains(['\r', '\n'])
+            || if usb_play {
+                !crate::session::valid_id(&self.board_id)
+                    || !self.api_token.is_empty()
+                    || self.installation_id.is_some()
+            } else {
+                match &self.installation_id {
+                    Some(id) => {
+                        !crate::session::valid_id(id)
+                            || !crate::session::valid_id(&self.board_id)
+                            || !self.api_token.is_empty()
+                    }
+                    None => {
+                        self.api_token.len() < 32
+                            || self.api_token.len() > 512
+                            || self.api_token.contains(['\r', '\n'])
+                    }
                 }
             }
             || self.certificate_pem.len() > 8192
@@ -538,6 +547,137 @@ async fn verify_candidate(
     Ok((client, addresses))
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UsbConnection {
+    handle: u64,
+    board_id: String,
+}
+
+#[tauri::command]
+pub async fn connect_usb_play(
+    state: tauri::State<'_, Connections>,
+    serial: String,
+) -> Result<UsbConnection> {
+    connect_usb(&state, serial).await
+}
+
+pub(crate) async fn connect_usb(state: &Connections, serial: String) -> Result<UsbConnection> {
+    let _permit = state.begin_maintenance().map_err(|_| ConnectionError::new("maintenance_active", "Another Board operation is active or needs recovery. Finish Parent setup before connecting."))?;
+    disconnect(state).await?;
+    let selected = serial.clone();
+    let mut bootstrap =
+        tauri::async_runtime::spawn_blocking(move || crate::usb_play::begin(&selected))
+            .await
+            .map_err(|_| {
+                ConnectionError::new(
+                    "usb_play_unavailable",
+                    "USB verification stopped; select the Board again.",
+                )
+            })??;
+    let text = |name: &str| {
+        bootstrap[name].as_str().map(str::to_owned).ok_or_else(|| {
+            ConnectionError::new(
+                "invalid_response",
+                "USB play returned an incomplete identity.",
+            )
+        })
+    };
+    let binding = crate::usb_play::Binding {
+        serial: serial.clone(),
+        soc: text("serial")?,
+        board_id: text("board_id")?,
+        boot_id: text("boot_id")?,
+        certificate_sha256: text("certificate_sha256")?,
+    };
+    let profile = BoardProfile {
+        board_id: binding.board_id.clone(),
+        name: "USB Board".into(),
+        adb_serial: serial.clone(),
+        tls_name: text("tls_name")?,
+        certificate_pem: text("certificate_pem")?,
+        api_token: String::new(),
+        installation_id: None,
+        last_address: None,
+    };
+    profile.validate_identity(true)?;
+    if !crate::session::valid_id(&binding.boot_id)
+        || binding.certificate_sha256.len() != 64
+        || !binding
+            .certificate_sha256
+            .bytes()
+            .all(|c| c.is_ascii_hexdigit())
+    {
+        return Err(ConnectionError::new(
+            "invalid_response",
+            "USB play returned an invalid boot or certificate identity.",
+        ));
+    }
+    let forward =
+        tauri::async_runtime::spawn_blocking(move || crate::pairing::Forward::usb_play(&serial))
+            .await
+            .map_err(|_| ConnectionError::new("usb_unavailable", "USB forwarding stopped."))?
+            .map_err(|_| {
+                ConnectionError::new(
+                    "usb_unavailable",
+                    "USB forwarding could not start for the selected Board.",
+                )
+            })?;
+    let candidate = Candidate::new("127.0.0.1", forward.port)?;
+    let (client, _) = secure_client(&profile, &candidate).await?;
+    let usb = crate::usb_play::UsbAuth::open(
+        &client,
+        &profile.tls_name,
+        candidate.port,
+        bootstrap.take(),
+        binding.clone(),
+        Some(forward),
+    )
+    .await?;
+    let auth = crate::session::GameplayAuth::usb_play(usb.clone());
+    let hello = request(
+        &client,
+        &profile,
+        candidate.port,
+        Method::GET,
+        "/v1/hello",
+        None,
+        &auth,
+    )
+    .await;
+    let hello = match hello {
+        Ok(hello) => hello,
+        Err(error) => {
+            auth.close(&client, &profile.tls_name, candidate.port).await;
+            return Err(error);
+        }
+    };
+    let verified = hello["board"]["board_id"].as_str() == Some(&profile.board_id)
+        && hello["protocol"] == "1.0"
+        && hello["runtime"]["boot_id"].as_str() == Some(&binding.boot_id)
+        && hello["runtime"]["release"].as_str()
+            == crate::runtime_update::release_id().ok().as_deref();
+    if !verified {
+        auth.close(&client, &profile.tls_name, candidate.port).await;
+        return Err(ConnectionError::new(
+            "protocol_incompatible",
+            "The running Companion did not prove the expected USB play identity/version. Use Parent setup to check its software; no outputs were enabled.",
+        ));
+    }
+    usb.start_heartbeat();
+    let mut active = state.active.lock().await;
+    let handle = state.sequence.fetch_add(1, Ordering::Relaxed);
+    let board_id = profile.board_id.clone();
+    *active = Some(ActiveBoard {
+        handle,
+        client,
+        profile,
+        auth,
+        port: candidate.port,
+    });
+    Ok(UsbConnection { handle, board_id })
+}
+
 #[tauri::command]
 pub async fn probe_board(
     state: tauri::State<'_, Connections>,
@@ -598,7 +738,33 @@ async fn clear_connection(old: &ActiveBoard) {
 }
 
 #[tauri::command]
+pub async fn disconnect_play_handle(
+    state: tauri::State<'_, Connections>,
+    handle: u64,
+) -> Result<()> {
+    close_play(&state, handle).await
+}
+
+pub(crate) async fn close_play(state: &Connections, handle: u64) -> Result<()> {
+    let mut active = state.active.lock().await;
+    if active.as_ref().is_some_and(|board| board.handle == handle)
+        && let Some(old) = active.take()
+    {
+        // Session revocation disarms its lease; cancelling an unpublished
+        // connection must not issue an output command.
+        old.auth
+            .close(&old.client, &old.profile.tls_name, old.port)
+            .await;
+    }
+    Ok(())
+}
+
+#[tauri::command]
 pub async fn disconnect_board(state: tauri::State<'_, Connections>) -> Result<()> {
+    disconnect(&state).await
+}
+
+async fn disconnect(state: &Connections) -> Result<()> {
     let mut active = state.active.lock().await;
     if let Some(old) = active.take() {
         clear_connection(&old).await;
@@ -661,6 +827,14 @@ pub enum GameplayRequest {
 #[tauri::command]
 pub async fn board_request(
     state: tauri::State<'_, Connections>,
+    handle: u64,
+    operation: GameplayRequest,
+) -> Result<Value> {
+    gameplay_request(&state, handle, operation).await
+}
+
+pub(crate) async fn gameplay_request(
+    state: &Connections,
     handle: u64,
     operation: GameplayRequest,
 ) -> Result<Value> {
@@ -766,6 +940,87 @@ pub fn adb_status<'a>(output: &'a str, selected: &str) -> Option<&'a str> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    #[ignore = "Owner-only exact USB play read-only acceptance; never run blanket --ignored."]
+    fn physical_password_free_usb_play_read_only_owner_only() {
+        assert_eq!(
+            std::env::var("TC_ACCEPTANCE_CONSENT").as_deref(),
+            Ok("usb-play-read-only")
+        );
+        assert_eq!(
+            std::env::var("TC_ACCEPTANCE_USB_SERIAL").as_deref(),
+            Ok("1158338022")
+        );
+        assert!(
+            !std::process::Command::new("pgrep")
+                .args(["-x", "tinkercrew"])
+                .status()
+                .unwrap()
+                .success(),
+            "Quit the app normally before isolated native acceptance."
+        );
+        let directory = PathBuf::from(std::env::var_os("HOME").unwrap())
+            .join("Library/Application Support/com.tinkercrew.desktop");
+        assert!(directory.is_dir() && !directory.is_symlink());
+        #[link(name = "Security", kind = "framework")]
+        unsafe extern "C" {
+            fn SecKeychainSetUserInteractionAllowed(state: u8) -> i32;
+            fn SecKeychainGetUserInteractionAllowed(state: *mut u8) -> i32;
+        }
+        let mut previous = 1u8;
+        assert_eq!(
+            unsafe { SecKeychainGetUserInteractionAllowed(&mut previous) },
+            0
+        );
+        struct Restore(u8);
+        impl Drop for Restore {
+            fn drop(&mut self) {
+                let _ = unsafe { SecKeychainSetUserInteractionAllowed(self.0) };
+            }
+        }
+        let _restore = Restore(previous);
+        assert_eq!(unsafe { SecKeychainSetUserInteractionAllowed(0) }, 0);
+        let connections = Connections::new(directory);
+        tauri::async_runtime::block_on(async {
+            for cycle in 0..2 {
+                let opened = connect_usb(&connections, "1158338022".into()).await.expect(
+                    "Native USB Connect failed; no credential or source fallback permitted.",
+                );
+                assert_eq!(opened.board_id, "43ddf2b6-1679-498d-89c8-4f4c96852b4a");
+                let hello = gameplay_request(&connections, opened.handle, GameplayRequest::Hello)
+                    .await
+                    .unwrap();
+                let snapshot =
+                    gameplay_request(&connections, opened.handle, GameplayRequest::State)
+                        .await
+                        .unwrap();
+                assert_eq!(hello["health"]["safe_state"], true);
+                assert_eq!(snapshot["health"]["state"], "safe_state");
+                if cycle == 0 {
+                    // Beyond the native 90s proof deadline: success requires the
+                    // real background USB reproof, not just the initial token.
+                    let deadline = std::time::Instant::now() + Duration::from_secs(95);
+                    while std::time::Instant::now() < deadline {
+                        tokio::time::sleep(Duration::from_secs(1)).await;
+                        let state =
+                            gameplay_request(&connections, opened.handle, GameplayRequest::State)
+                                .await
+                                .unwrap();
+                        assert_eq!(state["health"]["state"], "safe_state");
+                    }
+                }
+                close_play(&connections, opened.handle).await.unwrap();
+            }
+        });
+        let evidence = json!({"board_id":"43ddf2b6-1679-498d-89c8-4f4c96852b4a","nativeConnectCloseCycles":2,"sustainedReadOnlySeconds":95,"transport":"ADB private Unix TLS","interactiveKeychainDisabledInThisProcess":true,"noLeaseOrOutputCommandsRequested":true,"reportedSafeState":true,"physicalModuleAcceptance":"not tested"});
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        std::fs::write(
+            root.join("artifacts/qa/uno-q-usb-play-native.json"),
+            serde_json::to_vec_pretty(&evidence).unwrap(),
+        )
+        .unwrap();
+    }
 
     #[test]
     #[ignore = "Owner-only authenticated sensor observation; never enable in normal CI or run blanket --ignored."]

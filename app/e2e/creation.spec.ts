@@ -1,6 +1,61 @@
 import { expect, test } from "@playwright/test";
 
-test("opening Create never asks for Board credentials, and denied access stops after one explicit attempt", async ({
+test("normal USB Connect never looks up saved Mac credentials or falls back to the network", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    const host = window as unknown as {
+      isTauri: boolean;
+      __usbCalls: string[];
+      __TAURI_INTERNALS__: { invoke: (command: string) => Promise<unknown> };
+    };
+    host.isTauri = true;
+    host.__usbCalls = [];
+    host.__TAURI_INTERNALS__ = {
+      invoke: async (command) => {
+        host.__usbCalls.push(command);
+        if (command === "load_progress") return null;
+        if (command === "usb_play_boards") return [{ serial: "test-usb" }];
+        if (command === "connect_usb_play")
+          throw {
+            code: "usb_play_upgrade_required",
+            message:
+              "One-time Companion software update needed in Parent setup.",
+          };
+        if (
+          ["list_boards", "board_candidates", "probe_board"].includes(command)
+        )
+          throw {
+            code: "keychain_unavailable",
+            message: "Unexpected saved-credential access",
+          };
+        return {};
+      },
+    };
+  });
+  await page.goto("/");
+  await page
+    .getByRole("button", { name: "Connect Board", exact: true })
+    .click();
+  await expect(
+    page.getByText(
+      "One-time Companion software update needed in Parent setup.",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  await page.waitForTimeout(1200);
+  const calls = await page.evaluate(
+    () => (window as unknown as { __usbCalls: string[] }).__usbCalls,
+  );
+  expect(
+    calls.filter((name) =>
+      ["list_boards", "board_candidates", "probe_board"].includes(name),
+    ),
+  ).toEqual([]);
+  expect(calls.filter((name) => name === "connect_usb_play")).toHaveLength(1);
+});
+
+test("opening Create never asks for Board credentials; parent-only saved network access stops after one denial", async ({
   page,
 }) => {
   await page.addInitScript(() => {
@@ -36,7 +91,21 @@ test("opening Create never asks for Board credentials, and denied access stops a
     ),
   ).toEqual(["load_progress"]);
   await page
-    .getByRole("button", { name: "Connect Board", exact: true })
+    .getByRole("button", {
+      name: "Parent settings & troubleshooting",
+      exact: true,
+    })
+    .click();
+  await page
+    .getByText("Parent network connection — saved Pairing (optional)", {
+      exact: true,
+    })
+    .click();
+  await page
+    .getByRole("button", {
+      name: "Load saved Boards for network play",
+      exact: true,
+    })
     .click();
   await expect(
     page.getByText(
@@ -55,7 +124,7 @@ test("opening Create never asks for Board credentials, and denied access stops a
   ).toBe(1);
 });
 
-test("choosing practice cancels a pending credential lookup instead of connecting later", async ({
+test("choosing practice cancels pending USB selection without saved credential access", async ({
   page,
 }) => {
   await page.addInitScript(() => {
@@ -71,12 +140,10 @@ test("choosing practice cancels a pending credential lookup instead of connectin
       invoke: async (command) => {
         host.__calls.push(command);
         if (command === "load_progress") return null;
-        if (command === "list_boards")
+        if (command === "usb_play_boards")
           return new Promise((resolve) => {
-            host.__resolve = () =>
-              resolve([{ boardId: "late-board", name: "Late Board" }]);
+            host.__resolve = () => resolve([{ serial: "late-usb" }]);
           });
-        if (command === "board_candidates") return [];
         return {};
       },
     };
@@ -89,7 +156,7 @@ test("choosing practice cancels a pending credential lookup instead of connectin
     .poll(() =>
       page.evaluate(() =>
         (window as unknown as { __calls: string[] }).__calls.includes(
-          "list_boards",
+          "usb_play_boards",
         ),
       ),
     )
@@ -101,9 +168,82 @@ test("choosing practice cancels a pending credential lookup instead of connectin
   await page.waitForTimeout(300);
   expect(
     await page.evaluate(() =>
-      (window as unknown as { __calls: string[] }).__calls.filter(
-        (name) => name === "board_candidates",
+      (window as unknown as { __calls: string[] }).__calls.filter((name) =>
+        ["connect_usb_play", "list_boards", "board_candidates"].includes(name),
       ),
+    ),
+  ).toEqual([]);
+});
+
+test("Practice closes a late USB handle without opening gameplay or reading saved Pairing", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    const host = window as unknown as {
+      isTauri: boolean;
+      __lateCalls: { command: string; args: Record<string, unknown> }[];
+      __finishUsb: () => void;
+      __TAURI_INTERNALS__: {
+        invoke: (
+          command: string,
+          args?: Record<string, unknown>,
+        ) => Promise<unknown>;
+      };
+    };
+    host.isTauri = true;
+    host.__lateCalls = [];
+    host.__TAURI_INTERNALS__ = {
+      invoke: async (command, args = {}) => {
+        host.__lateCalls.push({ command, args });
+        if (command === "load_progress") return null;
+        if (command === "usb_play_boards") return [{ serial: "test-usb" }];
+        if (command === "connect_usb_play")
+          return new Promise((resolve) => {
+            host.__finishUsb = () =>
+              resolve({ handle: 42, boardId: "late-board" });
+          });
+        return {};
+      },
+    };
+  });
+  await page.goto("/");
+  await page
+    .getByRole("button", { name: "Connect Board", exact: true })
+    .click();
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (window as unknown as { __finishUsb?: () => void }).__finishUsb !==
+          undefined,
+      ),
+    )
+    .toBe(true);
+  await page.getByRole("button", { name: "Use practice", exact: true }).click();
+  await page.evaluate(() =>
+    (window as unknown as { __finishUsb: () => void }).__finishUsb(),
+  );
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (
+            window as unknown as {
+              __lateCalls: { command: string; args: Record<string, unknown> }[];
+            }
+          ).__lateCalls.find(
+            (call) => call.command === "disconnect_play_handle",
+          )?.args.handle,
+      ),
+    )
+    .toBe(42);
+  const calls = await page.evaluate(
+    () =>
+      (window as unknown as { __lateCalls: { command: string }[] }).__lateCalls,
+  );
+  expect(
+    calls.filter((call) =>
+      ["list_boards", "probe_board", "board_request"].includes(call.command),
     ),
   ).toEqual([]);
 });
@@ -128,11 +268,9 @@ test("an explicitly connected Board can test a healthy Buzzer without Distance o
     host.__TAURI_INTERNALS__ = {
       invoke: async (command, args = {}) => {
         if (command === "load_progress") return null;
-        if (command === "list_boards")
-          return [{ boardId: "board-one", name: "Family UNO Q" }];
-        if (command === "board_candidates")
-          return [{ host: "127.0.0.1", port: 7443 }];
-        if (command === "probe_board") return 1;
+        if (command === "usb_play_boards") return [{ serial: "test-usb" }];
+        if (command === "connect_usb_play")
+          return { handle: 1, boardId: "board-one" };
         if (command !== "board_request") return {};
         const op = args.operation as { operation: string };
         host.__ops.push(op);

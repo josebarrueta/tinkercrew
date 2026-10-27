@@ -167,6 +167,7 @@ pub(crate) fn installation(directory: &std::path::Path, create: bool) -> Result<
 enum AuthMode {
     Legacy(Zeroizing<String>),
     Paired(InstallationKeys),
+    UsbPlay(std::sync::Arc<crate::usb_play::UsbAuth>),
 }
 struct CachedSession {
     token: Zeroizing<String>,
@@ -209,12 +210,21 @@ impl GameplayAuth {
             cached: Mutex::new(None),
         }
     }
+    pub fn usb_play(session: std::sync::Arc<crate::usb_play::UsbAuth>) -> Self {
+        Self {
+            mode: AuthMode::UsbPlay(session),
+            cached: Mutex::new(None),
+        }
+    }
     pub async fn close(&self, client: &reqwest::Client, host: &str, port: u16) {
-        if let Some(session) = self.cached.lock().await.take()
-            && let Ok(mut header) = reqwest::header::HeaderValue::from_str(&format!(
-                "Bearer {}",
-                session.token.as_str()
-            ))
+        let token = if let AuthMode::UsbPlay(session) = &self.mode {
+            session.close()
+        } else {
+            self.cached.lock().await.take().map(|session| session.token)
+        };
+        if let Some(token) = token
+            && let Ok(mut header) =
+                reqwest::header::HeaderValue::from_str(&format!("Bearer {}", token.as_str()))
         {
             header.set_sensitive(true);
             let _ = client
@@ -231,6 +241,9 @@ impl GameplayAuth {
         port: u16,
         board: &str,
     ) -> Result<String> {
+        if let AuthMode::UsbPlay(session) = &self.mode {
+            return session.token();
+        }
         let AuthMode::Paired(keys) = &self.mode else {
             if let AuthMode::Legacy(value) = &self.mode {
                 return Ok(value.to_string());

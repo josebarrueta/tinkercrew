@@ -38,13 +38,24 @@ pub(crate) struct Forward {
 }
 impl Forward {
     pub(crate) fn new(serial: &str) -> Result<Self, String> {
-        Self::for_port(serial, 7443)
+        Self::for_endpoint(serial, "tcp:7443")
     }
     fn ssh(serial: &str) -> Result<Self, String> {
-        Self::for_port(serial, 22)
+        Self::for_endpoint(serial, "tcp:22")
     }
-    fn for_port(serial: &str, remote: u16) -> Result<Self, String> {
-        if ![22, 7443].contains(&remote) {
+    pub(crate) fn usb_play(serial: &str) -> Result<Self, String> {
+        Self::for_endpoint(
+            serial,
+            "localfilesystem:/home/arduino/ArduinoApps/tinkercrew-companion/data/usb-play.sock",
+        )
+    }
+    fn for_endpoint(serial: &str, remote: &str) -> Result<Self, String> {
+        if !matches!(
+            remote,
+            "tcp:22"
+                | "tcp:7443"
+                | "localfilesystem:/home/arduino/ArduinoApps/tinkercrew-companion/data/usb-play.sock"
+        ) {
             return Err("Unsupported fixed Companion forwarding endpoint.".into());
         }
         let path = crate::discovery::adb_path().map_err(|error| error.message)?;
@@ -59,7 +70,7 @@ impl Forward {
                 serial,
                 "forward",
                 "tcp:0",
-                &format!("tcp:{remote}"),
+                remote,
             ],
             &[],
             Duration::from_secs(4),

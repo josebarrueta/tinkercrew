@@ -113,11 +113,12 @@ async fn change_prepared_profile(
             return Err(format!("Type {verb} followed by the inspected hardware serial. This only exchanges the exact owned unstarted source profile; no app start or firmware operation is authorized."));
         }
         let before = usb(&serial,&identity.serial,json!({"operation":"inspect"}))?;
-        let (release,_) = runtime_update::baseline_bundle()?;
+        // Historical exact-source exception, NOT the evolving bundled runtime.
+        let release = "d3c762374833ecce711fdd4a0b3c2727a846c443a34c2ba426de457610c6b6fe";
         let operation = if restore { "restore_prepared_profile" } else { "correct_prepared_profile" };
         let mut result = usb(&serial,&identity.serial,json!({"operation":operation,"release":release}))?;
         if result["started"] != false || result["correctionPhase"] != if restore { "restored" } else { "corrected" }
-            || (!restore && result["release"].as_str() != Some(&release))
+            || (!restore && result["release"].as_str() != Some(release))
             || result["identity"]["board_id"] != before["identity"]["board_id"]
             || result["identity"]["tls_name"] != before["identity"]["tls_name"]
             || result["identity"]["certificate_pem"] != before["identity"]["certificate_pem"]

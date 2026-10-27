@@ -5,7 +5,7 @@ Owner-selected direction: module-first Playground, then a block Workbench for in
 ## Normal flow
 
 - `/` opens **Create**, explicitly in **Practice — no real Board outputs**. It reads only the separate local Creation library, not Board credentials. No discovery, Pairing, SSH, Keychain lookup or output runs implicitly.
-- **Connect Board** is visible intent to load saved permission and connect using the existing pinned/authenticated native protocol. The compact connection sheet explains app-owned secure storage. It never starts the Companion, flashes firmware, reboots, resets, changes networking, takes over default-app status or rekeys as a retry.
+- **Connect Board** is visible intent to establish [temporary USB play](usb-play.md) using pinned/authenticated native transport, without reading Keychain or saved Pairing. The compact connection sheet explains the memory-only permission. It never starts the Companion, flashes firmware, reboots, resets, changes networking, takes over default-app status or rekeys as a retry.
 - The connection panel is created only on explicit Connect/Parent settings intent; it is deferred until Connect, rather than merely hidden while doing credential work. Explicit Practice invalidates pending lookup/probe intent. Late results cannot switch the maker back to hardware, start new route probes or silently acquire output control.
 - The module Playground displays supported Buttons/Distance/Pixels/Buzzer health and live inputs. It does not claim universal I²C inventory or wiring/electrical certification. Missing/stale/invalid input states are distinct from a fresh released button or a numeric distance. Matrix drawing and general GPIO/power switching are not offered by this initial action interface.
 - Each output preview is intentional and independent of unrelated input modules: Pixels at brightness 0.25 for up to 1.5 seconds; Buzzer at 880 Hz for 250 ms. Practice uses visual feedback, not Mac audio. No output on discovery/connection. Reported/accepted state is not human evidence of light or sound.
@@ -51,7 +51,7 @@ The original ten-stage Mission, exact stored progress contract, rotating roles, 
 
 Parent settings expose existing recovery/provisioning functions only when deliberately opened, separate from the play path. Their typed confirmations, exact-target checks, locks and separate authority are unchanged. First-time unsupported/account/firmware setup retains the honest official-tool handoff; this implementation does not promise one-click virgin-Board preparation.
 
-Keychain remains app-owned secure credential storage. Missing item (`errSecItemNotFound`) is distinguished from OS access denial/locked storage; the latter is `keychain_unavailable`, preserves keys and stops route hunting/retry. There is no plaintext fallback, ACL modification, helper impersonation or requirement to grant a diagnostic executable broad access. Stable production signing/OS prompt acceptance remains #12 work.
+Keychain remains app-owned secure credential storage for the separate optional parent network/maintenance path, not normal USB play. Missing item (`errSecItemNotFound`) is distinguished from OS access denial/locked storage; the latter is `keychain_unavailable`, preserves keys and stops route hunting/retry. There is no plaintext fallback, ACL modification, helper impersonation or requirement to grant a diagnostic executable broad access. Stable production signing/OS prompt acceptance remains #12 work.
 
 ## Validation and limits
 

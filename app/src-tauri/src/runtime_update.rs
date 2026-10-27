@@ -40,6 +40,24 @@ fn digest(bytes: &[u8]) -> String {
         .map(|byte| format!("{byte:02x}"))
         .collect()
 }
+pub(crate) fn usb_play_bootstrap() -> String {
+    let files: BTreeMap<_, _> = RUNTIME
+        .iter()
+        .map(|(name, bytes)| (*name, digest(bytes)))
+        .collect();
+    include_str!("usb_play_bootstrap.py").replace(
+        "EXPECTED_FILES = None",
+        &format!(
+            "EXPECTED_FILES = {}",
+            serde_json::to_string(&files).expect("fixed runtime digests")
+        ),
+    )
+}
+
+pub(crate) fn release_id() -> Result<String, String> {
+    Ok(bundled_runtime()?.release)
+}
+
 fn tree(files: &[(&str, &[u8])]) -> String {
     let sorted: BTreeMap<_, _> = files.iter().copied().collect();
     let mut metadata = Vec::new();
@@ -535,7 +553,7 @@ mod tests {
     }
 
     #[test]
-    fn initial_package_supports_the_owned_unstarted_identity_preserving_profile_correction() {
+    fn historical_unstarted_profile_correction_is_separate_from_the_current_runtime_bundle() {
         let directory = tempfile::tempdir().unwrap();
         let (release, bytes) = baseline_bundle().unwrap();
         let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
@@ -550,7 +568,11 @@ mod tests {
         let output = process.wait_with_output().unwrap();
         assert!(output.status.success());
         let result: Value = serde_json::from_slice(&output.stdout).unwrap();
-        assert_eq!(result["release"].as_str(), Some(release.as_str()));
+        assert_eq!(
+            result["release"],
+            "d3c762374833ecce711fdd4a0b3c2727a846c443a34c2ba426de457610c6b6fe"
+        );
+        assert_ne!(result["release"].as_str(), Some(release.as_str()));
         assert_eq!(result["correctionPhase"], "corrected");
         assert_eq!(result["identityPreserved"], true);
         assert_eq!(result["started"], false);
