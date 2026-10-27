@@ -25,7 +25,7 @@ test("a Crew completes Treasure Guardian, resumes, and retains its remix offline
   page,
   context,
 }) => {
-  await page.goto("/");
+  await page.goto("/legacy");
   await page.getByRole("button", { name: "◆ Mission", exact: true }).click();
   await expect(
     page.getByRole("heading", { name: "What are we protecting?" }),

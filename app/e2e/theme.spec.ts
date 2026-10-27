@@ -3,7 +3,7 @@ import { expect, test } from "@playwright/test";
 test("Board Setup is first in the menu without changing the default Home Base screen", async ({
   page,
 }) => {
-  await page.goto("/");
+  await page.goto("/legacy");
   const menu = page.getByRole("navigation", { name: "Main navigation" });
   const buttons = menu.getByRole("button");
   await expect(buttons).toHaveText([
@@ -50,7 +50,7 @@ test("Tinkeroo keeps a clear next action, keyboard focus, and calm reduced-motio
 }, testInfo) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.setViewportSize({ width: 1180, height: 820 });
-  await page.goto("/");
+  await page.goto("/legacy");
   await expect(page).toHaveTitle(/Tinkeroo/);
   await expect(page.getByRole("img", { name: "Tinkeroo" })).toBeVisible();
   const action = page.getByTestId("start-mission");

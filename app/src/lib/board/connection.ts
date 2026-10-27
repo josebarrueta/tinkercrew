@@ -73,6 +73,7 @@ export async function connectBoard(
             [
               "authentication_failed",
               "authentication_busy",
+              "keychain_unavailable",
               "pairing_required",
               "protocol_incompatible",
               "maintenance_active",
@@ -87,6 +88,7 @@ export async function connectBoard(
         [
           "authentication_failed",
           "authentication_busy",
+          "keychain_unavailable",
           "pairing_required",
           "protocol_incompatible",
           "maintenance_active",

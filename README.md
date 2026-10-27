@@ -6,6 +6,12 @@ A local-first cooperative maker game for one family Crew: build LEGO creations, 
 
 > **Development preview:** the current implementation is on `main`. Simulator play is available without hardware. Physical UNO Q/family acceptance and public release signing/notarization are not complete. Hybrid setup software retains explicit official first-account/firmware-start handoffs; unsupported whole-baseline migrations are not attempted. No production installer has been validated yet.
 
+## Create first
+
+The app opens a module-first **Create** Playground. In clearly labeled Practice you can try inputs, color previews and a visual chirp without hardware. **Connect Board** explicitly opens saved Board permission/connection; it does not silently access credentials on Home or start/flash the Board. On a supported running Board, module tests use the authenticated connection.
+
+**Build with blocks** opens a Workbench for up to eight input → optional distance condition → light/chirp rules. Save, reopen and copy Creations locally; Run is always explicit and Stop remains available. **Missions → Make my guardian** gives a visible goal and editable starter, without mandatory names or writing. Earlier guided-Mission saves remain accessible separately and unchanged. See the [Creation workspace and its safety/compatibility limits](docs/architecture/creations.md).
+
 ## Start here
 
 | You want to… | Use this path |
@@ -40,7 +46,7 @@ Build downloads expire after **14 days**; QA reports and failed browser-test dia
 
 ## Upgrade the Mac app
 
-**A working manual upgrade path is provided; there is no automatic/in-app installer.** In the native app, open **Board Setup → Upgrade the Mac app → Open official Mac app releases**. This pauses/disconnects this Mac's gameplay and opens only the [official Releases page](https://github.com/josebarrueta/tinkercrew/releases); it does not download/install anything or change the Board. Resolve pending Board maintenance before upgrading.
+**A working manual upgrade path is provided; there is no automatic/in-app installer.** In the native app, open **Parent settings & troubleshooting → Parent setup & advanced maintenance → Upgrade the Mac app → Open official Mac app releases**. This pauses/disconnects this Mac's gameplay and opens only the [official Releases page](https://github.com/josebarrueta/tinkercrew/releases); it does not download/install anything or change the Board. Resolve pending Board maintenance before upgrading.
 
 1. Choose a **newer, owner-approved** release for your Mac's architecture/macOS, read its release notes, and follow the [release trust/verification guidance](docs/release/macos.md#signed-application-update-design). No public signed/notarized installer is available/validated yet. Development/PR artifacts are not a substitute for an approved release.
 2. Stop the Mission, disconnect the Board, and **quit Tinkeroo completely**. Never quit or upgrade during an active factory restore.
@@ -125,10 +131,12 @@ Physical Board, actual ADB/Bonjour/VPN, electrical safe-off timing, family play-
 
 ## Connect an Arduino UNO Q
 
-Simulator mode is the easiest first step. For hardware play:
+Practice is the easiest first step. For an already paired, compatible running Board, click **Connect Board** in Create, approve only the expected Tinkeroo secure-storage prompt if shown, and try an available module. No Linux password or full maintenance-checklist completion is needed for that path. If the Companion is stopped or unsupported, Connect does not automatically start/upload/reset/rekey it.
+
+For first-time setup, open **Parent settings & troubleshooting** (or the preserved earlier Board Setup view):
 
 1. Separately install official [Android Platform-Tools](https://developer.android.com/tools/releases/platform-tools) (Arduino documents `brew install android-platform-tools`). Tinkeroo does **not** bundle Google's binaries or accept their license for you. `TC_ADB_PATH` may point to an absolute `adb` executable.
-2. Open **Board Setup → Set up a UNO Q — resumable official-tool handoff guide**, select the exact physical USB Board, and follow the supported official first-account/name/password/Wi-Fi/SSH handoffs. Enable SSH explicitly even for dedicated-key verification over USB; full restart proof also needs LAN. No account/password or unknown system configuration is guessed.
+2. Open **Parent settings & troubleshooting → Set up a UNO Q — resumable official-tool handoff guide**, select the exact physical USB Board, and follow the supported official first-account/name/password/Wi-Fi/SSH handoffs. Enable SSH explicitly even for dedicated-key verification over USB; full restart proof also needs LAN. No account/password or unknown system configuration is guessed.
 3. On the supported configured baseline, **Prepare initial Companion files and identity** can resume/verify its fixed absent-target source and private Board-side TLS identity without overwriting an existing app/configuration. Explicitly start the selected [UNO Q Companion](companion/README.md) in official App Lab; first start can upload MCU firmware and stop another app. Review backups/loads/target first. See the [preparation and renewal contract](docs/architecture/initial-provisioning.md); unknown whole-baseline upgrades remain a handoff, never a speculative overwrite.
 4. Continue the [resumable guide](docs/architecture/setup-checkpoints.md): native Pairing verifies restricted SSH plus signed TLS, runtime proof verifies only a compatible compiled bundle, tracked restart requires a new kernel plus LAN/USB observations, and fresh bounded hardware/input evidence precedes saving the Crew. Checkboxes alone cannot complete those stages; completion never reconnects/rearms. The [legacy provisioned-record import](docs/architecture/board-connections.md) remains a separate development bridge, not setup proof.
 
@@ -136,7 +144,7 @@ UNO Q maker GPIO is **3.3 V**; never apply 5 V to analog inputs. Disconnect powe
 
 ## Upgrade the Board's Companion runtime
 
-This is **separate from upgrading Tinkeroo on the Mac**. On an already installed, compatible, supervised TBP baseline, use **Board Setup → Recoverable Linux runtime update**:
+This is **separate from upgrading Tinkeroo on the Mac**. On an already installed, compatible, supervised TBP baseline, use **Parent settings & troubleshooting → Parent setup & advanced maintenance → Recoverable Linux runtime update**:
 
 1. Connect/select the physical USB Board, inspect its hardware serial, and select its registered Board profile.
 2. Confirm the exact Board, type `UPDATE <hardware serial>`, and choose **Update / resume bundled Linux runtime**. Only the runtime bundled with this Mac app is eligible; there is no arbitrary archive installer.
@@ -146,13 +154,15 @@ This does not install the initial baseline, change credentials/dependencies/firm
 
 ## Board Setup and recovery
 
-**Board Setup** replaces Parent Settings and brings connections, existing-Board Linux authentication, hostname/Wi-Fi configuration, scheduled restart, local pairing cleanup, and guarded factory restore into one hub. Linux passwords are request-only, never saved. Management pauses gameplay.
+**Parent settings & troubleshooting** contains the earlier advanced Board Setup tools: existing-Board Linux authentication, hostname/Wi-Fi configuration, scheduled restart, local pairing cleanup, and guarded factory restore. The ordinary Create Playground is separate and does not require navigating these maintenance sections. Linux passwords are request-only, never saved. Management pauses gameplay.
 
 Factory restore is a **destructive Linux OS reflash**, not a restart or checkpoint reset. It requires a separately installed official Arduino Flasher CLI **0.5.4**, an inspected physical Board, exact version/checksum, backup/EDL/power acknowledgements, and `ERASE <hardware serial>`. Actual hardware acceptance is **pending**; no reset was performed during development. The hybrid guide now integrates protected Pairing/runtime/restart/hardware/Crew proofs, but retains official first-account/firmware-start handoffs and has not passed reset-Board acceptance; it is not one-click onboarding. See the [Board Setup workflow, safety boundaries, and recovery evidence](docs/architecture/board-setup.md).
 
 ## Tinkeroo look and feel
 
-![Tinkeroo Home Base with a calm lilac workspace and one clear Mission action](docs/design/tinkeroo-home.png)
+Historical guided-adventure view (the current default is the Creation Playground):
+
+![Earlier Tinkeroo Home Base](docs/design/tinkeroo-home.png)
 
 Tinkeroo shares the playful “roo” family naming theme with Rallyroo. Its calm lilac/white workspace uses purple for the next action, teal for supportive cues, and small sunshine/coral accents. Hardware green/yellow/red signals and amber safety warnings keep their meaning. No flashing, autoplay, confetti, or external font downloads compete with building. See the [brand and accessibility guide](docs/design/tinkeroo-theme.md).
 
@@ -160,6 +170,7 @@ The GitHub repository remains `josebarrueta/tinkercrew`. Existing bundle identit
 
 ## Project guides
 
+- [Creation workspace, bounded block logic and preserved earlier Mission](docs/architecture/creations.md)
 - [App architecture and playable Mission](app/README.md)
 - [Companion installation, API, and tests](companion/README.md)
 - [Board Setup management and destructive recovery](docs/architecture/board-setup.md)

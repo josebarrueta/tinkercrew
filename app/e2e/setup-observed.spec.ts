@@ -187,7 +187,7 @@ test("observed setup resumes without a client-side completion shortcut", async (
       .click();
     return page.getByRole("region", { name: "Resumable UNO Q setup guide" });
   }
-  await page.goto("/");
+  await page.goto("/legacy");
   let guide = await openGuide();
   const proof = () =>
     guide.getByRole("region", { name: "Observed setup proofs" });

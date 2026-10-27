@@ -153,9 +153,13 @@ pub(crate) fn installation(directory: &std::path::Path, create: bool) -> Result<
             })?;
             Ok(keys)
         }
+        Err(error) if error.code() != -25300 => Err(ConnectionError::new(
+            "keychain_unavailable",
+            "macOS could not allow access to Tinkeroo's installation permission. Unlock secure storage or approve the expected app prompt, then retry Connect. Existing keys were not changed.",
+        )),
         Err(_) => Err(ConnectionError::new(
             "pairing_required",
-            "Unlock Keychain or establish this installation's keys through physical USB Pairing. Existing records were not overwritten.",
+            "This installation has no saved private key. Establish permission through physical USB Pairing; existing Board records were not overwritten.",
         )),
     }
 }

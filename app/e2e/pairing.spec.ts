@@ -3,7 +3,7 @@ import { expect, test } from "@playwright/test";
 test("installation registration and remote revocation stay separate from local cleanup and setup completion", async ({
   page,
 }) => {
-  await page.goto("/");
+  await page.goto("/legacy");
   await page
     .getByRole("button", { name: "☰ Board Setup", exact: true })
     .click();

@@ -46,7 +46,7 @@ The app command creates `src-tauri/target/release/bundle/macos/Tinkeroo.app`. `n
 
 ## Upgrade the installed app
 
-Use **Board Setup → Upgrade the Mac app** to see the installed version, read the replacement checklist and open the fixed official Releases page. It disconnects local gameplay, refuses unresolved maintenance and never downloads/installs code or updates a Board automatically. Quit Tinkeroo, replace only the app bundle from a newer trusted DMG, and keep app data/Keychain. Public signed/notarized installers remain unavailable/unvalidated; development users can pull `main`, run `npm ci` and `npm run build:dmg`, then replace their locally built app. See the [full user instructions](../README.md#upgrade-the-mac-app).
+Use **Parent settings & troubleshooting → Parent setup & advanced maintenance → Upgrade the Mac app** to see the installed version, read the replacement checklist and open the fixed official Releases page. It disconnects local gameplay, refuses unresolved maintenance and never downloads/installs code or updates a Board automatically. Quit Tinkeroo, replace only the app bundle from a newer trusted DMG, and keep app data/Keychain. Public signed/notarized installers remain unavailable/unvalidated; development users can pull `main`, run `npm ci` and `npm run build:dmg`, then replace their locally built app. See the [full user instructions](../README.md#upgrade-the-mac-app).
 
 ## CI downloads and licensing
 
@@ -60,11 +60,17 @@ The Tinkeroo theme uses shared tokens in `src/lib/theme.css`: calm surfaces, one
 
 The display/package/artifact brand is Tinkeroo; internal `com.tinkercrew.desktop`, Keychain/discovery/protocol names, Rust crate names, and progress storage keys stay unchanged to preserve existing state and Board connections.
 
+## Creation Playground and block Workbench
+
+The default route is the C-style module Playground → B-style block Workbench selected in #38. Real module previews, multiple input/condition/output rules, run/stop, a versioned local Creation library and an outcome-first Guardian starter use the existing authenticated BoardClient and revision-checked storage. No initial credential access or automatic physical outputs. Practice is explicit; programs run on the Mac, not as arbitrary Board firmware. Parent settings retain exceptional maintenance. See [the complete contract and limits](../docs/architecture/creations.md).
+
+The original guided app is preserved at `/legacy`, linked from **Missions → Earlier guided adventure and saved progress**. Its previous saves and protected setup/evidence contracts are unchanged; original UI regressions now target that route, while new tests cover the default Create flow.
+
 ## Architecture boundary
 
 UI and Mission code depend on the `BoardClient` interface in `src/lib/board/types.ts`. `SimulatorBoardClient` and `ConnectedBoardClient` deliver inputs through the same event subscription. Domain/UI code must not execute shell commands.
 
-Mission definitions are versioned, schema-validated local JSON in `src/lib/missions/`. The intentionally limited `MissionSession` supports human-confirmed creative stages, named live checks, three progressive hints, independent Crew roles/tracks, remix, reflection, and completion records. Other World Map adventures are explicitly marked as future content; Free Build invitations are available now.
+Mission definitions are versioned, schema-validated local JSON in `src/lib/missions/`. The intentionally limited `MissionSession` supports human-confirmed creative stages, named live checks, three progressive hints, independent Crew roles/tracks, remix, reflection, and completion records. In the preserved earlier adventure, World Map placeholders and Free Build invitations remain historical content, not additional playable games. The default workspace now offers actual bounded free creation instead of a prompt-only mode.
 
 The native app stores progress in `crew-progress.sqlite` inside its macOS application-data directory. Saves are atomic and revision-checked so a stale window cannot overwrite newer progress. Mission/version validation refuses incompatible or corrupt saves rather than silently resetting them. Browser-only development uses localStorage for **non-secret progress only**, separate from native SQLite saves. Live hardware evidence is never restored as if newly observed after a restart.
 
@@ -78,7 +84,7 @@ Board Setup also includes a resumable hybrid guide, with checkpoints and native 
 
 ## Treasure Guardian
 
-Open **Mission** to play the ten-stage adventure with three named Crew members and independently selectable tracks. Rotate roles any time. Use the live simulator controls to move through sleeping/curious/alert ranges and A/B/C to arm, silence, and disarm. The self-test requires distance movement, all three buttons, and human confirmation of the test light/tone. The fresh behavior challenge cannot be passed using evidence from previous stages.
+From **Missions → Earlier guided adventure and saved progress**, open **Mission** to play the preserved ten-stage adventure with three named Crew members and independently selectable tracks. Rotate roles any time. Use the live simulator controls to move through sleeping/curious/alert ranges and A/B/C to arm, silence, and disarm. The self-test requires distance movement, all three buttons, and human confirmation of the test light/tone. The fresh behavior challenge cannot be passed using evidence from previous stages.
 
 Inventor controls adjust thresholds, warning color, and alarm duration. The Hacker panel exposes the bounded six-field rule JSON and a rolling input event log; it never executes arbitrary code. A tested change from the default rules plus a description and reflection are required to complete the Mission. Saved configuration resumes on restart, but the guardian always restarts disarmed and live checks must collect new evidence.
 

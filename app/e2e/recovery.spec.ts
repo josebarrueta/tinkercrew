@@ -3,7 +3,7 @@ import { expect, test } from "@playwright/test";
 test("stale input enters Safe state and recovery never silently rearms", async ({
   page,
 }) => {
-  await page.goto("/");
+  await page.goto("/legacy");
   await page.getByRole("button", { name: "◆ Mission", exact: true }).click();
   await page.getByRole("button", { name: "A — Arm", exact: true }).click();
   await expect(page.getByTestId("guardian-state")).toHaveText("sleeping");
@@ -26,7 +26,7 @@ test("stale input enters Safe state and recovery never silently rearms", async (
 test("stopping Mission controls requires explicit enable and never restores an armed guardian", async ({
   page,
 }) => {
-  await page.goto("/");
+  await page.goto("/legacy");
   await page.getByRole("button", { name: "◆ Mission", exact: true }).click();
   await page.getByRole("button", { name: "A — Arm", exact: true }).click();
   await expect(page.getByTestId("guardian-state")).toHaveText("sleeping");
@@ -50,7 +50,7 @@ test("stopping Mission controls requires explicit enable and never restores an a
 test("unreadable progress produces a recovery message without replacing the save", async ({
   page,
 }) => {
-  await page.goto("/");
+  await page.goto("/legacy");
   const broken = '{"payload":"broken-json","revision":1}';
   await page.evaluate(
     (value) =>
