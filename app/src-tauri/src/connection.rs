@@ -446,7 +446,7 @@ pub(crate) async fn request(
     if response.status() == reqwest::StatusCode::UNAUTHORIZED {
         return Err(ConnectionError::new(
             "authentication_failed",
-            "The Board rejected this credential. Recover Pairing through USB; do not disable TLS verification.",
+            "The Board session expired or was rejected. Reconnect your saved Board first. Recover Pairing through USB only if registration was revoked; keep TLS verification enabled.",
         ));
     }
     if !response.status().is_success() {
@@ -765,6 +765,88 @@ pub fn adb_status<'a>(output: &'a str, selected: &str) -> Option<&'a str> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    #[ignore = "Owner-only authenticated sensor observation; never enable in normal CI or run blanket --ignored."]
+    fn physical_authenticated_sensor_inspection_owner_only() {
+        assert!(
+            std::env::var("TC_ACCEPTANCE_CONSENT").as_deref() == Ok("read-only-sensors"),
+            "Explicit owner read-only sensor scope required."
+        );
+        let serial = std::env::var("TC_ACCEPTANCE_USB_SERIAL")
+            .expect("Explicit exact physical USB serial required.");
+        assert!(
+            crate::management::valid_serial(&serial),
+            "Invalid selected USB identity."
+        );
+        let running = std::process::Command::new("pgrep")
+            .args(["-x", "tinkercrew"])
+            .output()
+            .expect("Could not check parent app state.");
+        assert!(
+            !running.status.success(),
+            "Quit Tinkeroo before the isolated native diagnostic; no process was stopped."
+        );
+        let directory =
+            std::path::PathBuf::from(std::env::var_os("HOME").expect("Missing Mac home."))
+                .join("Library/Application Support/com.tinkercrew.desktop");
+        assert!(
+            directory.is_dir() && !directory.is_symlink(),
+            "Expected existing app data; no replacement storage created."
+        );
+        let state = Connections::new(directory);
+        let _permit = state
+            .begin_maintenance()
+            .expect("Another operation is unresolved; diagnostic refused.");
+        let physical =
+            crate::management::inspect(&serial).expect("Exact physical Board inspection failed.");
+        let observed = crate::pairing::usb(
+            &serial,
+            &json!({"operation":"inspect","expected_serial":physical.serial}),
+        )
+        .expect("Fixed read-only USB inspection failed.");
+        let board_id = observed["board_id"]
+            .as_str()
+            .expect("Missing USB Board identity.");
+        let profile = state
+            .profile(board_id)
+            .expect("Existing Pairing required; no new key/credential will be generated.");
+        assert!(
+            profile.adb_serial == serial
+                && profile.installation_id.is_some()
+                && profile.api_token.is_empty(),
+            "Selected Board does not have the expected installed TBP Pairing."
+        );
+        assert!(
+            observed["tls_name"].as_str() == Some(profile.tls_name.as_str())
+                && observed["certificate_pem"].as_str() == Some(profile.certificate_pem.as_str()),
+            "USB and saved TLS identities differ; diagnostic stopped."
+        );
+        let forward = crate::pairing::Forward::new(&serial).expect("Fixed HTTPS forward failed.");
+        let result=tauri::async_runtime::block_on(async {
+            let candidate=Candidate::new("127.0.0.1",forward.port)?;
+            let (client,_)=secure_client(&profile,&candidate).await?;
+            let auth=crate::session::GameplayAuth::from_profile(&profile,&state.directory)?;
+            let observation=async {
+                let hello=request(&client,&profile,forward.port,Method::GET,"/v1/hello",None,&auth).await?;
+                let sensors=request(&client,&profile,forward.port,Method::GET,"/v1/state",None,&auth).await?;
+                let events=request(&client,&profile,forward.port,Method::GET,"/v1/events?after=0",None,&auth).await?;
+                if hello["board"]["board_id"].as_str()!=Some(profile.board_id.as_str()) || hello["runtime"]["boot_id"]!=observed["boot_id"] {
+                    return Err(ConnectionError::new("identity_mismatch","Signed TLS and physical USB did not prove the same Board/kernel."));
+                }
+                Ok::<_,ConnectionError>(json!({"authenticatedTlsAndUsbIdentityVerified":true,"health":sensors["health"],"observables":sensors["observables"],"capabilities":hello["capabilities"],"runtimeRelease":hello["runtime"]["release"],"eventCount":events["events"].as_array().map(|items|items.len()),"noOutputControlLeaseRearmOrSelfTestRequested":true,"scope":"read-only current observations, not human input/output acceptance"}))
+            }.await;
+            auth.close(&client,&profile.tls_name,forward.port).await;
+            observation
+        }).expect("Authenticated read-only observation failed; no Pairing reset or output fallback attempted.");
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../artifacts/qa");
+        std::fs::write(
+            root.join("uno-q-native-sensor-inspection.json"),
+            serde_json::to_vec_pretty(&result).unwrap(),
+        )
+        .expect("Could not save sanitized observation.");
+        println!("{}", serde_json::to_string(&result).unwrap());
+    }
 
     #[test]
     fn maintenance_blocks_competing_operations_and_other_instances_with_pending_restore() {

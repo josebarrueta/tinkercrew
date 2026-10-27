@@ -153,6 +153,9 @@ async function mockManagement(
   await page
     .getByRole("button", { name: "☰ Board Setup", exact: true })
     .click();
+  await page
+    .getByText("Parent setup & advanced maintenance", { exact: true })
+    .click();
   const management = page.getByRole("region", {
     name: "Board configuration and recovery",
   });
@@ -482,6 +485,9 @@ test("Board Setup distinguishes credentials, restart, local cleanup, and destruc
   await expect(
     page.getByRole("heading", { name: "Board Setup", exact: true }).first(),
   ).toBeVisible();
+  await page
+    .getByText("Parent setup & advanced maintenance", { exact: true })
+    .click();
   const management = page.getByRole("region", {
     name: "Board configuration and recovery",
   });
@@ -609,6 +615,14 @@ test("management uses transient credential requests and clears them on navigatio
       }),
     ),
   ).not.toContain("fixture-only-");
+  await password.fill("fixture-only-closed-maintenance");
+  await page
+    .getByText("Parent setup & advanced maintenance", { exact: true })
+    .click();
+  await page
+    .getByRole("button", { name: "Add / pair a Board", exact: true })
+    .click();
+  await expect(password).toHaveValue("");
   await password.fill("fixture-only-not-submitted");
   await page.getByRole("button", { name: "⌂ Home Base", exact: true }).click();
   await page
