@@ -161,7 +161,7 @@
       chirp: false,
     };
     mission = true;
-    missionOpen = false;
+    void openWorkspace("B");
     note(
       "Guardian starter opened. Move a visitor close to change its light. These are your editable rules.",
     );
@@ -178,6 +178,11 @@
     note(
       "Kept in this demo only. Reloading the page clears demo saves; real app progress is untouched.",
     );
+  }
+  async function openWorkspace(next: "B" | "C") {
+    stop(false);
+    missionOpen = false;
+    await goto(`?variant=${next}`, { replaceState: true });
   }
   async function switchVariant(direction: number) {
     stop(false);
@@ -511,14 +516,18 @@
       </div>
     {:else if variant === "B"}
       <div class="workbench-heading">
-        <span class="eyebrow">HARDWARE WORKBENCH</span>
+        <button onclick={() => openWorkspace("C")}
+          >← Modules & experiments</button
+        >
+        <p class="eyebrow">STEP 2 · BUILD WITH BLOCKS</p>
         <h1>
           {mission
             ? "My guardian program"
             : "Build a behavior, one block at a time."}
         </h1>
         <p>
-          Choose a trigger. Choose a response. Run it and watch the connection.
+          Your inputs notice things. Your rules decide what happens. Your
+          outputs bring the idea to life.
         </p>
       </div>
       <div class="workbench-layout">
@@ -608,10 +617,19 @@
           <h2>
             {mission ? "A guardian of your own" : "What should happen when…?"}
           </h2>
-          <p>Make one connection between an input and an output.</p>
+          <p>
+            Now connect what your modules notice to what they do. Build with
+            blocks, try a rule, and change your idea.
+          </p>
         </div>
         <div class="sentence-editor">
-          {@render ruleFields()}{@render runControls()}
+          <button class="primary" onclick={() => openWorkspace("B")}
+            >Build with blocks →</button
+          >
+          <p class="muted">
+            Your demo Board and draft carry over. The program stays stopped
+            until you press Run.
+          </p>
         </div>
       </section>
       <button
@@ -637,7 +655,7 @@
                 stop(false);
                 rule = { ...item.rule };
                 mission = item.mission;
-                missionOpen = false;
+                void openWorkspace("B");
                 note(
                   `${item.name} reopened. Program is stopped until you press Run.`,
                 );

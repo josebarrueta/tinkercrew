@@ -19,7 +19,7 @@ Use the floating arrows, or left/right keyboard arrows outside controls. Switchi
 ## Try this
 
 1. Connect the **demo** Board. Try blue/purple, press A/B/C, move the pretend visitor, preview a chirp.
-2. Run the default rule; press A to see a one-second simulated blue light. Change its trigger/color or add a chirp; editing stops execution.
+2. Click **Build with blocks** to move from C to B. Run the default rule; press A to see a one-second simulated blue light. Change its trigger/color or add a chirp; editing stops execution.
 3. Open **Missions**. Read the visible physical goal, learning outcome and required modules. “Make my guardian” opens an editable distance-to-light starter, not a form/checklist. Run; move from 60 cm to below 20 cm.
 4. Stop. Keep a draft in demo memory and reopen it; it stays stopped. Reloading clears everything.
 5. In prototype scenarios, remove Distance; a button-to-light rule still works. A distance rule explains its missing requirement. Disconnect/reconnect never silently runs a program.
@@ -34,9 +34,15 @@ Use the floating arrows, or left/right keyboard arrows outside controls. Switchi
 - No general GPIO, power switching, independent Board execution, multi-rule compiler or actual saved-creation format is implemented.
 - This does not solve actual first-time vendor provisioning or OS credential consent by pretending they do not exist. Those need a separately implemented state-driven readiness flow.
 
-## Current verdict / validation
+## Owner-selected direction / validation
 
-**No winning layout or usability claim yet.** Working candidate comparisons, awaiting owner/maker feedback. Source-led tradeoffs: A prioritizes rule editing but its module rail is tall; B makes program structure visible but is busiest; C gives module testing priority but pushes the program lower. A possible combination is C for first contact, A for creating, and optional B later—not a validated decision.
+The owner selected **C for starting, B for learning/composing with blocks**: “i like c for starting , I like b as block module to learn also some logic and connecting more things”. This is owner design feedback, not family usability or physical acceptance.
+
+The prototype now has a direct path: C's module playground → **Build with blocks** → B's workbench, with **Modules & experiments** to go back. Both retain the same connected demo kit and draft, but navigating stops execution. Mission starters and kept drafts open in B. A remains on this archive branch for comparison, not part of the selected product path.
+
+The next block-editor goal is **multiple inputs, conditions and outputs**, not only recoloring one supplied rule. The current prototype still supports one trigger and a Pixels action plus optional chirp; it is not a multi-rule engine or general hardware programming implementation. Define readable logic, dependencies, execution trace, output conflict policy, validation and independent Stop/watchdog behavior before adding that production engine.
+
+No further layout choice is required. Validate the combined interaction and implement its smallest safe real vertical slice; do not promote throwaway code or claim the broader editor already exists.
 
 Svelte/TypeScript check passed with zero warnings. Local browser smoke walkthrough exercised connection, A→light, Stop, memory-only keep, all three layout switches, and Guardian distance→light; no browser exceptions or localStorage keys appeared. Screens visually inspected at 1440 px. No automated test suite was added for throwaway code; no real hardware or family acceptance was performed.
 
