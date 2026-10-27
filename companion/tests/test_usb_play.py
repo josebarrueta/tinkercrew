@@ -86,6 +86,21 @@ class UsbPlayTests(unittest.TestCase):
         status,result=self.request('/v1/usb-sessions',self.usb.begin());self.assertEqual(status,200)
         self.assertEqual(self.request('/v1/hello',token=result['session_token'])[0],200)
 
+    def test_module_preview_can_clear_before_its_first_lease_without_losing_the_session(self):
+        status,result=self.request('/v1/usb-sessions',self.usb.begin());self.assertEqual(status,200);token=result['session_token']
+        # CreationRuntime.test/start first releases previous control. Opening a
+        # real connection has deliberately not acquired any output lease.
+        clear={'operation':'outputs.clear','arguments':{}}
+        self.assertEqual(self.request('/v1/commands',clear,token)[0],200)
+        self.assertEqual(self.request('/v1/hello',token=token)[1]['health']['safe_state'],True)
+        self.assertEqual(self.request('/v1/control-lease',{'lease_ms':1500},token)[0],200)
+        self.assertEqual(self.request('/v1/commands',{'operation':'pixels.set','arguments':{'color':'#3366ff','brightness':0.25,'duration_ms':1500}},token)[0],200)
+        self.assertEqual(self.request('/v1/commands',clear,token)[0],200)
+        self.assertEqual(self.request('/v1/commands',clear,token)[0],200)
+        self.assertEqual(self.request('/v1/hello',token=token)[0],200)
+        status,other=self.request('/v1/usb-sessions',self.usb.begin());self.assertEqual(status,200)
+        self.assertEqual(self.request('/v1/control-lease',{'lease_ms':1500},other['session_token'])[0],200)
+
     def test_usb_session_cap_and_control_owner_are_independent_of_connect(self):
         tokens=[]
         for _ in range(2):
@@ -94,6 +109,7 @@ class UsbPlayTests(unittest.TestCase):
         self.assertEqual(self.request('/v1/hello',token=tokens[0])[1]['health']['safe_state'],True)
         self.assertEqual(self.request('/v1/control-lease',{'lease_ms':1500},tokens[0])[0],200)
         self.assertEqual(self.request('/v1/control-lease',{'lease_ms':1500},tokens[1])[0],409)
+        self.assertEqual(self.request('/v1/commands',{'operation':'outputs.clear','arguments':{}},tokens[1])[0],409)
         self.assertEqual(self.request('/v1/sessions/current',token=tokens[0],method='DELETE')[0],200)
         self.assertEqual(self.request('/v1/hello',token=tokens[1])[1]['health']['safe_state'],True)
         self.assertEqual(self.request('/v1/usb-sessions',self.usb.begin())[0],200)

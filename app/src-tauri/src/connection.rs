@@ -459,6 +459,22 @@ pub(crate) async fn request(
             "The Board session expired or was rejected. Reconnect your saved Board first. Recover Pairing through USB only if registration was revoked; keep TLS verification enabled.",
         ));
     }
+    if [
+        reqwest::StatusCode::BAD_REQUEST,
+        reqwest::StatusCode::CONFLICT,
+        reqwest::StatusCode::UNPROCESSABLE_ENTITY,
+    ]
+    .contains(&response.status())
+    {
+        return Err(ConnectionError::new(
+            "command_rejected",
+            if response.status() == reqwest::StatusCode::CONFLICT {
+                "Another control session owns this Board. Stop that controller before explicitly trying this module again."
+            } else {
+                "The Board rejected this module request. The connection remains available; check the module before explicitly trying again."
+            },
+        ));
+    }
     if !response.status().is_success() {
         return Err(ConnectionError::new(
             "command_failed",
@@ -942,6 +958,80 @@ mod tests {
     use super::*;
 
     #[test]
+    #[ignore = "Owner-only module cleanup preflight: clears outputs, never acquires/activates. Run only with exact consent."]
+    fn physical_module_cleanup_without_arming_owner_only() {
+        assert_eq!(
+            std::env::var("TC_ACCEPTANCE_CONSENT").as_deref(),
+            Ok("module-test-disarm")
+        );
+        assert_eq!(
+            std::env::var("TC_ACCEPTANCE_USB_SERIAL").as_deref(),
+            Ok("1158338022")
+        );
+        assert!(
+            !std::process::Command::new("pgrep")
+                .args(["-x", "tinkercrew"])
+                .status()
+                .unwrap()
+                .success()
+        );
+        let directory = PathBuf::from(std::env::var_os("HOME").unwrap())
+            .join("Library/Application Support/com.tinkercrew.desktop");
+        assert!(directory.is_dir() && !directory.is_symlink());
+        #[link(name = "Security", kind = "framework")]
+        unsafe extern "C" {
+            fn SecKeychainSetUserInteractionAllowed(state: u8) -> i32;
+            fn SecKeychainGetUserInteractionAllowed(state: *mut u8) -> i32;
+        }
+        let mut previous = 1u8;
+        assert_eq!(
+            unsafe { SecKeychainGetUserInteractionAllowed(&mut previous) },
+            0
+        );
+        struct Restore(u8);
+        impl Drop for Restore {
+            fn drop(&mut self) {
+                let _ = unsafe { SecKeychainSetUserInteractionAllowed(self.0) };
+            }
+        }
+        let _restore = Restore(previous);
+        assert_eq!(unsafe { SecKeychainSetUserInteractionAllowed(0) }, 0);
+        let connections = Connections::new(directory);
+        tauri::async_runtime::block_on(async {
+            let opened = connect_usb(&connections, "1158338022".into())
+                .await
+                .unwrap();
+            assert_eq!(opened.board_id, "43ddf2b6-1679-498d-89c8-4f4c96852b4a");
+            let before = gameplay_request(&connections, opened.handle, GameplayRequest::State)
+                .await
+                .unwrap();
+            assert_eq!(
+                before["health"]["state"], "safe_state",
+                "Do not interfere with an active controller."
+            );
+            for _ in 0..2 {
+                gameplay_request(&connections, opened.handle, GameplayRequest::Clear)
+                    .await
+                    .expect("Native pre-lease cleanup rejected");
+            }
+            let after = gameplay_request(&connections, opened.handle, GameplayRequest::State)
+                .await
+                .unwrap();
+            assert_eq!(after["health"]["state"], "safe_state");
+            assert_eq!(after["outputs"]["pixels"], "off");
+            assert_eq!(after["outputs"]["buzzer"], "off");
+            close_play(&connections, opened.handle).await.unwrap();
+        });
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let evidence = json!({"nativeConnectClearReadClose":"passed","repeatedPreLeaseClear":true,"interactiveKeychainDisabledInThisProcess":true,"outputActivationOrLease":"never requested","physicalLightSound":"not tested"});
+        std::fs::write(
+            root.join("artifacts/qa/uno-q-module-cleanup-native.json"),
+            serde_json::to_vec_pretty(&evidence).unwrap(),
+        )
+        .unwrap();
+    }
+
+    #[test]
     #[ignore = "Owner-only exact USB play read-only acceptance; never run blanket --ignored."]
     fn physical_password_free_usb_play_read_only_owner_only() {
         assert_eq!(
@@ -1272,6 +1362,9 @@ mod tests {
         tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap().block_on(async {
             let auth = crate::session::GameplayAuth::legacy(&profile.api_token);
             let (client, _) = verify_candidate(&profile, &candidate, &auth).await.unwrap();
+            let rejected = request(&client, &profile, port, Method::POST, "/v1/commands", Some(json!({"operation":"pixels.set","arguments":{"color":"#3366ff","brightness":0.25,"duration_ms":1500}})), &auth).await.unwrap_err();
+            assert_eq!(rejected.code, "command_rejected");
+            request(&client, &profile, port, Method::GET, "/v1/state", None, &auth).await.unwrap();
             request(&client, &profile, port, Method::POST, "/v1/control-lease", Some(json!({"lease_ms":1500})), &auth).await.unwrap();
             request(&client, &profile, port, Method::POST, "/v1/commands", Some(json!({"operation":"pixels.set", "arguments":{"color":"#22c55e","brightness":0.3,"duration_ms":1000}})), &auth).await.unwrap();
             let state = request(&client, &profile, port, Method::GET, "/v1/state", None, &auth).await.unwrap();

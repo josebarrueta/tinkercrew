@@ -33,6 +33,38 @@ const buttonEvent = (sequence: number) => ({
 });
 
 describe("connected Companion adapter", () => {
+  it("a rejected module command stops control without destroying the authenticated read connection", async () => {
+    const failures: unknown[] = [];
+    const operations: string[] = [];
+    const client = await ConnectedBoardClient.open(
+      7,
+      "board-one",
+      async (_handle, request) => {
+        operations.push(request.operation);
+        if (request.operation === "hello") return hello;
+        if (request.operation === "state") return state;
+        if (request.operation === "events") return { events: [] };
+        throw {
+          code: "command_rejected",
+          message: "Another controller is using this Board.",
+        };
+      },
+      (error) => failures.push(error),
+    );
+    try {
+      await expect(
+        client.command({
+          operation: "pixels.set",
+          arguments: { color: "#3366ff", brightness: 0.25 },
+        }),
+      ).rejects.toMatchObject({ code: "command_rejected" });
+      expect((await client.getSnapshot()).mode).toBe("connected");
+      expect(failures).toEqual([]);
+      expect(operations).not.toContain("renew_control");
+    } finally {
+      client.close();
+    }
+  });
   it("does not advertise operational input capabilities for null or out-of-range values", async () => {
     const transport: GameplayTransport = async (_handle, request) =>
       request.operation === "hello"

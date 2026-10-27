@@ -121,7 +121,13 @@ export class ConnectedBoardClient implements BoardClient {
     try {
       return await this.transport(this.handle, operation);
     } catch (cause) {
-      this.fail(cause);
+      if (connectionError(cause).code === "command_rejected") {
+        // A bounded command rejection is not expired authentication or lost
+        // transport. Stop running logic, but preserve reads and explicit retry.
+        this.emit({ type: "health.changed", health: "safe_state" });
+      } else {
+        this.fail(cause);
+      }
       throw cause;
     }
   }

@@ -1,0 +1,17 @@
+# Module-test regression — 2026-10-27
+
+Owner screenshots after #44 showed authenticated USB, Pixels/Buzzer available and Buttons/Distance disconnected, followed by command failure and an unusable connection. Successful read-only connection acceptance had **not** proved the module-test path; the prior completion statement was too broad.
+
+## Reproduction and fix (#45)
+
+- `CreationRuntime.preview/start` intentionally calls `releaseControl` before acquiring a lease. Core permitted authenticated `outputs.clear` without a lease, but the HTTP ownership gate rejected all Commands without one. The exact real private-TLS regression failed **400 != 200** on that first cleanup.
+- Safe, idempotent clear is now accepted when no controller exists or this session owns control. It never acquires a lease and relinquishes ownership after successful clearing. A foreign controller's clear still returns409; authentication/maintenance checks remain intact.
+- A second adapter regression showed command rejection incorrectly setting the entire authenticated connection to failed. Native 400/409/422 command rejections now have a distinct `command_rejected` result; the connected adapter signals stopped control but preserves reads and explicit retry. Authentication/transport/severe service failures still fail closed. No automatic command retry or rearming.
+- `app/e2e/module-protocol.spec.ts` executes **the real CreationRuntime + ConnectedBoardClient** against the actual TLS/Unix Companion and MemoryHardware: open without lease → clear → acquire → Pixels → stop → Buzzer → stop → repeated Stop → still-readable session. It does not return unconditional success from mocked output/cleanup IPC. Existing Rust real-TLS tests cover native rejection classification, and the protocol suite checks controller exclusion/immediate relinquishment.
+
+## Evidence and limits
+
+- Full software/app check: `artifacts/qa/20261027T204139Z-67421.md` — **195 tests**: 38 frontend, 36 native, 49 Companion, 33 browser/protocol, 38 helper, 1 release verifier. Four scoped physical diagnostics are ignored normally.
+- A separate read-only live USB session on deployed runtime `ad29cfc…` confirmed the Board itself reports Buttons/Distance **disconnected**, values/ages null, and Pixels/Buzzer operational. This is independent of the cleanup rejection and is not hidden or converted to fake fresh readings. No lease or output Command was sent for that observation.
+- Initial rollout attempt stopped **before any runtime operation** because the exact physical USB Board was no longer listed. No update/firmware/reset/re-pair was attempted. Live update and native cleanup verification require the Board reconnected; do not treat simulated previews as a physical light/sound pass.
+- The app was quit normally before rebuilding. User saves, persistent Pairing and identity are not migrated or erased. The compatible Linux-only rollout must retain its guarded trial/health/rollback and preserved-baseline checks.

@@ -464,6 +464,7 @@ def make_handler(companion: Companion, token: str | None = None, *, auth=None, u
                         tick()
                         self._send(503, {"status": "error", "error": {"code": "maintenance_active"}})
                         return
+                    clearing = self.path == '/v1/commands' and body.get('operation') == 'outputs.clear'
                     if auth is not None:
                         tick()
                         current = self.headers["Authorization"][7:]
@@ -480,10 +481,15 @@ def make_handler(companion: Companion, token: str | None = None, *, auth=None, u
                                 control_until = control_clock() + min(body.get("lease_ms", 1500), 2000) / 1000
                                 self._send(200, result)
                                 return
-                            if control_token != current:
+                            if control_token != current and not clearing:
                                 raise CommandError("safe_state_active: acquire a control lease first")
                     if self.path == "/v1/commands":
                         result = companion.command(body.get("operation"), body.get("arguments", {}))
+                        if clearing:
+                            # Clearing never arms. It is safe before the first lease
+                            # or after Stop, but the foreign-owner check above still
+                            # prevents another session interrupting a live controller.
+                            control_token, control_until = None, 0.0
                     elif self.path == "/v1/control-lease":
                         result = companion.renew_control_lease(body.get("lease_ms", 1500))
                     elif self.path == "/v1/self-tests":
