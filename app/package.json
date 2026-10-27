@@ -8,6 +8,7 @@
   },
   "scripts": {
     "dev": "vite dev",
+    "prototype:create": "vite dev --host 127.0.0.1 --port 5182 --strictPort --open '/prototype/create?variant=C'",
     "dev:app": "tauri dev",
     "build": "vite build",
     "build:app": "tauri build --bundles app --config src-tauri/tauri.development.conf.json",
