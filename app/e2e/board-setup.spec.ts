@@ -149,7 +149,7 @@ async function mockManagement(
     },
     { initialPhase, registered },
   );
-  await page.goto("/");
+  await page.goto("/legacy");
   await page
     .getByRole("button", { name: "☰ Board Setup", exact: true })
     .click();
@@ -475,7 +475,7 @@ test("runtime updates require an inspected registered Board and distinct typed u
 test("Board Setup distinguishes credentials, restart, local cleanup, and destructive restore", async ({
   page,
 }) => {
-  await page.goto("/");
+  await page.goto("/legacy");
   await expect(
     page.getByRole("button", { name: "☰ Parent Settings", exact: true }),
   ).toHaveCount(0);

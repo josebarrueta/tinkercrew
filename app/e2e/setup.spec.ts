@@ -3,7 +3,7 @@ import { expect, test } from "@playwright/test";
 test("setup preview exposes official handoff and never invents factory success", async ({
   page,
 }) => {
-  await page.goto("/");
+  await page.goto("/legacy");
   await page
     .getByRole("button", { name: "☰ Board Setup", exact: true })
     .click();

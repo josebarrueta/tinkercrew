@@ -236,11 +236,12 @@ impl Connections {
         })
     }
     pub fn profile(&self, board_id: &str) -> Result<BoardProfile> {
-        let bytes = get_generic_password(KEYCHAIN_SERVICE, board_id).map_err(|_| {
-            ConnectionError::new(
-                "pairing_required",
-                "Unlock macOS Keychain or import the USB-verified Board record in Board Setup.",
-            )
+        let bytes = get_generic_password(KEYCHAIN_SERVICE, board_id).map_err(|error| {
+            if error.code() == -25300 {
+                ConnectionError::new("pairing_required", "This Mac has no saved permission for that Board. Pair it through physical USB; existing records were not replaced.")
+            } else {
+                ConnectionError::new("keychain_unavailable", "macOS could not allow access to Tinkeroo's saved Board permission. Unlock secure storage or approve the expected Tinkeroo prompt, then retry Connect. Do not delete or re-pair as a workaround.")
+            }
         })?;
         let profile: BoardProfile = serde_json::from_slice(&bytes).map_err(|_| {
             ConnectionError::new(

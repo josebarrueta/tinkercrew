@@ -86,7 +86,7 @@ async function connectedBoard(page: Page) {
       },
     };
   });
-  await page.goto("/");
+  await page.goto("/legacy");
   await expect(
     page.getByText("Board connected", { exact: true }),
   ).toBeVisible();

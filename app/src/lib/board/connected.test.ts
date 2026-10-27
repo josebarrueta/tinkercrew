@@ -33,6 +33,34 @@ const buttonEvent = (sequence: number) => ({
 });
 
 describe("connected Companion adapter", () => {
+  it("does not advertise operational input capabilities for null or out-of-range values", async () => {
+    const transport: GameplayTransport = async (_handle, request) =>
+      request.operation === "hello"
+        ? hello
+        : request.operation === "state"
+          ? {
+              ...state,
+              observables: {
+                distance: { value: -50, health: "operational", age_ms: 0 },
+                buttons: { value: null, health: "operational", age_ms: 0 },
+              },
+            }
+          : { events: [] };
+    const client = await ConnectedBoardClient.open(
+      7,
+      "board-one",
+      transport,
+      () => {},
+    );
+    try {
+      const snapshot = await client.getSnapshot();
+      expect(snapshot.capabilities).not.toContain("distance");
+      expect(snapshot.capabilities).not.toContain("buttons");
+      expect(snapshot.capabilities).toContain("buzzer");
+    } finally {
+      client.close();
+    }
+  });
   it("counts request/transit delay against sensor freshness instead of trusting wire age alone", async () => {
     let elapsed = 0;
     vi.spyOn(performance, "now").mockImplementation(() => elapsed);

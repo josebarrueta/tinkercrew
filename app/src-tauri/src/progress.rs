@@ -117,6 +117,31 @@ mod tests {
     use super::*;
 
     #[test]
+    fn creation_namespace_preserves_existing_mission_and_rejects_stale_library_writes() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("progress.sqlite");
+        let store = ProgressStore::open(&path).unwrap();
+        store
+            .save("treasure-guardian", "{\"stageIndex\":3}", 0)
+            .unwrap();
+        store
+            .save("creations-v1", "{\"version\":1,\"creations\":[]}", 0)
+            .unwrap();
+        drop(store);
+        let store = ProgressStore::open(&path).unwrap();
+        assert_eq!(
+            store.load("treasure-guardian").unwrap().unwrap().payload,
+            "{\"stageIndex\":3}"
+        );
+        assert_eq!(store.load("creations-v1").unwrap().unwrap().revision, 1);
+        assert!(store.save("creations-v1", "{}", 0).is_err());
+        assert_eq!(
+            store.load("creations-v1").unwrap().unwrap().payload,
+            "{\"version\":1,\"creations\":[]}"
+        );
+    }
+
+    #[test]
     fn progress_survives_reopening_and_rejects_stale_writers() {
         let path =
             std::env::temp_dir().join(format!("tinkercrew-progress-{}.sqlite", std::process::id()));

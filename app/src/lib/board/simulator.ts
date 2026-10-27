@@ -17,6 +17,7 @@ export class SimulatorBoardClient implements BoardClient {
   private listeners = new Set<(event: BoardEvent) => void>();
   private leaseUntil = 0;
   private buzzerUntil = 0;
+  private pixelsUntil = 0;
   private frozenAt: number | null = null;
   private snapshot: BoardSnapshot = {
     mode: "simulator",
@@ -65,9 +66,21 @@ export class SimulatorBoardClient implements BoardClient {
       this.leaseUntil = 0;
     }
     if (Date.now() >= this.buzzerUntil) this.snapshot.outputs.buzzer = null;
+    if (Date.now() >= this.pixelsUntil) this.snapshot.outputs.pixels = null;
     this.snapshot.observables.distanceAgeMs =
       this.frozenAt === null ? 0 : Date.now() - this.frozenAt;
-    return structuredClone(this.snapshot);
+    const result = structuredClone(this.snapshot);
+    const fresh = result.observables.distanceAgeMs <= 750;
+    result.capabilities = result.capabilities.filter(
+      (name) => name !== "distance" || fresh,
+    );
+    result.capabilityHealth = {
+      distance: {
+        health: fresh ? "operational" : "stale",
+        ageMs: result.observables.distanceAgeMs,
+      },
+    };
+    return result;
   }
 
   async renewControl(): Promise<void> {
@@ -110,6 +123,7 @@ export class SimulatorBoardClient implements BoardClient {
       if (!Number.isFinite(brightness) || brightness < 0 || brightness > 0.5)
         throw new Error("brightness must be a finite number from 0.0..0.5");
       this.snapshot.outputs.pixels = { color, brightness };
+      this.pixelsUntil = Date.now() + 1500;
       return;
     }
     if (command.operation === "buzzer.play") {

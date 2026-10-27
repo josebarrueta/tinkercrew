@@ -16,6 +16,10 @@ _Avoid_: User, child account, player account
 A guided adventure that combines a story, a physical build, observable behavior, remixing, and reflection.
 _Avoid_: Lesson, tutorial, project
 
+**Creation**:
+A saved physical invention and its bounded input-to-output behavior, made freely or from a Mission starting point.
+_Avoid_: Firmware app, sketch, child account
+
 **Board**:
 The specific Arduino UNO Q selected by the Crew for setup, recovery, or play.
 _Avoid_: Generic device, controller

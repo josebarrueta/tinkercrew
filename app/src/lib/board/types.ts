@@ -21,6 +21,9 @@ export interface BoardSnapshot {
   mode: "simulator" | "connected";
   health: "ready" | "disconnected" | "safe_state";
   capabilities: Capability[];
+  capabilityHealth?: Partial<
+    Record<Capability, { health: string; ageMs?: number | null }>
+  >;
   observables: {
     distanceMillimeters: number;
     distanceAgeMs: number;

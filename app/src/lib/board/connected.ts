@@ -166,6 +166,10 @@ export class ConnectedBoardClient implements BoardClient {
       ).filter((name) =>
         name === "buttons" || name === "distance"
           ? state.observables[name].health === "operational" &&
+            state.observables[name].value !== null &&
+            (name !== "distance" ||
+              (state.observables.distance.value! >= 20 &&
+                state.observables.distance.value! <= 4000)) &&
             state.observables[name].age_ms !== null &&
             state.observables[name].age_ms + transitMs <= 750
           : this.hello?.capabilities[name]?.health === "operational",
@@ -174,6 +178,43 @@ export class ConnectedBoardClient implements BoardClient {
         mode: "connected",
         health: state.health.state,
         capabilities,
+        capabilityHealth: Object.fromEntries(
+          (
+            [
+              "buttons",
+              "distance",
+              "pixels",
+              "buzzer",
+              "matrix",
+            ] as Capability[]
+          ).map((name) => {
+            const input =
+              name === "buttons" || name === "distance"
+                ? state.observables[name]
+                : null;
+            return [
+              name,
+              {
+                health: capabilities.includes(name)
+                  ? "operational"
+                  : input?.health === "operational"
+                    ? input.value === null ||
+                      (name === "distance" &&
+                        (state.observables.distance.value! < 20 ||
+                          state.observables.distance.value! > 4000))
+                      ? "degraded"
+                      : "stale"
+                    : (input?.health ??
+                      this.hello?.capabilities[name]?.health ??
+                      "unknown"),
+                ageMs:
+                  input?.age_ms === null || !input
+                    ? null
+                    : input.age_ms + transitMs,
+              },
+            ];
+          }),
+        ),
         observables: {
           distanceMillimeters: state.observables.distance.value ?? Number.NaN,
           distanceAgeMs:
