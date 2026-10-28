@@ -49,6 +49,7 @@ test("the actual preview path can clear, acquire, test both outputs and stop on 
       cert,
       key,
       directory,
+      "bridge-notify-before-ack",
     ],
     {
       env: {

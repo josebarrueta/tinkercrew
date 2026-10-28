@@ -76,6 +76,19 @@ class UsbPlayTests(unittest.TestCase):
             except subprocess.TimeoutExpired:child.kill();child.wait()
             child.stderr.close()
 
+    def test_delayed_bridge_samples_keep_receive_age_and_button_event_time(self):
+        self.now+=3
+        self.companion.record_distance(250,observed_at=1001.0)
+        self.companion.record_buttons([False,False,False],observed_at=1001.0)
+        self.companion.record_buttons([True,False,False],observed_at=1001.1)
+        status,session=self.request('/v1/usb-sessions',self.usb.begin());self.assertEqual(status,200);token=session['session_token']
+        status,state=self.request('/v1/state',token=token);self.assertEqual(status,200)
+        self.assertEqual(state['observables']['distance']['health'],'stale')
+        self.assertEqual(state['observables']['distance']['age_ms'],2000)
+        events=self.request('/v1/events?after=0',token=token)[1]['events']
+        edge=next(event for event in events if event['type']=='button.changed')
+        self.assertAlmostEqual(edge['monotonic_ms'],1100,delta=1)
+
     def test_private_listener_never_replaces_a_live_socket_or_an_unknown_file(self):
         with self.assertRaises(ValueError):
             CompanionUSBServer(str(self.root/'u.sock'),self.server.RequestHandlerClass)

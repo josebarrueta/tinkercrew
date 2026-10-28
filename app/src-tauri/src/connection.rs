@@ -202,7 +202,7 @@ impl Connections {
             .write(true)
             .open(self.directory.join("board-management.lock"))
         {
-            Ok(file) => crate::file_lock::ExclusiveFile::new(file).is_err(),
+            Ok(file) => crate::file_lock::SharedFile::new(file).is_err(),
             Err(error) => error.kind() != std::io::ErrorKind::NotFound,
         }
     }
@@ -996,7 +996,7 @@ mod tests {
         }
         let _restore = Restore(previous);
         assert_eq!(unsafe { SecKeychainSetUserInteractionAllowed(0) }, 0);
-        let connections = Connections::new(directory);
+        let connections = Arc::new(Connections::new(directory));
         tauri::async_runtime::block_on(async {
             let opened = connect_usb(&connections, "1158338022".into())
                 .await
@@ -1014,6 +1014,26 @@ mod tests {
                     .await
                     .expect("Native pre-lease cleanup rejected");
             }
+            for _ in 0..12 {
+                let mut tasks = vec![];
+                for operation in [
+                    GameplayRequest::State,
+                    GameplayRequest::Events { after: 0 },
+                    GameplayRequest::Clear,
+                ] {
+                    let state = connections.clone();
+                    let handle = opened.handle;
+                    tasks.push(tauri::async_runtime::spawn(async move {
+                        gameplay_request(&state, handle, operation).await
+                    }));
+                }
+                for task in tasks {
+                    task.await.unwrap().expect(
+                        "Parallel native read/events/disarm falsely blocked as maintenance",
+                    );
+                }
+                tokio::time::sleep(Duration::from_millis(100)).await;
+            }
             let after = gameplay_request(&connections, opened.handle, GameplayRequest::State)
                 .await
                 .unwrap();
@@ -1023,7 +1043,7 @@ mod tests {
             close_play(&connections, opened.handle).await.unwrap();
         });
         let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-        let evidence = json!({"nativeConnectClearReadClose":"passed","repeatedPreLeaseClear":true,"interactiveKeychainDisabledInThisProcess":true,"outputActivationOrLease":"never requested","physicalLightSound":"not tested"});
+        let evidence = json!({"nativeConnectClearReadClose":"passed","repeatedPreLeaseClear":true,"concurrentNativeRequestGroups":12,"interactiveKeychainDisabledInThisProcess":true,"outputActivationOrLease":"never requested","physicalLightSound":"not tested"});
         std::fs::write(
             root.join("artifacts/qa/uno-q-module-cleanup-native.json"),
             serde_json::to_vec_pretty(&evidence).unwrap(),
@@ -1379,6 +1399,66 @@ mod tests {
             wrong.certificate_pem = rcgen::generate_simple_self_signed(vec!["guardian.local".into()]).unwrap().cert.pem();
             assert_eq!(verify_candidate(&wrong, &candidate, &crate::session::GameplayAuth::legacy(&wrong.api_token)).await.err().unwrap().code, "companion_unavailable");
         });
+    }
+
+    #[test]
+    fn concurrent_gameplay_requests_do_not_report_their_own_guard_checks_as_maintenance() {
+        let directory = tempfile::tempdir().unwrap();
+        let connections = Arc::new(Connections::new(directory.path().into()));
+        // Use the real management interface to create/release its normal lock;
+        // there is no active operation, pending journal or connected Board.
+        drop(connections.begin_maintenance().unwrap());
+        let false_blocks = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let mut workers = vec![];
+        for _ in 0..8 {
+            let state = connections.clone();
+            let blocked = false_blocks.clone();
+            workers.push(std::thread::spawn(move || {
+                tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()
+                    .unwrap()
+                    .block_on(async {
+                        for _ in 0..250 {
+                            let error = gameplay_request(&state, 0, GameplayRequest::State)
+                                .await
+                                .unwrap_err();
+                            if error.code == "maintenance_active" {
+                                blocked.fetch_add(1, Ordering::Relaxed);
+                            } else {
+                                assert_eq!(error.code, "disconnected");
+                            }
+                        }
+                    });
+            }));
+        }
+        for worker in workers {
+            worker.join().unwrap();
+        }
+        assert_eq!(
+            false_blocks.load(Ordering::Relaxed),
+            0,
+            "Read-only guard probes must not impersonate an exclusive management owner"
+        );
+        let owner = connections.begin_maintenance().unwrap();
+        let sibling = Connections::new(directory.path().into());
+        tauri::async_runtime::block_on(async {
+            assert_eq!(
+                gameplay_request(&connections, 0, GameplayRequest::State)
+                    .await
+                    .unwrap_err()
+                    .code,
+                "maintenance_active"
+            );
+            assert_eq!(
+                gameplay_request(&sibling, 0, GameplayRequest::State)
+                    .await
+                    .unwrap_err()
+                    .code,
+                "maintenance_active"
+            );
+        });
+        drop(owner);
     }
 
     #[test]
