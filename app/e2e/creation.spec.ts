@@ -95,15 +95,18 @@ test("opening Create never asks for Board credentials; parent-only saved network
   ).toEqual(["load_progress"]);
   await page
     .getByRole("button", {
-      name: "Parent settings & troubleshooting",
+      name: "Parent settings",
       exact: true,
     })
     .click();
   await page
-    .getByText("Parent network connection — saved Pairing (optional)", {
-      exact: true,
-    })
+    .getByRole("button", { name: "Network & saved permission", exact: true })
     .click();
+  await expect(
+    page.getByText("Parent network connection — saved Pairing (optional)", {
+      exact: true,
+    }),
+  ).toBeVisible();
   await page
     .getByRole("button", {
       name: "Load saved Boards for network play",
@@ -165,7 +168,7 @@ test("choosing practice cancels pending USB selection without saved credential a
       ),
     )
     .toBe(true);
-  await page.getByRole("button", { name: "Use practice", exact: true }).click();
+  await page.getByRole("button", { name: "Use Practice", exact: true }).click();
   await page.evaluate(() =>
     (window as unknown as { __resolve: () => void }).__resolve(),
   );
@@ -223,7 +226,7 @@ test("Practice closes a late USB handle without opening gameplay or reading save
       ),
     )
     .toBe(true);
-  await page.getByRole("button", { name: "Use practice", exact: true }).click();
+  await page.getByRole("button", { name: "Use Practice", exact: true }).click();
   await page.evaluate(() =>
     (window as unknown as { __finishUsb: () => void }).__finishUsb(),
   );
@@ -403,6 +406,7 @@ test("multiple block rules compose a conditional chirp and copying preserves the
   await expect(page.getByLabel("Creation name")).toHaveValue(
     "Signal friend (copy)",
   );
+  await page.getByRole("button", { name: "My creations", exact: true }).click();
   await page
     .getByRole("button", { name: "Signal friend", exact: true })
     .click();
@@ -446,6 +450,7 @@ test("a stale window cannot replace another maker's saved Creation or earlier Mi
     .click();
   await expect(other.getByRole("alert")).toContainText("another window");
   await page.reload();
+  await page.getByRole("button", { name: "My creations", exact: true }).click();
   await expect(
     page.getByRole("button", { name: "First maker", exact: true }),
   ).toBeVisible();
@@ -481,7 +486,9 @@ test("the new workspace exposes its goal and a keyboard-accessible persistent St
     path: info.outputPath("creation-blocks.png"),
     fullPage: true,
   });
-  await page.getByRole("button", { name: "Missions", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Start from a Mission", exact: true })
+    .click();
   await expect(
     page.getByRole("heading", { name: "You’ll learn", exact: true }),
   ).toBeVisible();
@@ -538,6 +545,7 @@ test("a maker tries modules, composes blocks, and saves/reopens a stopped Creati
   ).toBeVisible();
   await page.getByLabel("Creation name").fill("Unsaved draft stays here");
   await page.getByLabel("Tinkeroo", { exact: true }).click();
+  await page.getByRole("button", { name: "Try modules", exact: true }).click();
   await page
     .getByRole("button", { name: "Build with blocks", exact: true })
     .click();
@@ -545,6 +553,7 @@ test("a maker tries modules, composes blocks, and saves/reopens a stopped Creati
     "Unsaved draft stays here",
   );
   await page.reload();
+  await page.getByRole("button", { name: "My creations", exact: true }).click();
   await page
     .getByRole("button", { name: "My space greeter", exact: true })
     .click();

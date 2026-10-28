@@ -22,6 +22,9 @@
     advanced = true,
     defer = false,
     onParent = () => {},
+    parentTask,
+    continueLabel = "Continue to Mission",
+    onBusyChange = () => {},
   }: {
     visible: boolean;
     onConnected: (client: BoardClient) => void;
@@ -31,6 +34,10 @@
     advanced?: boolean;
     defer?: boolean;
     onParent?: () => void;
+    parentTask?:
+      "overview" | "setup" | "network" | "updates" | "troubleshooting";
+    continueLabel?: string;
+    onBusyChange?: (busy: boolean) => void;
   } = $props();
   let usbBoards = $state<{ serial: string }[]>([]);
   let selectedUsb = $state("");
@@ -41,6 +48,18 @@
   let usbConfirmed = $state(false);
   let setupOpen = $state(false);
   let maintenanceOpen = $state(false);
+  let networkOpen = $state(false);
+  $effect(() => {
+    if (parentTask) {
+      maintenanceOpen = [
+        "setup",
+        "updates",
+        "troubleshooting",
+        "network",
+      ].includes(parentTask);
+      networkOpen = parentTask === "network";
+    }
+  });
   let maintenanceSection = $state<HTMLDetailsElement>();
   async function openParentSetup() {
     if (!advanced) {
@@ -243,6 +262,27 @@
     }
   }
 
+  export async function cancelPending() {
+    if (
+      !busy &&
+      !loadingBoards &&
+      connection.phase !== "searching" &&
+      !(reconnect && connection.phase === "failed")
+    )
+      return;
+    const preserveConnected = connection.phase === "connected" && !busy;
+    ++intent;
+    reconnect = false;
+    clearTimeout(retry);
+    if (preserveConnected) return;
+    client?.close();
+    onSimulator();
+    report({ phase: "simulator" });
+    await closeUsb();
+    // In-flight discovery/connect retains its busy gate until it settles.
+    // Its epoch checks dispose only its own late USB handle.
+  }
+
   export async function useSimulator() {
     ++intent;
     reconnect = false;
@@ -272,7 +312,15 @@
   }
 
   export async function openConnection() {
-    if (!native || disposed || busy || loadingBoards || managementBusy) return;
+    if (
+      !native ||
+      disposed ||
+      busy ||
+      loadingBoards ||
+      managementBusy ||
+      connection.phase === "connected"
+    )
+      return;
     const epoch = ++intent;
     loadingBoards = true;
     message = "";
@@ -297,7 +345,14 @@
   }
 
   async function openSavedBoards() {
-    if (!native || disposed || busy || loadingBoards) return;
+    if (
+      !native ||
+      disposed ||
+      busy ||
+      loadingBoards ||
+      connection.phase === "connected"
+    )
+      return;
     const epoch = ++intent;
     loadingBoards = true;
     try {
@@ -326,7 +381,18 @@
 </script>
 
 <section hidden={!visible} class="connections">
-  <h2>{advanced ? "Connect & play" : "Connect your Board"}</h2>
+  <h2 tabindex="-1">
+    {parentTask && parentTask !== "overview"
+      ? {
+          setup: "Board setup",
+          network: "Network & saved permission",
+          updates: "Software updates",
+          troubleshooting: "Troubleshooting",
+        }[parentTask]
+      : advanced
+        ? "Connect & play"
+        : "Connect your Board"}
+  </h2>
   <p>
     Plug in a prepared UNO Q with a USB data cable. USB play uses temporary
     permission in this app's memory — no Mac or Linux password, Keychain access,
@@ -334,8 +400,8 @@
     Board needs parent setup once.
   </p>
   <p>
-    Using the simulator instead? It is practice only and never drives the
-    connected Board.
+    Practice never drives the connected Board. Choose a module test or Run
+    explicitly when you are ready to use real hardware.
   </p>
   {#if !native}<p>
       Board connections are available in the native macOS app. This browser
@@ -350,7 +416,7 @@
     {:else if connection.phase === "failed"}{#if advanced}{connection.error
           .code}:
       {/if}{connection.error.message}
-    {:else}Simulator mode is active.{/if}
+    {:else}Practice mode is active.{/if}
   </p>
   {#if message}<p role="status">{message}</p>{/if}
   {#if !advanced && connection.phase === "failed"}<p>
@@ -364,7 +430,14 @@
       Parent maintenance is active or needs recovery. Gameplay stays paused;
       open Parent setup &amp; advanced maintenance below to inspect it.
     </p>{/if}
-  <fieldset disabled={!native || busy || loadingBoards || managementBusy}>
+  <fieldset
+    hidden={!!parentTask}
+    disabled={!native ||
+      busy ||
+      loadingBoards ||
+      managementBusy ||
+      connection.phase === "connected"}
+  >
     <legend>USB play</legend>
     <label
       >USB Board
@@ -380,10 +453,17 @@
       >Connect / retry USB Board</button
     >
   </fieldset>
-  <button onclick={() => useSimulator()}
-    >Use simulator / stop reconnecting</button
-  >
-  {#if advanced}<details>
+  {#if !parentTask || connection.phase === "connected"}<button
+      onclick={() => useSimulator()}>Use Practice</button
+    >{/if}
+  {#if connection.phase === "connected"}<p>
+      Connection details are read-only. Use Practice to disconnect before
+      choosing another Board or network.
+    </p>{/if}
+  {#if advanced}<details
+      bind:open={networkOpen}
+      hidden={!!parentTask && parentTask !== "network"}
+    >
       <summary>Parent network connection — saved Pairing (optional)</summary>
       <p>
         Wi-Fi play uses saved Mac credentials and can require Keychain approval.
@@ -391,10 +471,20 @@
         network.
       </p>
       <button
-        disabled={!native || busy || loadingBoards || managementBusy}
+        disabled={!native ||
+          busy ||
+          loadingBoards ||
+          managementBusy ||
+          connection.phase === "connected"}
         onclick={openSavedBoards}>Load saved Boards for network play</button
       >
-      <fieldset disabled={!native || busy || loadingBoards || managementBusy}>
+      <fieldset
+        disabled={!native ||
+          busy ||
+          loadingBoards ||
+          managementBusy ||
+          connection.phase === "connected"}
+      >
         <legend>Your saved Board</legend>
         <label
           >Paired Board
@@ -434,25 +524,30 @@
         <button disabled={!selected} onclick={() => connectSaved()}
           >Connect / retry selected Board</button
         >
-        <button onclick={() => useSimulator()}
-          >Use simulator / stop reconnecting</button
+        <button hidden={!!parentTask} onclick={() => useSimulator()}
+          >Use Practice</button
         >
       </fieldset>
     </details>{/if}
-  {#if advanced}<button
+  {#if advanced && !parentTask}<button
       class="primary"
       disabled={busy ||
         managementBusy ||
         connection.phase === "searching" ||
         connection.phase === "failed"}
-      onclick={onMission}>Continue to Mission</button
+      onclick={onMission}>{continueLabel}</button
     >{/if}
-  <button onclick={openParentSetup}>Parent setup (one time)</button>
+  {#if !parentTask}<button onclick={openParentSetup}
+      >Parent setup (one time)</button
+    >{/if}
   <p>
     Opening a Mission does not enable physical lights or sound. Mission controls
     need a separate explicit action.
   </p>
-  {#if advanced}<details bind:open={setupOpen}>
+  {#if advanced}<details
+      bind:open={setupOpen}
+      hidden={!!parentTask && parentTask !== "setup"}
+    >
       <summary>Set up a UNO Q — resumable official-tool handoff guide</summary>
       <p>
         Use this for a new Board, not every play session. Already paired Boards
@@ -483,6 +578,7 @@
       </p>
       <BoardManagement
         visible={visible && maintenanceOpen}
+        area={parentTask === "overview" ? undefined : parentTask}
         pairedBoardId={selected}
         beforeChange={useSimulator}
         onForgot={async () => {
@@ -493,11 +589,12 @@
         }}
         onBusyChange={(value) => {
           managementBusy = value;
+          onBusyChange(value);
         }}
       />
     </details>
     <HardwareSafety />
-    <details>
+    <details hidden={!!parentTask && parentTask !== "setup"}>
       <summary>Import an already provisioned Board (development bridge)</summary
       >
       <p>
