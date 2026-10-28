@@ -57,40 +57,46 @@ class Companion:
             return "stale"
         return "operational"
 
-    def _emit(self, event_type: str, capability: str, health: str, payload: dict) -> None:
+    def _emit(self, event_type: str, capability: str, health: str, payload: dict, *, observed_at=None) -> None:
         self._sequence += 1
         self._events.append({
             "protocol": PROTOCOL_VERSION,
             "event_id": str(uuid.uuid4()),
             "sequence": self._sequence,
-            "monotonic_ms": int((self._clock() - self._started_at) * 1000),
+            "monotonic_ms": int(((self._clock() if observed_at is None else observed_at) - self._started_at) * 1000),
             "type": event_type,
             "capability": capability,
             "health": health,
             "payload": payload,
         })
 
-    def record_distance(self, millimeters: int) -> None:
-        if not isinstance(millimeters, int) or not 0 <= millimeters <= 5000:
+    def record_distance(self, millimeters: int, *, observed_at=None) -> None:
+        received = self._clock() if observed_at is None else observed_at
+        if not isinstance(millimeters, int) or not 0 <= millimeters <= 5000 or not isinstance(received, (int, float)) or not self._started_at <= received <= self._clock():
             return
         with self._lock:
             observable = self._observables["distance"]
+            if observable.observed_at is not None and received < observable.observed_at:
+                return
             recovered = not observable.connected
             observable.value = millimeters
-            observable.observed_at = self._clock()
+            observable.observed_at = received
             observable.connected = True
             if recovered:
                 self._emit("capability.health_changed", "distance", "operational", {})
-            self._emit("distance.changed", "distance", "operational", {"millimeters": millimeters})
+            self._emit("distance.changed", "distance", "operational", {"millimeters": millimeters}, observed_at=received)
 
-    def record_buttons(self, pressed: list[bool]) -> None:
-        if len(pressed) != 3 or any(type(item) is not bool for item in pressed):
+    def record_buttons(self, pressed: list[bool], *, observed_at=None) -> None:
+        received = self._clock() if observed_at is None else observed_at
+        if len(pressed) != 3 or any(type(item) is not bool for item in pressed) or not isinstance(received, (int, float)) or not self._started_at <= received <= self._clock():
             return
         with self._lock:
             observable = self._observables["buttons"]
+            if observable.observed_at is not None and received < observable.observed_at:
+                return
             recovered = not observable.connected
             observable.value = list(pressed)
-            observable.observed_at = self._clock()
+            observable.observed_at = received
             observable.connected = True
             previous = self._last_buttons
             self._last_buttons = list(pressed)
@@ -102,7 +108,7 @@ class Companion:
                         self._emit("button.changed", "buttons", "operational", {
                             "button": index,
                             "pressed": value,
-                        })
+                        }, observed_at=received)
 
     def mark_disconnected(self, capability: str) -> None:
         if capability not in self._observables:

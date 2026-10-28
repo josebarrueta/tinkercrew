@@ -15,6 +15,21 @@ impl Drop for ExclusiveFile {
     }
 }
 
+/// Read-only ownership probe. Multiple probes may coexist, but an actual
+/// exclusive management scope blocks every one of them.
+pub(crate) struct SharedFile(std::fs::File);
+impl SharedFile {
+    pub(crate) fn new(file: std::fs::File) -> std::io::Result<Self> {
+        fs2::FileExt::try_lock_shared(&file)?;
+        Ok(Self(file))
+    }
+}
+impl Drop for SharedFile {
+    fn drop(&mut self) {
+        let _ = fs2::FileExt::unlock(&self.0);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

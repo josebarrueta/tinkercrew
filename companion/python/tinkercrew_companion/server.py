@@ -204,11 +204,68 @@ def build_companion(board_version: str = "unknown", board_id: str = "unprovision
     from arduino.app_utils.bridge import Bridge
 
     companion = Companion(BridgeHardware(Bridge), board_version=board_version, board_id=board_id)
-    Bridge.provide("tc_buttons", lambda a, b, c: companion.record_buttons([bool(a), bool(b), bool(c)]))
-    Bridge.provide("tc_distance", lambda millimeters: companion.record_distance(int(millimeters)))
-    Bridge.provide("tc_disconnected", lambda capability: companion.mark_disconnected(str(capability)))
-    Bridge.provide("tc_capability_health", lambda capability, health: companion.record_capability_health(str(capability), str(health)))
+    # The vendor SDK invokes notifications on its single RPC receiver. Never
+    # acquire Companion's lock there: an outgoing RPC may hold it while waiting
+    # for the acknowledgement that only this receiver can deliver.
+    inputs = BridgeInputRelay(companion)
+    Bridge.provide("tc_buttons", lambda a, b, c: inputs.push('buttons', [bool(a), bool(b), bool(c)]))
+    Bridge.provide("tc_distance", lambda millimeters: inputs.push('distance', int(millimeters)))
+    Bridge.provide("tc_disconnected", lambda capability: inputs.push('disconnected', str(capability)))
+    Bridge.provide("tc_capability_health", lambda capability, health: inputs.push('health', str(capability), str(health)))
     return companion
+
+
+class BridgeInputRelay:
+    """Bounded inbound-only handoff; never wait for Core or hardware in the SDK receiver.
+
+    Exactly one daemon belongs to the Companion child process. Original receive
+    times follow input samples through the queue; delayed data never looks fresh.
+    Overflow drops queued data and disarms rather than growing memory or rearming.
+    """
+    def __init__(self, companion):
+        import queue
+        self.companion = companion
+        self.queue = queue.Queue(maxsize=64)
+        self.overflow = threading.Event()
+        threading.Thread(target=self.run, name='tinkeroo-bridge-inputs', daemon=True).start()
+
+    def push(self, kind, *values):
+        import queue
+        try:
+            self.queue.put_nowait((time.monotonic(), kind, values))
+        except queue.Full:
+            self.overflow.set()
+
+    def run(self):
+        import queue
+        while True:
+            try:
+                if self.overflow.is_set():
+                    self.overflow.clear()
+                    for _ in range(64):
+                        try:
+                            self.queue.get_nowait()
+                        except queue.Empty:
+                            break
+                    self.companion.mark_disconnected('buttons')
+                    self.companion.mark_disconnected('distance')
+                    self.companion.enter_safe_state('bridge_input_overflow')
+                received, kind, values = self.queue.get(timeout=0.1)
+                if kind == 'buttons':
+                    self.companion.record_buttons(values[0], observed_at=received)
+                elif kind == 'distance':
+                    self.companion.record_distance(values[0], observed_at=received)
+                elif kind == 'disconnected':
+                    self.companion.mark_disconnected(values[0])
+                elif kind == 'health':
+                    self.companion.record_capability_health(*values)
+            except queue.Empty:
+                pass
+            except Exception:
+                # No values/exception reflection. A processing fault invalidates
+                # queued authority; independent MCU/output deadlines still apply.
+                self.overflow.set()
+                time.sleep(0.05)
 
 
 class CompanionHTTPServer(ThreadingHTTPServer):
@@ -464,6 +521,7 @@ def make_handler(companion: Companion, token: str | None = None, *, auth=None, u
                         tick()
                         self._send(503, {"status": "error", "error": {"code": "maintenance_active"}})
                         return
+                    clearing = self.path == '/v1/commands' and body.get('operation') == 'outputs.clear'
                     if auth is not None:
                         tick()
                         current = self.headers["Authorization"][7:]
@@ -480,10 +538,15 @@ def make_handler(companion: Companion, token: str | None = None, *, auth=None, u
                                 control_until = control_clock() + min(body.get("lease_ms", 1500), 2000) / 1000
                                 self._send(200, result)
                                 return
-                            if control_token != current:
+                            if control_token != current and not clearing:
                                 raise CommandError("safe_state_active: acquire a control lease first")
                     if self.path == "/v1/commands":
                         result = companion.command(body.get("operation"), body.get("arguments", {}))
+                        if clearing:
+                            # Clearing never arms. It is safe before the first lease
+                            # or after Stop, but the foreign-owner check above still
+                            # prevents another session interrupting a live controller.
+                            control_token, control_until = None, 0.0
                     elif self.path == "/v1/control-lease":
                         result = companion.renew_control_lease(body.get("lease_ms", 1500))
                     elif self.path == "/v1/self-tests":

@@ -76,6 +76,19 @@ class UsbPlayTests(unittest.TestCase):
             except subprocess.TimeoutExpired:child.kill();child.wait()
             child.stderr.close()
 
+    def test_delayed_bridge_samples_keep_receive_age_and_button_event_time(self):
+        self.now+=3
+        self.companion.record_distance(250,observed_at=1001.0)
+        self.companion.record_buttons([False,False,False],observed_at=1001.0)
+        self.companion.record_buttons([True,False,False],observed_at=1001.1)
+        status,session=self.request('/v1/usb-sessions',self.usb.begin());self.assertEqual(status,200);token=session['session_token']
+        status,state=self.request('/v1/state',token=token);self.assertEqual(status,200)
+        self.assertEqual(state['observables']['distance']['health'],'stale')
+        self.assertEqual(state['observables']['distance']['age_ms'],2000)
+        events=self.request('/v1/events?after=0',token=token)[1]['events']
+        edge=next(event for event in events if event['type']=='button.changed')
+        self.assertAlmostEqual(edge['monotonic_ms'],1100,delta=1)
+
     def test_private_listener_never_replaces_a_live_socket_or_an_unknown_file(self):
         with self.assertRaises(ValueError):
             CompanionUSBServer(str(self.root/'u.sock'),self.server.RequestHandlerClass)
@@ -86,6 +99,21 @@ class UsbPlayTests(unittest.TestCase):
         status,result=self.request('/v1/usb-sessions',self.usb.begin());self.assertEqual(status,200)
         self.assertEqual(self.request('/v1/hello',token=result['session_token'])[0],200)
 
+    def test_module_preview_can_clear_before_its_first_lease_without_losing_the_session(self):
+        status,result=self.request('/v1/usb-sessions',self.usb.begin());self.assertEqual(status,200);token=result['session_token']
+        # CreationRuntime.test/start first releases previous control. Opening a
+        # real connection has deliberately not acquired any output lease.
+        clear={'operation':'outputs.clear','arguments':{}}
+        self.assertEqual(self.request('/v1/commands',clear,token)[0],200)
+        self.assertEqual(self.request('/v1/hello',token=token)[1]['health']['safe_state'],True)
+        self.assertEqual(self.request('/v1/control-lease',{'lease_ms':1500},token)[0],200)
+        self.assertEqual(self.request('/v1/commands',{'operation':'pixels.set','arguments':{'color':'#3366ff','brightness':0.25,'duration_ms':1500}},token)[0],200)
+        self.assertEqual(self.request('/v1/commands',clear,token)[0],200)
+        self.assertEqual(self.request('/v1/commands',clear,token)[0],200)
+        self.assertEqual(self.request('/v1/hello',token=token)[0],200)
+        status,other=self.request('/v1/usb-sessions',self.usb.begin());self.assertEqual(status,200)
+        self.assertEqual(self.request('/v1/control-lease',{'lease_ms':1500},other['session_token'])[0],200)
+
     def test_usb_session_cap_and_control_owner_are_independent_of_connect(self):
         tokens=[]
         for _ in range(2):
@@ -94,6 +122,7 @@ class UsbPlayTests(unittest.TestCase):
         self.assertEqual(self.request('/v1/hello',token=tokens[0])[1]['health']['safe_state'],True)
         self.assertEqual(self.request('/v1/control-lease',{'lease_ms':1500},tokens[0])[0],200)
         self.assertEqual(self.request('/v1/control-lease',{'lease_ms':1500},tokens[1])[0],409)
+        self.assertEqual(self.request('/v1/commands',{'operation':'outputs.clear','arguments':{}},tokens[1])[0],409)
         self.assertEqual(self.request('/v1/sessions/current',token=tokens[0],method='DELETE')[0],200)
         self.assertEqual(self.request('/v1/hello',token=tokens[1])[1]['health']['safe_state'],True)
         self.assertEqual(self.request('/v1/usb-sessions',self.usb.begin())[0],200)

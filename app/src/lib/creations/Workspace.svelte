@@ -442,6 +442,12 @@
         <h2>Your modules</h2>
         <button onclick={practiceMode}>Use practice</button>
       </div>
+      {#if !practice && connectionState.phase === "failed"}<p
+          class="error"
+          role="alert"
+        >
+          {connectionState.error.message} Outputs will not resume automatically.
+        </p>{/if}
       {#if practice}<p class="muted">
           Explore without a Board. Connect Board when you want to control real
           hardware.
