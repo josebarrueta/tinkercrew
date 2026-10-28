@@ -18,13 +18,20 @@ from tinkercrew_companion.server import CompanionHTTPServer, CompanionUSBServer,
 board='98f6411f-20ec-438a-a1de-6ce20fb0370e'
 root=Path(sys.argv[3]).resolve();root.chmod(0o700);directory=root/'data'
 parent=PairingRegistry(directory,board);usb=UsbPlayRegistry(directory,board)
-if len(sys.argv)>4 and sys.argv[4]=='bridge-notify-before-ack':
+mode=sys.argv[4] if len(sys.argv)>4 else ''
+if mode in ('bridge-notify-before-ack','bridge-healthy-inputs'):
     # External SDK seam: its single receiver delivers an input notification
     # before the reply to an outgoing RPC. No real Arduino SDK or hardware.
     class ReceiverBridge:
         def __init__(self):
-            self.handlers={};self.calls=queue.Queue()
+            self.handlers={};self.calls=queue.Queue();self.buttons=(True,False,False)
             threading.Thread(target=self.receive,daemon=True).start()
+            if mode=='bridge-healthy-inputs':threading.Thread(target=self.samples,daemon=True).start()
+        def samples(self):
+            # Test-only external SDK inputs; fixed vocabulary, no runtime IPC.
+            choices={'A':(True,False,False),'B':(False,True,False),'C':(False,False,True)}
+            for line in sys.stdin:
+                if line.strip() in choices:self.buttons=choices[line.strip()]
         def provide(self,name,handler):self.handlers[name]=handler
         def call(self,name,*args):
             replied=threading.Event();self.calls.put(replied)
@@ -32,9 +39,16 @@ if len(sys.argv)>4 and sys.argv[4]=='bridge-notify-before-ack':
             return True
         def receive(self):
             while True:
-                replied=self.calls.get()
-                self.handlers['tc_disconnected']('distance')
-                replied.set()
+                try:replied=self.calls.get(timeout=0.1)
+                except queue.Empty:replied=None
+                if mode=='bridge-healthy-inputs':
+                    # Fixed external input samples stay fresh while the actual
+                    # Companion handles state/events/leases/commands normally.
+                    if 'tc_buttons' in self.handlers:self.handlers['tc_buttons'](*self.buttons)
+                    if 'tc_distance' in self.handlers:self.handlers['tc_distance'](123)
+                elif replied is not None:
+                    self.handlers['tc_disconnected']('distance')
+                if replied is not None:replied.set()
     for name in ('arduino','arduino.app_utils'):
         module=types.ModuleType(name);module.__path__=[];sys.modules[name]=module
     module=types.ModuleType('arduino.app_utils.bridge');module.Bridge=ReceiverBridge();sys.modules[module.__name__]=module

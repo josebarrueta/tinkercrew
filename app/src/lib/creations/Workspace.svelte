@@ -25,6 +25,7 @@
   let live = $state(initialRuntime.getStatus());
   let snapshot = $state<BoardSnapshot | null>(null);
   let screen = $state<"play" | "blocks" | "missions" | "parent">("play");
+  let headerHeight = $state(80);
   let program = $state<Program>({ rules: [newRule()] });
   let title = $state("My invention");
   let creationId = $state<string | null>(null);
@@ -35,6 +36,12 @@
   let problem = $state("");
   let working = $state(false);
   let saving = $state(false);
+  let unsaved = $state(false);
+  type Replacement =
+    { kind: "new" | "guardian" } | { kind: "open"; id: string };
+  let pendingReplacement = $state<Replacement | null>(null);
+  let replacing = $state(false);
+  let decisionReturnFocus: HTMLElement | null = null;
   let draftSession = 0,
     draftVersion = 0;
   let lastButton = $state("");
@@ -63,6 +70,7 @@
         : "Not available";
   }
   function dirty() {
+    unsaved = true;
     draftVersion++;
     savedStatus = "Unsaved changes.";
   }
@@ -102,7 +110,7 @@
     screen = "parent";
   }
   async function perform(action: () => Promise<void>) {
-    if (working) return;
+    if (working || pendingReplacement || replacing) return;
     working = true;
     problem = "";
     try {
@@ -141,7 +149,7 @@
     await perform(() => actor.start(program));
   }
   async function save(fork = false) {
-    if (!libraryReady || saving) return;
+    if (!libraryReady || saving) return false;
     saving = true;
     const session = draftSession,
       version = draftVersion;
@@ -170,8 +178,10 @@
         if (version === draftVersion) {
           title = entry.title;
           savedStatus = "Saved on this Mac.";
+          unsaved = false;
         }
       }
+      return session === draftSession && version === draftVersion;
     } catch (cause) {
       problem = errorMessage(
         cause,
@@ -179,42 +189,79 @@
       );
       if (session === draftSession)
         savedStatus = "Not saved yet. Retry after correcting the message.";
+      return false;
     } finally {
       saving = false;
     }
   }
-  async function openCreation(id: string) {
+  async function applyReplacement(target: Replacement) {
     await stop();
-    const saved = library.creations.find((item) => item.id === id);
-    if (!saved) return;
+    if (target.kind === "open") {
+      const saved = library.creations.find((item) => item.id === target.id);
+      if (!saved) return;
+      program = programSchema.parse(saved.program);
+      title = saved.title;
+      creationId = saved.id;
+      unsaved = false;
+      savedStatus = "Saved on this Mac.";
+    } else {
+      program =
+        target.kind === "guardian" ? guardianStarter() : { rules: [newRule()] };
+      title =
+        target.kind === "guardian" ? "My treasure guardian" : "My invention";
+      creationId = null;
+      dirty();
+      if (target.kind === "guardian")
+        message =
+          "Guardian starter: cross the 20 cm boundary and notice the light. Change a rule to make it yours.";
+    }
     draftSession++;
-    program = programSchema.parse(saved.program);
-    title = saved.title;
-    creationId = id;
     screen = "blocks";
-    savedStatus = "Saved on this Mac.";
     problem = "";
   }
-  async function fresh() {
-    await stop();
-    draftSession++;
-    program = { rules: [newRule()] };
-    title = "My invention";
-    creationId = null;
-    screen = "blocks";
-    dirty();
+  async function requestReplacement(target: Replacement) {
+    if (saving || replacing || pendingReplacement) return;
+    replacing = true;
+    decisionReturnFocus =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
+    try {
+      await stop();
+      if (unsaved) {
+        pendingReplacement = target;
+      } else await applyReplacement(target);
+    } finally {
+      replacing = false;
+    }
+    if (pendingReplacement) {
+      await tick();
+      document.getElementById("keep-editing")?.focus();
+    }
   }
-  async function guardian() {
-    await stop();
-    draftSession++;
-    program = guardianStarter();
-    title = "My treasure guardian";
-    creationId = null;
-    screen = "blocks";
-    dirty();
-    message =
-      "Guardian starter: cross the 20 cm boundary and notice the light. Change a rule to make it yours.";
+  async function keepEditing() {
+    if (replacing || saving) return;
+    pendingReplacement = null;
+    await tick();
+    decisionReturnFocus?.focus();
   }
+  async function replaceDraft(saveFirst: boolean) {
+    const target = pendingReplacement;
+    if (!target || replacing || saving) return;
+    replacing = true;
+    try {
+      // A successful write of an older draft version cannot discard edits
+      // made while the write was in flight.
+      if (saveFirst && !(await save())) return;
+      await applyReplacement(target);
+      pendingReplacement = null;
+    } finally {
+      replacing = false;
+    }
+  }
+  const openCreation = (id: string) => requestReplacement({ kind: "open", id });
+  const fresh = () => requestReplacement({ kind: "new" });
+  const guardian = () => requestReplacement({ kind: "guardian" });
   onMount(() => {
     let disposed = false;
     void repository
@@ -223,7 +270,7 @@
         if (!disposed) {
           library = value;
           libraryReady = true;
-          savedStatus = "No changes saved yet.";
+          if (!unsaved) savedStatus = "No changes saved yet.";
         }
       })
       .catch(() => {
@@ -286,8 +333,16 @@
 </script>
 
 <svelte:head><title>Tinkeroo — make hardware your own</title></svelte:head>
+<svelte:window
+  onkeydown={(event) => {
+    if (event.key === "Escape" && pendingReplacement) {
+      event.preventDefault();
+      void keepEditing();
+    }
+  }}
+/>
 
-<header>
+<header bind:clientHeight={headerHeight}>
   <button class="brand" aria-label="Tinkeroo" onclick={() => navigate("play")}
     ><img src="/icon.svg" alt="" width="36" height="36" />Tinkeroo</button
   >
@@ -314,7 +369,32 @@
     >
   </div>
 </header>
-<main>
+<main style:--header-height={`${headerHeight}px`}>
+  {#if pendingReplacement}
+    <section class="draft-decision" aria-label="Unsaved Creation">
+      <h2>Keep your Creation?</h2>
+      <p>
+        Save your changes before opening something else. Your program stays
+        stopped until you choose Run again.
+      </p>
+      <div class="row">
+        <button
+          id="keep-editing"
+          disabled={replacing || saving}
+          onclick={keepEditing}>Keep editing</button
+        >
+        <button
+          disabled={replacing || saving}
+          onclick={() => replaceDraft(false)}>Discard changes</button
+        >
+        <button
+          class="primary"
+          disabled={replacing || saving || !libraryReady || !title.trim()}
+          onclick={() => replaceDraft(true)}>Save and continue</button
+        >
+      </div>
+    </section>
+  {/if}
   {#if problem}<p class="error" role="alert">{problem}</p>{/if}
   {#if live.error}<p class="error" role="alert">{live.error}</p>{/if}
   {#if !practice && connectionState.phase !== "connected"}<p class="error">
@@ -557,6 +637,35 @@
         life.
       </p>
     </section>
+    <section class="editor-toolbar" aria-label="Creation controls">
+      <label
+        >Creation name<input
+          maxlength="60"
+          bind:value={title}
+          oninput={dirty}
+        /></label
+      >
+      <div class="row">
+        <button
+          class="primary"
+          disabled={working ||
+            !!pendingReplacement ||
+            replacing ||
+            live.state === "running"}
+          aria-label="Run creation"
+          onclick={run}>▶ Run creation</button
+        >
+        <button
+          disabled={!libraryReady ||
+            saving ||
+            live.state === "stopping" ||
+            !title.trim()}
+          aria-busy={saving}
+          onclick={() => save()}>Save creation</button
+        >
+      </div>
+      <p role="status">{savedStatus}</p>
+    </section>
     <div class="workbench">
       <section class="palette" aria-label="Block palette">
         <h2>Choose blocks</h2>
@@ -697,14 +806,7 @@
               >
             </div>
           </article>{/each}
-        <div class="row">
-          <button
-            class="primary"
-            disabled={working || live.state === "running"}
-            aria-label="Run creation"
-            onclick={run}>▶ Run creation</button
-          ><button onclick={() => stop(true)}>Stop program</button>
-        </div>
+        <button onclick={() => stop(true)}>Stop program</button>
         <p>
           Editing or changing screens stops execution. C is reserved for Stop. A
           program runs on this Mac, not autonomously on the Board.
@@ -715,22 +817,8 @@
             </p>{/each}
         </details>
         <section class="save-panel">
-          <label
-            >Creation name<input
-              maxlength="60"
-              bind:value={title}
-              oninput={dirty}
-            /></label
-          >
           <div class="row">
             <button
-              disabled={!libraryReady ||
-                saving ||
-                live.state === "stopping" ||
-                !title.trim()}
-              aria-busy={saving}
-              onclick={() => save()}>Save creation</button
-            ><button
               disabled={!libraryReady ||
                 saving ||
                 live.state === "stopping" ||
@@ -738,7 +826,6 @@
               onclick={() => save(true)}>Save a separate copy</button
             ><button onclick={fresh}>New creation</button>
           </div>
-          <p role="status">{savedStatus}</p>
         </section>
       </section>
       <aside>
@@ -898,6 +985,41 @@
     background: var(--primary-hover);
     color: white;
   }
+  .editor-toolbar {
+    position: sticky;
+    top: var(--header-height);
+    z-index: 4;
+    display: grid;
+    grid-template-columns: minmax(180px, 1fr) auto;
+    align-items: center;
+    gap: 4px 24px;
+    padding: 12px 20px;
+    margin-bottom: 24px;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background: var(--surface);
+    box-shadow: var(--shadow);
+  }
+  .editor-toolbar label {
+    margin: 0;
+  }
+  .editor-toolbar p {
+    grid-column: 1 / -1;
+    margin: 0;
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .draft-decision {
+    padding: 20px;
+    margin-bottom: 24px;
+    border: 2px solid var(--primary);
+    border-radius: 16px;
+    background: var(--surface);
+    scroll-margin-top: 160px;
+  }
+  #keep-editing {
+    scroll-margin-top: 180px;
+  }
   .stop {
     background: var(--danger-bg);
     color: var(--danger);
@@ -1001,7 +1123,7 @@
   }
   select,
   input[type="number"],
-  .save-panel input {
+  .editor-toolbar input {
     display: block;
     width: 100%;
     min-height: 44px;
