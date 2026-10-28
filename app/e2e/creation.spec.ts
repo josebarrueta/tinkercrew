@@ -58,6 +58,8 @@ test("normal USB Connect never looks up saved Mac credentials or falls back to t
 test("opening Create never asks for Board credentials; parent-only saved network access stops after one denial", async ({
   page,
 }) => {
+  const rendererErrors: string[] = [];
+  page.on("pageerror", (error) => rendererErrors.push(error.message));
   await page.addInitScript(() => {
     const host = window as unknown as {
       isTauri: boolean;
@@ -70,6 +72,7 @@ test("opening Create never asks for Board credentials; parent-only saved network
       invoke: async (command) => {
         host.__creationCalls.push(command);
         if (command === "load_progress") return null;
+        if (command === "factory_restore_status") return { phase: "idle" };
         if (command === "list_boards")
           throw {
             code: "keychain_unavailable",
@@ -122,6 +125,7 @@ test("opening Create never asks for Board credentials; parent-only saved network
         ).__creationCalls.filter((name) => name === "list_boards").length,
     ),
   ).toBe(1);
+  expect(rendererErrors).toEqual([]);
 });
 
 test("choosing practice cancels pending USB selection without saved credential access", async ({
