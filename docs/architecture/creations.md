@@ -1,6 +1,6 @@
 # Creation workspace — C to start, B to compose (#38 / #40)
 
-Owner-selected direction: module-first Playground, then a block Workbench for inputs, conditions and outputs. This is production implementation rewritten from the throwaway prototype, not a merged prototype route. The prototype remains on `prototype/creation-workspace` as a primary design source. Only owner design preference has been observed; physical/family acceptance remains #21.
+Owner-selected direction: module-first Playground, then a block Workbench for inputs, conditions and outputs. This is production implementation rewritten from the throwaway prototype, not a merged prototype route. The prototype remains on `prototype/creation-workspace` as a primary design source. The owner confirmed basic Buttons/Distance/Pixels/Buzzer operation after PR #46. Full Creation/Mission/family acceptance remains #21; navigation fixture results are not a new physical witness.
 
 ## Normal flow
 
@@ -9,7 +9,9 @@ Owner-selected direction: module-first Playground, then a block Workbench for in
 - The connection panel is created only on explicit Connect/Parent settings intent; it is deferred until Connect, rather than merely hidden while doing credential work. Explicit Practice invalidates pending lookup/probe intent. Late results cannot switch the maker back to hardware, start new route probes or silently acquire output control.
 - The module Playground displays supported Buttons/Distance/Pixels/Buzzer health and live inputs. It does not claim universal I²C inventory or wiring/electrical certification. Missing/stale/invalid input states are distinct from a fresh released button or a numeric distance. Matrix drawing and general GPIO/power switching are not offered by this initial action interface.
 - Each output preview is intentional and independent of unrelated input modules: Pixels at brightness 0.25 for up to 1.5 seconds; Buzzer at 880 Hz for 250 ms. Practice uses visual feedback, not Mac audio. No output on discovery/connection. Reported/accepted state is not human evidence of light or sound.
-- **Build with blocks** opens the Workbench; **Modules & experiments** returns to Playground. Navigation, rule editing, reconnect/switch and open/fork stop execution. **Stop outputs** is always available, not gated on a save or slow request. C is reserved for software Stop, not a certified emergency power disconnect.
+- **Create / My creations** are the primary destinations. Create has persistent **Try modules / Build** views and a secondary **Start from a Mission** action. Both views retain the same current Creation. URL/history stores only a whitelisted view, never program data or credentials. Real view changes focus their heading and stop execution; selecting the current view is a no-op. Run/Save/title/status stay below the measured sticky header.
+- **Board details** inspects an existing connection without reconnecting or changing authority. The nonmodal Board sheet keeps close/content together and leaves global Stop reachable. Dismissal or view change cancels pending intent, closes only the late specific USB handle and cannot silently switch Practice to real hardware.
+- Navigation, rule editing, reconnect/switch and open/fork stop execution. **Stop outputs** is always available, not gated on a save or slow request. C is reserved for software Stop, not a certified emergency power disconnect.
 
 ## Bounded block behavior
 
@@ -20,7 +22,7 @@ A Creation contains 1–8 rules:
 - Output: Pixels color, a short Buzzer chirp, or both. At least one output per rule.
 - Distance boundaries are 20–4000 mm (shown in cm). Colors are strict hex RGB; output brightness/frequency/durations are fixed safe parameters, not arbitrary expressions.
 
-The input block palette adds rules; connected WHEN / ONLY IF / THEN blocks edit them. No drag/drop library, JavaScript evaluator, shell, arbitrary path/archive, GPIO register, firmware or Board-program deployment interface exists. Programs execute on the Mac through `BoardClient`; loss of the Mac/transport must stop Board outputs through the independent watchdogs.
+Add rule is the single rule-creation action; connected WHEN / ONLY IF / THEN blocks edit each rule. Optional block guidance is collapsed inside the program. No drag/drop library, JavaScript evaluator, shell, arbitrary path/archive, GPIO register, firmware or Board-program deployment interface exists. Programs execute on the Mac through `BoardClient`; loss of the Mac/transport must stop Board outputs through the independent watchdogs.
 
 `CreationRuntime` is the authority-owning interpreter at the existing BoardClient seam:
 
@@ -41,15 +43,16 @@ The simulator now models Pixels' 1.5-second TTL separately from the lease, so a 
 - Native: new `creations-v1` row in the existing SQLite progress store, using the existing atomic revision-checked save operation. No table migration or rewrite of `treasure-guardian` data.
 - Browser practice: separate `tinkercrew.creations.v1` localStorage entry. No credentials, tokens, keys, network configuration or live output authority.
 - Strict version/schema/size/identity checks; failed/unreadable load disables saving rather than replacing the library. Pending saves serialize, stale windows reject conflicts, Save captures a snapshot and does not label later edits as saved. Fork creates a separate ID/title and preserves the original. Opening/copying never runs it.
+- My creations shows existing titles/rule counts and opens work stopped. New/Open/Mission starter replacements share Save/Discard/Keep editing, including failed-save and newer-edit protection. It does not invent timestamps or migrate the library.
 - Local work is not autonomously uploaded to the Board. Progress and runtime authority remain different things.
 
-The new **Missions** brief states the Guardian's physical outcome, learning goal and required modules before any forms. **Make my guardian** opens two editable distance-to-color rules in the same Workbench. Buttons/sound are optional extensions; no fixed Crew size, naming or written reflection is required for this starter. It does not claim completion of the historical adventure.
+The optional **Start from a Mission** brief states the Guardian's physical outcome, learning goal and required modules before any forms. **Make my guardian** opens two editable distance-to-color rules in the same Workbench. Buttons/sound are optional extensions; no fixed Crew size, naming or written reflection is required for this starter. It does not claim completion of the historical adventure.
 
-The original ten-stage Mission, exact stored progress contract, rotating roles, old evidence gates and maintenance views remain at `/legacy`, reachable through **Earlier guided adventure and saved progress**. Its regression tests now target that explicit route rather than assuming it is the default Home. The original Mission is neither reset nor silently reinterpreted under the new starter. The new normal flow doesn't require completing the old LAN/reboot/Crew wizard or forge its protected checkpoints.
+The original ten-stage Mission, exact stored progress contract, rotating roles, old evidence gates and maintenance views remain at `/legacy`, reachable through **Earlier guided adventure and saved progress**. Its regression tests target that explicit route rather than assuming it is the default Home. Entry protects unsaved work; a deliberate detour remembers only draft program/title/ID/dirty status/view in frontend memory. Return restores that draft stopped, not Board authority. Continue without saving is not crash/reload persistence. The original Mission is neither reset nor silently reinterpreted under the new starter. The new normal flow doesn't require completing the old LAN/reboot/Crew wizard or forge its protected checkpoints.
 
 ## Trust and parent settings
 
-Parent settings expose existing recovery/provisioning functions only when deliberately opened, separate from the play path. Their typed confirmations, exact-target checks, locks and separate authority are unchanged. First-time unsupported/account/firmware setup retains the honest official-tool handoff; this implementation does not promise one-click virgin-Board preparation.
+Parent settings group Board setup, Network & saved permission, Software updates and Troubleshooting, with return to the originating Creation/view. Contextual setup opens the requested task, not another menu. A discovered pending recovery journal remains visible across task groups and prevents leaving active maintenance; no journal is cleared by navigation. Parent settings expose existing recovery/provisioning functions only when deliberately opened, separate from the play path. Their typed confirmations, exact-target checks, locks and separate authority are unchanged. First-time unsupported/account/firmware setup retains the honest official-tool handoff; this implementation does not promise one-click virgin-Board preparation.
 
 Keychain remains app-owned secure credential storage for the separate optional parent network/maintenance path, not normal USB play. Missing item (`errSecItemNotFound`) is distinguished from OS access denial/locked storage; the latter is `keychain_unavailable`, preserves keys and stops route hunting/retry. There is no plaintext fallback, ACL modification, helper impersonation or requirement to grant a diagnostic executable broad access. Stable production signing/OS prompt acceptance remains #12 work.
 

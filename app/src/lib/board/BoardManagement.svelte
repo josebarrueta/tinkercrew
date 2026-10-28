@@ -22,8 +22,10 @@
     pairedBoardId,
     onForgot,
     onBusyChange,
+    area,
   }: {
     visible: boolean;
+    area?: "setup" | "network" | "updates" | "troubleshooting";
     beforeChange: () => Promise<void>;
     pairedBoardId: string;
     onForgot: () => Promise<void>;
@@ -85,6 +87,7 @@
   });
   let busy = $state(false);
   let error = $state("");
+  let recoveryOpen = $state(false);
   let message = $state("");
   const restorePending = $derived(!["idle", "failed"].includes(restore.phase));
   const canErase = $derived(
@@ -99,6 +102,9 @@
       power,
   );
   const chosenImage = $derived(images[Number(imageIndex)]);
+  $effect(() => {
+    if (restorePending && area) recoveryOpen = true;
+  });
 
   $effect(() => {
     onBusyChange(busy || restorePending);
@@ -215,7 +221,7 @@
 </script>
 
 <section class="management" aria-label="Board configuration and recovery">
-  <details>
+  <details hidden={!!area && area !== "updates"}>
     <summary>Upgrade the Mac app</summary>
     <p>
       Installed Mac app: {appVersion}. App upgrades are manual and
@@ -317,6 +323,7 @@
     >
   </fieldset>
   <fieldset
+    hidden={area === "setup" || area === "updates"}
     disabled={!native || busy || restorePending || !board || !usbConfirmed}
   >
     <legend>2. Sign in with existing Linux credentials</legend>
@@ -390,7 +397,10 @@
       >
     </details>
   </fieldset>
-  <fieldset disabled={!native || busy || restorePending || !authenticated}>
+  <fieldset
+    hidden={area === "setup" || area === "updates"}
+    disabled={!native || busy || restorePending || !authenticated}
+  >
     <legend>3. Board configuration</legend>
     <button onclick={() => task(() => action({ operation: "status" }))}
       >Refresh Board status</button
@@ -434,7 +444,7 @@
         )}>Join this Wi-Fi network</button
     >
   </fieldset>
-  <details>
+  <details hidden={!!area && area !== "setup"}>
     <summary>Prepare initial Companion files and identity</summary>
     <p>
       After official first-time account setup, this prepares the fixed Companion
@@ -608,7 +618,7 @@
       actually running; preparation alone cannot complete the guide.
     </p>
   </details>
-  <details>
+  <details hidden={!!area && area !== "setup"}>
     <summary>Installation Pairing and lost-Mac revocation</summary>
     <p>
       This requires an updated, already installed Companion explicitly
@@ -719,7 +729,7 @@
       >
     </fieldset>
   </details>
-  <details>
+  <details hidden={!!area && area !== "updates"}>
     <summary>Recoverable Linux runtime update</summary>
     <p>
       Updates only the six bundled Companion runtime modules on an already
@@ -817,7 +827,11 @@
         separate.
       </p>{/if}
   </details>
-  <details class="recovery">
+  <details
+    class="recovery"
+    hidden={!!area && area !== "troubleshooting" && !restorePending}
+    bind:open={recoveryOpen}
+  >
     <summary>Restart, pairing cleanup, and factory recovery</summary>
     <h3>Restart the UNO Q — keeps its data</h3>
     <p>

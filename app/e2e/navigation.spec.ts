@@ -43,7 +43,9 @@ test("browsing a Mission keeps the draft and choosing its starter protects it", 
     .getByRole("button", { name: "Build with blocks", exact: true })
     .click();
   await page.getByLabel("Creation name", { exact: true }).fill("My own idea");
-  await page.getByRole("button", { name: "Missions", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Start from a Mission", exact: true })
+    .click();
   const decision = page.getByRole("region", {
     name: "Unsaved Creation",
     exact: true,
@@ -59,13 +61,12 @@ test("browsing a Mission keeps the draft and choosing its starter protects it", 
     .getByRole("button", { name: "Keep editing", exact: true })
     .click();
   await page.getByRole("button", { name: "Create", exact: true }).click();
-  await page
-    .getByRole("button", { name: "Build with blocks", exact: true })
-    .click();
   await expect(page.getByLabel("Creation name", { exact: true })).toHaveValue(
     "My own idea",
   );
-  await page.getByRole("button", { name: "Missions", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Start from a Mission", exact: true })
+    .click();
   await page
     .getByRole("button", { name: "Make my guardian", exact: false })
     .click();
@@ -130,9 +131,17 @@ test("edits made during a pending native save are not discarded by its older suc
   await expect(page.getByLabel("Creation name", { exact: true })).toHaveValue(
     "Newer unsaved edits",
   );
+  await decision
+    .getByRole("button", { name: "Keep editing", exact: true })
+    .click();
+  await page.getByRole("button", { name: "My creations", exact: true }).click();
   await expect(
     page.getByRole("button", { name: "Earlier version", exact: true }),
   ).toBeVisible();
+  await page.getByRole("button", { name: "Create", exact: true }).click();
+  await expect(page.getByLabel("Creation name", { exact: true })).toHaveValue(
+    "Newer unsaved edits",
+  );
   await expect(page.getByTestId("creation-state")).toHaveText("stopped");
 });
 
@@ -205,6 +214,7 @@ test("New Creation protects unsaved work with stay, discard and save choices", a
   await expect(page.getByLabel("Creation name", { exact: true })).toHaveValue(
     "My invention",
   );
+  await page.getByRole("button", { name: "My creations", exact: true }).click();
   await page
     .getByRole("button", { name: "My unsaved signal", exact: true })
     .click();

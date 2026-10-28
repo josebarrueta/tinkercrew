@@ -86,7 +86,7 @@
   style="padding: 12px 24px; background: var(--primary-soft); font-size: 14px;"
 >
   Earlier guided adventure — your original saves are preserved.
-  <a href="/">Return to Create &amp; module experiments →</a>
+  <a href="/">Return to my Creation →</a>
 </div>
 <div class="app-shell">
   <aside>

@@ -1,5 +1,12 @@
 <script lang="ts">
   import { onMount, tick } from "svelte";
+  import {
+    pushState,
+    replaceState,
+    goto,
+    beforeNavigate,
+  } from "$app/navigation";
+  import { rememberDraft, takeDraft } from "./return-draft";
   import { isTauri } from "@tauri-apps/api/core";
   import ConnectionPanel from "../board/ConnectionPanel.svelte";
   import { SimulatorBoardClient } from "../board/simulator";
@@ -24,7 +31,19 @@
   let actor = $state.raw(initialRuntime);
   let live = $state(initialRuntime.getStatus());
   let snapshot = $state<BoardSnapshot | null>(null);
-  let screen = $state<"play" | "blocks" | "missions" | "parent">("play");
+  type Screen = "play" | "blocks" | "library" | "missions" | "parent";
+  let screen = $state<Screen>("play");
+  let createView = $state<"play" | "blocks">("play");
+  let returnView: Screen = "play";
+  type ParentTask =
+    "overview" | "setup" | "network" | "updates" | "troubleshooting";
+  let parentTask = $state<ParentTask>("overview");
+  let managementBusy = $state(false);
+  let connectionSection = $state<HTMLElement>();
+  let connectionReturnFocus: HTMLElement | null = null;
+  let selectionEpoch = 0;
+  let mainElement: HTMLElement;
+  let navigationEpoch = 0;
   let headerHeight = $state(80);
   let program = $state<Program>({ rules: [newRule()] });
   let title = $state("My invention");
@@ -38,7 +57,7 @@
   let saving = $state(false);
   let unsaved = $state(false);
   type Replacement =
-    { kind: "new" | "guardian" } | { kind: "open"; id: string };
+    { kind: "new" | "guardian" | "legacy" } | { kind: "open"; id: string };
   let pendingReplacement = $state<Replacement | null>(null);
   let replacing = $state(false);
   let decisionReturnFocus: HTMLElement | null = null;
@@ -51,8 +70,20 @@
   let connectionPanel = $state<{
     openConnection: () => Promise<void>;
     useSimulator: () => Promise<void>;
+    cancelPending: () => Promise<void>;
   }>();
   const practice = $derived(board === simulator);
+  const displayError = $derived(
+    problem ||
+      live.error ||
+      (!practice && connectionState.phase === "failed"
+        ? connectionState.error.message
+        : ""),
+  );
+  beforeNavigate((navigation) => {
+    if (managementBusy && navigation.to?.url.pathname !== "/")
+      navigation.cancel();
+  });
   const has = (name: Capability) =>
     snapshot?.health !== "disconnected" &&
     (snapshot?.capabilities.includes(name) ?? false);
@@ -80,34 +111,94 @@
     await operation;
     live = actor.getStatus();
   }
-  async function navigate(next: typeof screen) {
-    await stop();
+  function locationView(): Screen {
+    const value = new URLSearchParams(location.search).get("view");
+    return ["play", "blocks", "library", "missions", "parent"].includes(
+      value ?? "",
+    )
+      ? (value as Screen)
+      : "play";
+  }
+  async function showView(next: Screen, history = true) {
     screen = next;
+    if (next === "play" || next === "blocks") createView = next;
+    const url = new URL(location.href);
+    url.searchParams.set("view", next);
+    if (history) pushState(url, {});
+    await tick();
+    mainElement
+      ?.querySelector<HTMLElement>("h1")
+      ?.focus({ preventScroll: true });
+    window.scrollTo({ top: 0, behavior: "instant" });
+  }
+  async function navigate(next: Screen, history = true) {
+    const epoch = ++navigationEpoch;
+    if (next === screen) return;
+    if (managementBusy || replacing) {
+      if (managementBusy)
+        problem =
+          "Finish the active Parent task before leaving. Stop outputs is still available.";
+      const url = new URL(location.href);
+      url.searchParams.set("view", screen);
+      replaceState(url, {});
+      return;
+    }
+    await connectionPanel?.cancelPending();
+    connectionOpen = false;
+    await stop();
+    if (epoch !== navigationEpoch) return;
+    await showView(next, history);
   }
   async function selectBoard(next: BoardClient) {
+    const epoch = ++selectionEpoch;
     await stop();
+    if (epoch !== selectionEpoch) return;
     snapshot = null;
     problem = "";
     lastButton = "";
     board = next;
   }
   async function connect() {
-    await stop();
+    if (managementBusy) return;
+    connectionReturnFocus =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
+    const inspectOnly = connectionState.phase === "connected";
+    if (!inspectOnly) await stop();
     connectionInitialized = true;
     connectionOpen = true;
     await tick();
-    await connectionPanel?.openConnection();
+    connectionSection
+      ?.querySelector<HTMLElement>("h2")
+      ?.focus({ preventScroll: true });
+    if (!inspectOnly) await connectionPanel?.openConnection();
+  }
+  async function closeConnection() {
+    await connectionPanel?.cancelPending();
+    connectionOpen = false;
+    await tick();
+    connectionReturnFocus?.focus({ preventScroll: true });
   }
   async function practiceMode() {
     await stop();
     if (connectionPanel) await connectionPanel.useSimulator();
     else await selectBoard(simulator);
   }
-  async function parentSettings() {
-    await stop();
+  async function parentSettings(task: ParentTask = "overview") {
+    if (managementBusy) return;
+    if (screen !== "parent") returnView = screen;
+    if (connectionOpen) await closeConnection();
     connectionInitialized = true;
-    connectionOpen = false;
-    screen = "parent";
+    parentTask = task;
+    await navigate("parent");
+  }
+  async function selectParentTask(task: ParentTask) {
+    if (managementBusy) return;
+    await connectionPanel?.cancelPending();
+    parentTask = task;
+    await tick();
+    connectionSection?.querySelector<HTMLElement>("h2")?.focus();
   }
   async function perform(action: () => Promise<void>) {
     if (working || pendingReplacement || replacing) return;
@@ -196,6 +287,10 @@
   }
   async function applyReplacement(target: Replacement) {
     await stop();
+    if (target.kind === "legacy") {
+      await goto("/legacy");
+      return;
+    }
     if (target.kind === "open") {
       const saved = library.creations.find((item) => item.id === target.id);
       if (!saved) return;
@@ -216,11 +311,11 @@
           "Guardian starter: cross the 20 cm boundary and notice the light. Change a rule to make it yours.";
     }
     draftSession++;
-    screen = "blocks";
+    await showView("blocks");
     problem = "";
   }
   async function requestReplacement(target: Replacement) {
-    if (saving || replacing || pendingReplacement) return;
+    if (saving || replacing || pendingReplacement || managementBusy) return;
     replacing = true;
     decisionReturnFocus =
       document.activeElement instanceof HTMLElement
@@ -263,6 +358,21 @@
   const fresh = () => requestReplacement({ kind: "new" });
   const guardian = () => requestReplacement({ kind: "guardian" });
   onMount(() => {
+    const returning = takeDraft();
+    if (returning) {
+      program = returning.program;
+      title = returning.title;
+      creationId = returning.id;
+      unsaved = returning.unsaved;
+      createView = returning.view;
+      savedStatus = unsaved ? "Unsaved changes." : "Saved on this Mac.";
+    }
+    screen =
+      returning && !new URLSearchParams(location.search).has("view")
+        ? returning.view
+        : locationView();
+    if (screen === "blocks") createView = "blocks";
+    if (screen === "parent") connectionInitialized = true;
     let disposed = false;
     void repository
       .load()
@@ -270,7 +380,10 @@
         if (!disposed) {
           library = value;
           libraryReady = true;
-          if (!unsaved) savedStatus = "No changes saved yet.";
+          if (!unsaved)
+            savedStatus = creationId
+              ? "Saved on this Mac."
+              : "No changes saved yet.";
         }
       })
       .catch(() => {
@@ -280,6 +393,13 @@
           "Saved library unavailable; saving is disabled to protect it.";
       });
     return () => {
+      rememberDraft({
+        program: $state.snapshot(program),
+        title,
+        id: creationId,
+        unsaved,
+        view: createView,
+      });
       disposed = true;
     };
   });
@@ -334,25 +454,38 @@
 
 <svelte:head><title>Tinkeroo — make hardware your own</title></svelte:head>
 <svelte:window
+  onpopstate={() => {
+    void navigate(locationView(), false);
+  }}
   onkeydown={(event) => {
     if (event.key === "Escape" && pendingReplacement) {
       event.preventDefault();
       void keepEditing();
+    } else if (event.key === "Escape" && connectionOpen) {
+      event.preventDefault();
+      void closeConnection();
     }
   }}
 />
 
 <header bind:clientHeight={headerHeight}>
-  <button class="brand" aria-label="Tinkeroo" onclick={() => navigate("play")}
+  <button
+    class="brand"
+    aria-label="Tinkeroo"
+    onclick={() => navigate(createView)}
     ><img src="/icon.svg" alt="" width="36" height="36" />Tinkeroo</button
   >
   <nav aria-label="Main navigation">
     <button
       class:active={screen === "play" || screen === "blocks"}
-      onclick={() => navigate("play")}>Create</button
+      aria-current={screen === "play" || screen === "blocks"
+        ? "page"
+        : undefined}
+      onclick={() => navigate(createView)}>Create</button
     ><button
-      class:active={screen === "missions"}
-      onclick={() => navigate("missions")}>Missions</button
+      class:active={screen === "library"}
+      aria-current={screen === "library" ? "page" : undefined}
+      onclick={() => navigate("library")}>My creations</button
     >
   </nav>
   <div class="board-dock">
@@ -362,14 +495,33 @@
         : connectionState.phase === "connected"
           ? "Real Board · authenticated connection"
           : "Real Board · connection unavailable"}</span
-    ><button onclick={connect}>Connect Board</button><button
-      class="stop"
-      aria-label="Stop outputs"
-      onclick={() => stop(true)}>■ Stop outputs</button
+    ><button onclick={connect}
+      >{connectionState.phase === "connected"
+        ? "Board details"
+        : "Connect Board"}</button
+    ><button class="stop" aria-label="Stop outputs" onclick={() => stop(true)}
+      >■ Stop outputs</button
+    ><button disabled={managementBusy} onclick={() => parentSettings()}
+      >Parent settings</button
     >
   </div>
 </header>
-<main style:--header-height={`${headerHeight}px`}>
+<main bind:this={mainElement} style:--header-height={`${headerHeight}px`}>
+  {#if screen === "play" || screen === "blocks"}
+    <nav class="creation-views" aria-label="Creation views">
+      <button
+        class:active={screen === "play"}
+        aria-current={screen === "play" ? "page" : undefined}
+        onclick={() => navigate("play")}>Try modules</button
+      >
+      <button
+        class:active={screen === "blocks"}
+        aria-current={screen === "blocks" ? "page" : undefined}
+        onclick={() => navigate("blocks")}>Build</button
+      >
+      <button onclick={() => navigate("missions")}>Start from a Mission</button>
+    </nav>
+  {/if}
   {#if pendingReplacement}
     <section class="draft-decision" aria-label="Unsaved Creation">
       <h2>Keep your Creation?</h2>
@@ -377,6 +529,11 @@
         Save your changes before opening something else. Your program stays
         stopped until you choose Run again.
       </p>
+      {#if pendingReplacement.kind === "legacy"}<p>
+          Your draft stays in memory for this detour. Save first to keep it
+          after closing or reloading the app. Earlier Mission progress stays
+          separate.
+        </p>{/if}
       <div class="row">
         <button
           id="keep-editing"
@@ -385,7 +542,10 @@
         >
         <button
           disabled={replacing || saving}
-          onclick={() => replaceDraft(false)}>Discard changes</button
+          onclick={() => replaceDraft(false)}
+          >{pendingReplacement.kind === "legacy"
+            ? "Continue without saving"
+            : "Discard changes"}</button
         >
         <button
           class="primary"
@@ -395,49 +555,81 @@
       </div>
     </section>
   {/if}
-  {#if problem}<p class="error" role="alert">{problem}</p>{/if}
-  {#if live.error}<p class="error" role="alert">{live.error}</p>{/if}
-  {#if !practice && connectionState.phase !== "connected"}<p class="error">
-      Connection needs attention. Outputs will not resume automatically.
-      Reconnect your saved Board; do not reset or re-pair just because it is
-      offline.
+  {#if displayError && !connectionOpen}<p class="error" role="alert">
+      {displayError}
     </p>{/if}
-  {#if connectionOpen}<section class="connection-sheet">
-      <button
-        onclick={() => {
-          connectionOpen = false;
-        }}>Close connection panel</button
-      >
-    </section>{/if}
   {#if screen === "parent"}<div class="heading">
-      <h1>Parent settings</h1>
+      <h1 tabindex="-1">Parent settings</h1>
       <p>
         Setup and maintenance are separate from creating. Firmware, restarts,
         credential changes and erasing data require explicit actions below.
       </p>
-    </div>{/if}
-  {#if connectionInitialized}<ConnectionPanel
-      bind:this={connectionPanel}
-      visible={connectionOpen || screen === "parent"}
-      defer
-      advanced={screen === "parent"}
-      onParent={parentSettings}
-      onMission={() => navigate("blocks")}
-      onConnected={(client) => {
-        void selectBoard(client);
-        connectionOpen = false;
-        if (screen === "parent") screen = "play";
-        message =
-          "Board connected. Try one module; no output was enabled by connecting.";
-      }}
-      onSimulator={() => {
-        void selectBoard(simulator);
-        connectionOpen = false;
-      }}
-      onState={(state) => {
-        connectionState = state;
-      }}
-    />{/if}
+    </div>
+    <button disabled={managementBusy} onclick={() => navigate(returnView)}
+      >Return to my Creation</button
+    >
+    <nav class="parent-tasks" aria-label="Parent tasks">
+      {#each [["setup", "Board setup"], ["network", "Network & saved permission"], ["updates", "Software updates"], ["troubleshooting", "Troubleshooting"]] as [task, label]}
+        <button
+          disabled={managementBusy}
+          aria-current={parentTask === task ? "page" : undefined}
+          onclick={() => selectParentTask(task as ParentTask)}>{label}</button
+        >
+      {/each}
+    </nav>
+    {#if parentTask === "overview"}<p>
+        Choose a task. Normal USB play needs none of these settings. Destructive
+        recovery stays inside Troubleshooting.
+      </p>{/if}
+  {/if}
+  {#if connectionInitialized}<section
+      bind:this={connectionSection}
+      class:connection-sheet={connectionOpen}
+      aria-label="Board connection"
+      hidden={!connectionOpen &&
+        (screen !== "parent" || parentTask === "overview")}
+    >
+      {#if connectionOpen}<button onclick={closeConnection}
+          >Close connection panel</button
+        >{/if}
+      <ConnectionPanel
+        bind:this={connectionPanel}
+        visible={connectionOpen ||
+          (screen === "parent" && parentTask !== "overview")}
+        defer
+        advanced={!connectionOpen &&
+          screen === "parent" &&
+          parentTask !== "overview"}
+        parentTask={screen === "parent" && !connectionOpen
+          ? parentTask
+          : undefined}
+        onParent={() => parentSettings("setup")}
+        onBusyChange={(busy) => {
+          managementBusy = busy;
+        }}
+        continueLabel="Return to my Creation"
+        onMission={() => navigate(returnView)}
+        onConnected={async (client) => {
+          await selectBoard(client);
+          if (board !== client) return;
+          connectionOpen = false;
+          if (screen === "parent") await navigate(returnView);
+          else {
+            await tick();
+            connectionReturnFocus?.focus({ preventScroll: true });
+          }
+          message =
+            "Board connected. Choose a module test or Run explicitly; outputs do not resume automatically.";
+        }}
+        onSimulator={() => {
+          void selectBoard(simulator);
+          connectionOpen = false;
+        }}
+        onState={(state) => {
+          connectionState = state;
+        }}
+      />
+    </section>{/if}
 
   {#snippet preview()}
     <section class="preview" aria-label="Reported outputs">
@@ -520,14 +712,9 @@
     <section class="module-panel">
       <div class="panel-heading">
         <h2>Your modules</h2>
-        <button onclick={practiceMode}>Use practice</button>
+        {#if !practice}<button onclick={practiceMode}>Use Practice</button>{/if}
       </div>
-      {#if !practice && connectionState.phase === "failed"}<p
-          class="error"
-          role="alert"
-        >
-          {connectionState.error.message} Outputs will not resume automatically.
-        </p>{/if}
+
       {#if practice}<p class="muted">
           Explore without a Board. Connect Board when you want to control real
           hardware.
@@ -609,7 +796,7 @@
   {#if screen === "play"}
     <section class="heading">
       <span class="eyebrow">SMALL EXPERIMENTS. BIG IDEAS.</span>
-      <h1>First, make something happen.</h1>
+      <h1 tabindex="-1">First, make something happen.</h1>
       <p>
         No forms. Try a module, notice its response, then make your own
         behavior.
@@ -630,12 +817,7 @@
     </section>
   {:else if screen === "blocks"}
     <section class="heading">
-      <button onclick={() => navigate("play")}>← Modules & experiments</button>
-      <h1>Build a behavior, one block at a time.</h1>
-      <p>
-        Inputs notice things. Conditions decide when. Outputs bring your idea to
-        life.
-      </p>
+      <h1 tabindex="-1">Build a behavior, one block at a time.</h1>
     </section>
     <section class="editor-toolbar" aria-label="Creation controls">
       <label
@@ -667,31 +849,6 @@
       <p role="status">{savedStatus}</p>
     </section>
     <div class="workbench">
-      <section class="palette" aria-label="Block palette">
-        <h2>Choose blocks</h2>
-        <p class="eyebrow">INPUTS</p>
-        <button
-          class="input-block"
-          disabled={program.rules.length >= 8}
-          onclick={() => addRule("A")}>WHEN button A is pressed</button
-        ><button
-          class="input-block"
-          disabled={program.rules.length >= 8}
-          onclick={() => addRule("B")}>WHEN button B is pressed</button
-        ><button
-          class="input-block"
-          disabled={program.rules.length >= 8}
-          onclick={() => addRule("near")}>WHEN a visitor comes close</button
-        >
-        <p class="eyebrow">CONDITIONS</p>
-        <p>Add an <strong>ONLY IF</strong> distance check inside a rule.</p>
-        <p class="eyebrow">OUTPUTS</p>
-        <p>Choose light, chirp or both in each <strong>THEN</strong> block.</p>
-        <small
-          >Click an input to add a rule. Edit its connected blocks; no code or
-          dragging required.</small
-        >
-      </section>
       <section class="program">
         <div class="panel-heading">
           <h2>Your program</h2>
@@ -816,6 +973,14 @@
               {line}
             </p>{/each}
         </details>
+        <details class="palette">
+          <summary>How these blocks work</summary>
+          <p>
+            Use Add rule, then choose its WHEN input. Add an ONLY IF distance
+            condition if needed, and choose light, chirp or both in THEN. No
+            code or dragging required.
+          </p>
+        </details>
         <section class="save-panel">
           <div class="row">
             <button
@@ -836,16 +1001,14 @@
           {@render buttonInput()}
           <h3>Distance</h3>
           <p class="health">{health("distance")}</p>
-          {@render distanceInput()}<button onclick={() => navigate("play")}
-            >Open module tests</button
-          >
+          {@render distanceInput()}
         </section>
       </aside>
     </div>
   {:else if screen === "missions"}
     <section class="mission">
       <span class="eyebrow">AN IDEA TO MAKE YOUR OWN</span>
-      <h1>Make a treasure guardian</h1>
+      <h1 tabindex="-1">Make a treasure guardian</h1>
       <p class="lead">
         Build something that notices a visitor. When they come close, its light
         changes.
@@ -877,22 +1040,42 @@
           The original ten-stage Mission and its saves have not been changed or
           marked complete by this starter.
         </p>
-        <a href="/legacy">Open earlier Mission progress →</a>
+        <a
+          href="/legacy"
+          onclick={(event) => {
+            event.preventDefault();
+            void requestReplacement({ kind: "legacy" });
+          }}>Open earlier Mission progress →</a
+        >
       </details>
     </section>
   {/if}
-  {#if screen !== "parent"}<section class="saved">
+  {#if screen === "library"}<section class="saved">
+      <h1 tabindex="-1">My creations</h1>
+      <p>
+        Current Creation: <strong>{title}</strong>{unsaved
+          ? " · unsaved changes"
+          : ""}
+      </p>
+      <button onclick={() => navigate(createView)}>Return to my Creation</button
+      >
       <div class="panel-heading">
         <h2>Your saved creations · {library.creations.length}/24</h2>
         <button onclick={fresh}>Start a new creation</button>
       </div>
       {#if library.creations.length}<div class="row">
-          {#each library.creations as entry}<button
-              onclick={() => openCreation(entry.id)}>{entry.title}</button
-            >{/each}
+          {#each library.creations as entry}<article class="saved-card">
+              <button onclick={() => openCreation(entry.id)}
+                >{entry.title}</button
+              >
+              <p class="muted">
+                {entry.program.rules.length}
+                {entry.program.rules.length === 1 ? "rule" : "rules"} · Opens stopped
+              </p>
+            </article>{/each}
         </div>{:else}<p>
           {libraryReady
-            ? "No creations saved yet. Try a rule, then keep it here."
+            ? "No creations saved yet."
             : "Saved library is not available yet. Existing work has not been replaced."}
         </p>{/if}
       <p class="muted">
@@ -902,8 +1085,7 @@
     </section>{/if}
   <footer>
     <p>{message}</p>
-    <button onclick={parentSettings}>Parent settings & troubleshooting</button
-    ><span
+    <span
       >Disconnect power before changing wiring. UNO Q maker I/O uses 3.3 V
       logic; never apply 5 V to analog inputs. No arbitrary port/power controls;
       more hardware needs explicit support.</span
@@ -945,6 +1127,12 @@
     align-items: center;
     gap: 10px;
     flex-wrap: wrap;
+  }
+  .creation-views {
+    margin-bottom: 20px;
+  }
+  h1:focus {
+    outline: none;
   }
   .board-dock {
     margin-left: auto;
@@ -1204,20 +1392,16 @@
   }
   .workbench {
     display: grid;
-    grid-template-columns: 190px minmax(360px, 1fr) 330px;
+    grid-template-columns: minmax(360px, 1fr) 330px;
     gap: 24px;
     align-items: start;
   }
   .palette {
-    padding: 18px;
+    margin-top: 16px;
+    padding: 12px 18px;
     border: 1px solid var(--border);
     border-radius: 16px;
     background: var(--surface);
-  }
-  .palette button {
-    width: 100%;
-    margin: 7px 0;
-    text-align: left;
   }
   .palette p {
     font-size: 13px;
@@ -1325,7 +1509,33 @@
     color: var(--danger);
   }
   .connection-sheet {
-    text-align: right;
+    position: fixed;
+    top: calc(var(--header-height) + 12px);
+    right: 24px;
+    width: min(580px, calc(100vw - 48px));
+    max-height: calc(100vh - var(--header-height) - 24px);
+    overflow: auto;
+    z-index: 6;
+    padding: 20px;
+    border: 2px solid var(--border);
+    border-radius: 16px;
+    background: var(--surface);
+    box-shadow: 0 12px 40px #26304b30;
+  }
+  .connection-sheet :global(.connections) {
+    margin-top: 0;
+  }
+  .connection-sheet :global(h2) {
+    font-size: 26px;
+  }
+  .parent-tasks {
+    margin: 24px 0;
+  }
+  .saved-card {
+    min-width: 220px;
+    padding: 12px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
   }
   footer {
     margin-top: 32px;
@@ -1350,13 +1560,6 @@
     }
     .workbench aside {
       top: 150px;
-    }
-    .palette {
-      grid-column: 1 / -1;
-    }
-    .palette button {
-      width: auto;
-      margin-right: 10px;
     }
   }
   @media (max-width: 850px) {

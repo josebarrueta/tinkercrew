@@ -264,6 +264,9 @@ for (const inputs of ["missing", "healthy"] as const) {
           exact: true,
         }),
       ).toBeVisible();
+      await expect(
+        page.getByRole("button", { name: "Board details", exact: true }),
+      ).toBeFocused();
       if (inputs === "healthy") {
         await expect(page.getByText("12.3 cm", { exact: true })).toBeVisible();
         await expect(
@@ -304,7 +307,17 @@ for (const inputs of ["missing", "healthy"] as const) {
         .getByRole("button", { name: "Build with blocks", exact: true })
         .click();
       await page
-        .getByRole("button", { name: "Open module tests", exact: true })
+        .getByRole("button", { name: "Try modules", exact: true })
+        .click();
+      await page
+        .getByRole("button", { name: "My creations", exact: true })
+        .click();
+      await page.getByRole("button", { name: "Create", exact: true }).click();
+      await page
+        .getByRole("button", { name: "Parent settings", exact: true })
+        .click();
+      await page
+        .getByRole("button", { name: "Return to my Creation", exact: true })
         .click();
       expect(operations).not.toContain("renew_control");
       if (inputs === "healthy") {
@@ -313,6 +326,25 @@ for (const inputs of ["missing", "healthy"] as const) {
           page.getByText("A: pressed", { exact: true }),
         ).toBeVisible();
       }
+      const authorityBeforeDetails = operations.filter((op) =>
+        ["renew_control", "clear", "pixels", "buzzer"].includes(op),
+      );
+      await page
+        .getByRole("button", { name: "Board details", exact: true })
+        .click();
+      const details = page.getByRole("region", {
+        name: "Board connection",
+        exact: true,
+      });
+      await expect(details).toBeVisible();
+      await details
+        .getByRole("button", { name: "Close connection panel", exact: true })
+        .click();
+      expect(
+        operations.filter((op) =>
+          ["renew_control", "clear", "pixels", "buzzer"].includes(op),
+        ),
+      ).toEqual(authorityBeforeDetails);
       delayStateOnce = true;
       await expect.poll(() => delayedStateStarted).toBe(true);
       await page.getByRole("button", { name: "Try blue", exact: true }).click();
@@ -335,6 +367,9 @@ for (const inputs of ["missing", "healthy"] as const) {
       await page
         .getByRole("button", { name: "Stop outputs", exact: true })
         .click();
+      // A click dispatch is not completion of its asynchronous TLS clear.
+      // The runtime reports stopped only after that clear finishes successfully.
+      await expect(page.getByTestId("creation-state")).toHaveText("stopped");
       expect(
         (
           (await transport(1, { operation: "state" })) as {
