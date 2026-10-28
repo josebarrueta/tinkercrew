@@ -264,6 +264,9 @@ for (const inputs of ["missing", "healthy"] as const) {
           exact: true,
         }),
       ).toBeVisible();
+      await expect(
+        page.getByRole("button", { name: "Board details", exact: true }),
+      ).toBeFocused();
       if (inputs === "healthy") {
         await expect(page.getByText("12.3 cm", { exact: true })).toBeVisible();
         await expect(

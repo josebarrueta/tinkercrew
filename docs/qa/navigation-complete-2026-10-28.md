@@ -8,13 +8,15 @@ PR #49 (draft protection/sticky controls) had already merged before the owner's 
 
 - **Create / My creations** primary destinations, visible **Try modules / Build** selection and secondary Mission starters. One current draft survives ordinary navigation. The library shows actual titles/rule counts/current draft status, not invented timestamps.
 - Whitelisted view-only URLs and SvelteKit shallow history. Heading focus/scroll on real transitions; selecting the current view does nothing. Back/Forward never restores output authority.
-- One nonmodal Board region contains close/content, keeps global Stop accessible and restores focus on close. Connected inspection is read-only: no reconnect, credential lookup, lease or output clear just to inspect. Explicit Practice disconnect precedes selecting a different connection.
+- One nonmodal Board region contains close/content, keeps global Stop accessible and restores focus on close or successful connection. Connected inspection is read-only: no reconnect, credential lookup, lease or output clear just to inspect. Explicit Practice disconnect precedes selecting a different connection.
 - Dismissing pending connection or leaving its view cancels intent and disposes the late specific USB handle. Saved-network retries are cancelled when leaving a failed/pending attempt. No automatic rearm.
 - Parent groups: Board setup, Network & saved permission, Software updates, Troubleshooting. Contextual help opens its task; Return restores the originating Creation/view. Exact-target consent and native guards remain unchanged. Active maintenance prevents navigating away; discovered pending recovery stays visible even in another task group.
 - Legacy adventure entry shares draft protection. A deliberate detour remembers only the current program/title/ID/dirty flag/view in frontend memory. Return restores it stopped, not a connection or credentials. Continue without saving explicitly does not promise survival after closing/reloading the app. Historical saves/checkpoints are untouched.
 - One primary error instead of competing root/module warnings; Practice wording and one Add rule path. Block guidance is optional rather than another palette/action system.
 
 ## Tests and failure history
+
+A final protocol-backed keyboard check also exposed focus remaining in a hidden connection panel after successful connection. The workspace now waits for Board selection, ignores superseded selections and restores the invoking control's focus. This failed before the fix and passed afterward.
 
 Added rendered UI/IPC regressions for Create/library/history retention, same-view no-op while running, Parent heading/return/task targeting, task-specific visibility, pending recovery visibility, exact-handle cancellation and legacy return. Existing tests were adapted to actual navigation, not removed.
 
@@ -24,7 +26,7 @@ The first full run exposed two legacy recovery regressions: a one-way `open` att
 
 Another run exposed an existing test race: Playwright click dispatch was being treated as asynchronous TLS-clear completion. Final-off verification now first waits for the runtime's **stopped** UI state, which occurs after successful clear; it does not poll until output TTL expiry, retry a Command or loosen watchdogs.
 
-Final `bash scripts/check-mvp.sh`: **PASS**, evidence `artifacts/qa/20261028T171331Z-23626.md`:
+Final `bash scripts/check-mvp.sh`: **PASS**, evidence `artifacts/qa/20261028T171930Z-25357.md`:
 
 | Suite | Passed |
 | --- | ---: |

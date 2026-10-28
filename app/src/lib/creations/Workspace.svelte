@@ -609,10 +609,15 @@
         }}
         continueLabel="Return to my Creation"
         onMission={() => navigate(returnView)}
-        onConnected={(client) => {
-          void selectBoard(client);
+        onConnected={async (client) => {
+          await selectBoard(client);
+          if (board !== client) return;
           connectionOpen = false;
-          if (screen === "parent") void navigate(returnView);
+          if (screen === "parent") await navigate(returnView);
+          else {
+            await tick();
+            connectionReturnFocus?.focus({ preventScroll: true });
+          }
           message =
             "Board connected. Choose a module test or Run explicitly; outputs do not resume automatically.";
         }}
