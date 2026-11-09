@@ -1,0 +1,10 @@
+Source/scope information: wait-timeout 0.2.1
+
+Conservatively include this fixed-list Rust crate, including available alternate/test/proc-macro notices, rather than excluding it based on dependency kind or linker elimination. Native/network/TLS providers and other dependency components keep their separate evidence and approval status.
+
+Exact published source archive:
+https://static.crates.io/crates/wait-timeout/wait-timeout-0.2.1.crate
+SHA-256: 09ac3b126d3914f9849036f826e054cbabdc8519970b8998ddaf3b5bd3c65f11
+
+Texts and quoted source notice bytes were checked against this locked archive.
+Engineering evidence does not grant owner/legal or publication approval.

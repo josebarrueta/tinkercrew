@@ -1,0 +1,10 @@
+Source/scope information: tower-service 0.3.3
+
+Conservatively include this fixed-list Rust crate, including available alternate/test/proc-macro notices, rather than excluding it based on dependency kind or linker elimination. Native/network/TLS providers and other dependency components keep their separate evidence and approval status.
+
+Exact published source archive:
+https://static.crates.io/crates/tower-service/tower-service-0.3.3.crate
+SHA-256: 8df9b6e13f2d32c91b9bd719c00d1958837bc7dec474d94952798cc8e69eeec3
+
+Texts and quoted source notice bytes were checked against this locked archive.
+Engineering evidence does not grant owner/legal or publication approval.

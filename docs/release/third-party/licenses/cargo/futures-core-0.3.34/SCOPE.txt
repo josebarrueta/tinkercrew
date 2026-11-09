@@ -1,0 +1,10 @@
+Source/scope information: futures-core 0.3.34
+
+Conservatively include this fixed-list Rust crate, including available alternate/test/proc-macro notices, rather than excluding it based on dependency kind or linker elimination. Native/network/TLS providers and other dependency components keep their separate evidence and approval status.
+
+Exact published source archive:
+https://static.crates.io/crates/futures-core/futures-core-0.3.34.crate
+SHA-256: 92d699e522242e69e3003b94ecc1f960f3a5e015aa7c5d7486e65ad01dd94f5e
+
+Texts and quoted source notice bytes were checked against this locked archive.
+Engineering evidence does not grant owner/legal or publication approval.

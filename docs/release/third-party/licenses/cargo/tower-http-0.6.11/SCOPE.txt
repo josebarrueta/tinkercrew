@@ -1,0 +1,10 @@
+Source/scope information: tower-http 0.6.11
+
+Conservatively include this fixed-list Rust crate, including available alternate/test/proc-macro notices, rather than excluding it based on dependency kind or linker elimination. Native/network/TLS providers and other dependency components keep their separate evidence and approval status.
+
+Exact published source archive:
+https://static.crates.io/crates/tower-http/tower-http-0.6.11.crate
+SHA-256: 4cfcf7e2740e6fc6d4d688b4ef00650406bb94adf4731e43c096c3a19fe40840
+
+Texts and quoted source notice bytes were checked against this locked archive.
+Engineering evidence does not grant owner/legal or publication approval.

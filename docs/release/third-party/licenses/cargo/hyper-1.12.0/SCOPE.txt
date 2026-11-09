@@ -1,0 +1,10 @@
+Source/scope information: hyper 1.12.0
+
+Conservatively include this fixed-list Rust crate, including available alternate/test/proc-macro notices, rather than excluding it based on dependency kind or linker elimination. Native/network/TLS providers and other dependency components keep their separate evidence and approval status.
+
+Exact published source archive:
+https://static.crates.io/crates/hyper/hyper-1.12.0.crate
+SHA-256: 2c3e324da4c95177d6291d4c8730197c0d1822f8a9766814a4a44fa5ab797c9c
+
+Texts and quoted source notice bytes were checked against this locked archive.
+Engineering evidence does not grant owner/legal or publication approval.

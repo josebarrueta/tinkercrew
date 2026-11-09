@@ -1,0 +1,10 @@
+Source/scope information: serde-untagged 0.1.9
+
+Conservatively include this fixed-list Rust crate, including available alternate/test/proc-macro notices, rather than excluding it based on dependency kind or linker elimination. Native/network/TLS providers and other dependency components keep their separate evidence and approval status.
+
+Exact published source archive:
+https://static.crates.io/crates/serde-untagged/serde-untagged-0.1.9.crate
+SHA-256: f9faf48a4a2d2693be24c6289dbe26552776eb7737074e6722891fadbe6c5058
+
+Texts and quoted source notice bytes were checked against this locked archive.
+Engineering evidence does not grant owner/legal or publication approval.

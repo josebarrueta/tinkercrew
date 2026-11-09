@@ -1,0 +1,13 @@
+Source and license information: cssparser-macros 0.7.1
+
+The source code for this component is governed by the Mozilla Public License
+version 2.0, reproduced in this disclosure. Tinkeroo uses the upstream published
+crate without source modifications. Its source code, including original notices,
+is available without charge from:
+https://static.crates.io/crates/cssparser-macros/cssparser-macros-0.7.1.crate
+SHA-256 of the .crate (gzip tar) archive: d045de693cb712d0b22c6a64be5b953f67b3ce00ab5ad3dd5d8b441886ab8e1a
+
+Download the archive over HTTPS and unpack it with a tar-compatible tool to
+obtain the source form. The MPL rights in that source are not restricted by
+Tinkeroo's MIT license. This statement applies to this exact component/version,
+not to every dependency of Tinkeroo.

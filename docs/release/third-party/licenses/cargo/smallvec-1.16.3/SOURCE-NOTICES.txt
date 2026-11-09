@@ -1,0 +1,9 @@
+Verbatim notice comments from the locked published source. Tinkeroo-authored source labels follow.
+Includes conservative test/alternate-feature notices; not proof each source member is in the binary.
+
+Source: smallvec-1.16.3/src/lib.rs, smallvec-1.16.3/src/specialization.rs
+// Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
+// http://www.apache.org/licenses/LICENSE-2.0> or the MIT license
+// <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
+// option. This file may not be copied, modified, or distributed
+// except according to those terms.

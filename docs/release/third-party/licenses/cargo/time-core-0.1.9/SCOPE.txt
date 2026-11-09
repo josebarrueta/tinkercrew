@@ -1,0 +1,10 @@
+Source/scope information: time-core 0.1.9
+
+Conservatively include this fixed-list Rust crate, including available alternate/test/proc-macro notices, rather than excluding it based on dependency kind or linker elimination. Native/network/TLS providers and other dependency components keep their separate evidence and approval status.
+
+Exact published source archive:
+https://static.crates.io/crates/time-core/time-core-0.1.9.crate
+SHA-256: 9e1c906769ad99c88eaa54e728060edef082f8e358ff32030cb7c7d315e81109
+
+Texts and quoted source notice bytes were checked against this locked archive.
+Engineering evidence does not grant owner/legal or publication approval.

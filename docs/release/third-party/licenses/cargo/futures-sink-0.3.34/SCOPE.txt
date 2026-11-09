@@ -1,0 +1,10 @@
+Source/scope information: futures-sink 0.3.34
+
+Conservatively include this fixed-list Rust crate, including available alternate/test/proc-macro notices, rather than excluding it based on dependency kind or linker elimination. Native/network/TLS providers and other dependency components keep their separate evidence and approval status.
+
+Exact published source archive:
+https://static.crates.io/crates/futures-sink/futures-sink-0.3.34.crate
+SHA-256: 1944426bf7d03f1d14f708785e4b33efd750b36d48a157b836b3efc15ede8e1d
+
+Texts and quoted source notice bytes were checked against this locked archive.
+Engineering evidence does not grant owner/legal or publication approval.

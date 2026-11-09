@@ -1,0 +1,13 @@
+Source and license information: selectors 0.38.0
+
+The source code for this component is governed by the Mozilla Public License
+version 2.0, reproduced in this disclosure. Tinkeroo uses the upstream published
+crate without source modifications. Its source code, including original notices,
+is available without charge from:
+https://static.crates.io/crates/selectors/selectors-0.38.0.crate
+SHA-256 of the .crate (gzip tar) archive: 8adfa1c298912827b8a28b223b3b874357397ae706e6190acd9bf28cee99114d
+
+Download the archive over HTTPS and unpack it with a tar-compatible tool to
+obtain the source form. The MPL rights in that source are not restricted by
+Tinkeroo's MIT license. This statement applies to this exact component/version,
+not to every dependency of Tinkeroo.

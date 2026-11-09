@@ -1,0 +1,6 @@
+Verbatim notice comments from the locked published source. Tinkeroo-authored source labels follow.
+Includes conservative test/alternate-feature notices; not proof each source member is in the binary.
+
+Source: camino-1.2.6/build.rs, camino-1.2.6/src/lib.rs, camino-1.2.6/src/proptest_impls.rs, camino-1.2.6/src/serde_impls.rs, camino-1.2.6/src/tests.rs, camino-1.2.6/tests/integration_tests.rs
+// Copyright (c) The camino Contributors
+// SPDX-License-Identifier: MIT OR Apache-2.0

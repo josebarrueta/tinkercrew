@@ -1,0 +1,10 @@
+Source/scope information: hyper-util 0.1.21
+
+Conservatively include this fixed-list Rust crate, including available alternate/test/proc-macro notices, rather than excluding it based on dependency kind or linker elimination. Native/network/TLS providers and other dependency components keep their separate evidence and approval status.
+
+Exact published source archive:
+https://static.crates.io/crates/hyper-util/hyper-util-0.1.21.crate
+SHA-256: ddc03d96684f9226b8a787cdb71488417b53ab5ea8fdb1dac946cb9431cc8bff
+
+Texts and quoted source notice bytes were checked against this locked archive.
+Engineering evidence does not grant owner/legal or publication approval.

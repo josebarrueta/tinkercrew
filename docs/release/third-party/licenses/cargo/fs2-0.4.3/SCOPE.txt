@@ -1,0 +1,10 @@
+Source/scope information: fs2 0.4.3
+
+Conservatively include this fixed-list Rust crate, including available alternate/test/proc-macro notices, rather than excluding it based on dependency kind or linker elimination. Native/network/TLS providers and other dependency components keep their separate evidence and approval status.
+
+Exact published source archive:
+https://static.crates.io/crates/fs2/fs2-0.4.3.crate
+SHA-256: 9564fc758e15025b46aa6643b1b77d047d1a56a1aea6e01002ac0c7026876213
+
+Texts and quoted source notice bytes were checked against this locked archive.
+Engineering evidence does not grant owner/legal or publication approval.

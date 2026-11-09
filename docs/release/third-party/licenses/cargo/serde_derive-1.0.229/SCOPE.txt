@@ -1,0 +1,10 @@
+Source/scope information: serde_derive 1.0.229
+
+Conservatively include this fixed-list Rust crate, including available alternate/test/proc-macro notices, rather than excluding it based on dependency kind or linker elimination. Native/network/TLS providers and other dependency components keep their separate evidence and approval status.
+
+Exact published source archive:
+https://static.crates.io/crates/serde_derive/serde_derive-1.0.229.crate
+SHA-256: e7a5d71263a5a7d47b41f6b3f06ba276f10cc18b0931f1799f710578e2309348
+
+Texts and quoted source notice bytes were checked against this locked archive.
+Engineering evidence does not grant owner/legal or publication approval.

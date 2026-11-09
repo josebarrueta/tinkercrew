@@ -32,7 +32,7 @@ For family feedback, use the [play-test guide](prototypes/treasure-guardian-play
 
 ### Public releases — not available/validated yet
 
-When an owner-approved signed/notarized release is published, download the appropriate `.dmg` from [GitHub Releases](https://github.com/josebarrueta/tinkercrew/releases), open it, and drag **Tinkeroo** to **Applications**. Public release preparation targets Universal 2 (Apple silicon and Intel), macOS 12+; actual Intel/clean-Mac acceptance remains pending.
+When an owner-approved signed/notarized release is published, download the appropriate `.dmg` from [GitHub Releases](https://github.com/josebarrueta/tinkercrew/releases), open it, and drag **Tinkeroo** to **Applications**. The first public release targets **Apple silicon Macs only**; Intel support is deferred. The configured minimum is macOS 12+, but supported-version and clean-Mac acceptance remain pending.
 
 Do not disable Gatekeeper or remove quarantine to declare an installation successful. Current development/CI artifacts are **ad-hoc signed, not Developer-ID-signed or notarized**, and may be blocked when downloaded. They are for developer testing, not a production installer. Build locally using the instructions below if you need to try the native app now.
 
@@ -106,7 +106,7 @@ Outputs:
 
 Open your local `.app`, or copy it to Applications for local testing. “Release mode” means an optimized build, **not** a production-signed/notarized release. Both development build scripts explicitly seal/sign the bundle ad-hoc using `tauri.development.conf.json`; CI verifies the strict resource seal. This separate configuration is not used by the protected Developer ID release workflow. The DMG script sets `CI=true` to avoid interactive Finder layout automation while preserving the Applications link.
 
-For Universal builds, production signing/notarization, owner-provided secrets, detached update signatures, and clean-Mac gates, see the [release procedure](docs/release/macos.md). Routine CI never receives signing credentials, publishes releases, or updates a Board.
+For Apple-silicon release builds, production signing/notarization, owner-provided secrets, detached update signatures, and clean-Mac gates, see the [release procedure](docs/release/macos.md). Routine CI never receives signing credentials, publishes releases, or updates a Board.
 
 ## Tests and CI
 
@@ -178,6 +178,7 @@ The GitHub repository remains `josebarrueta/tinkercrew`. Existing bundle identit
 - [Recoverable installed-baseline Linux runtime updates and limitations](docs/architecture/runtime-updates.md)
 - [Initial preparation, dedicated SSH and same-key certificate renewal](docs/architecture/initial-provisioning.md)
 - [Secure protocol proposal](docs/architecture/secure-board-protocol.md)
+- [First public release: readiness gates and execution checklist](docs/release/readiness.md)
 - [MVP roadmap and open work](https://github.com/josebarrueta/tinkercrew/issues/13)
 
 ## License

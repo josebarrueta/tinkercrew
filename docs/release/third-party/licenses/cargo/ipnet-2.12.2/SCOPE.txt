@@ -1,0 +1,10 @@
+Source/scope information: ipnet 2.12.2
+
+Conservatively include this fixed-list Rust crate, including available alternate/test/proc-macro notices, rather than excluding it based on dependency kind or linker elimination. Native/network/TLS providers and other dependency components keep their separate evidence and approval status.
+
+Exact published source archive:
+https://static.crates.io/crates/ipnet/ipnet-2.12.2.crate
+SHA-256: 791930b43c0d5973160d90a8f3894509f2b273430f5c5c73b668636d0287c5c0
+
+Texts and quoted source notice bytes were checked against this locked archive.
+Engineering evidence does not grant owner/legal or publication approval.

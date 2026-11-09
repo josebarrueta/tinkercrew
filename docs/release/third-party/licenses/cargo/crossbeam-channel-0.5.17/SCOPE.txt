@@ -1,0 +1,10 @@
+Source/scope information: crossbeam-channel 0.5.17
+
+Full third-party text includes CC-BY-3.0 matching.go material and Go/Rust notices; fixture-versus-shipped-source scope and attribution fulfillment need a separate review.
+
+Exact published source archive:
+https://static.crates.io/crates/crossbeam-channel/crossbeam-channel-0.5.17.crate
+SHA-256: 98b0cc327b5bc766e7fda9c9260cc0fa81b43a8e240440422dff70788e3f9ef1
+
+Texts and quoted source notice bytes were checked against this locked archive.
+Engineering evidence does not grant owner/legal or publication approval.

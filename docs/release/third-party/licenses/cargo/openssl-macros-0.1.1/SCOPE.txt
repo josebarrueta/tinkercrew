@@ -1,0 +1,9 @@
+Source/scope information: openssl-macros 0.1.1
+
+Rust API, FFI or macro wrapper. The full published wrapper license/attribution texts are included. Separately versioned native dependencies retain their own evidence entries and pending status; this is not approval of their complete notice coverage.
+
+Exact published source archive (no upstream modification asserted by this note):
+https://static.crates.io/crates/openssl-macros/openssl-macros-0.1.1.crate
+SHA-256: a948666b637a0f465e8564c73e89d4dde00d72d4d473cc972f390fc3dcee7d9c
+
+This is engineering scope documentation, not owner/legal or publication approval.

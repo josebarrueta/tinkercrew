@@ -1,0 +1,10 @@
+Source/scope information: smallvec 1.16.3
+
+Conservatively include this fixed-list Rust crate, including available alternate/test/proc-macro notices, rather than excluding it based on dependency kind or linker elimination. Native/network/TLS providers and other dependency components keep their separate evidence and approval status.
+
+Exact published source archive:
+https://static.crates.io/crates/smallvec/smallvec-1.16.3.crate
+SHA-256: 5b3dc8af474f516a851ff4bd12db780f948b9250ad37211e4eec0bccea54e01b
+
+Texts and quoted source notice bytes were checked against this locked archive.
+Engineering evidence does not grant owner/legal or publication approval.

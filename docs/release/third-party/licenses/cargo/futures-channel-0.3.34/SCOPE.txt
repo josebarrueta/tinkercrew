@@ -1,0 +1,10 @@
+Source/scope information: futures-channel 0.3.34
+
+Conservatively include this fixed-list Rust crate, including available alternate/test/proc-macro notices, rather than excluding it based on dependency kind or linker elimination. Native/network/TLS providers and other dependency components keep their separate evidence and approval status. The mpsc queue has a separately attributed Dmitry Vyukov BSD-2-Clause grant; its full source comment accompanies the MIT/Apache texts.
+
+Exact published source archive:
+https://static.crates.io/crates/futures-channel/futures-channel-0.3.34.crate
+SHA-256: b1f9e3d69d39e4862ffed03ed071a76f9a13ba1d9109d355b0f0aa6b15e393c4
+
+Texts and quoted source notice bytes were checked against this locked archive.
+Engineering evidence does not grant owner/legal or publication approval.

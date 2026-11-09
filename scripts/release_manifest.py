@@ -11,8 +11,8 @@ from pathlib import Path
 def build_manifest(version: str, target: str, artifact: Path, signature: Path) -> dict:
     if not re.fullmatch(r"\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?", version):
         raise ValueError("Use an explicit SemVer release version without a leading v")
-    if target not in {"darwin-aarch64", "darwin-x86_64", "darwin-universal"}:
-        raise ValueError("Unsupported macOS release target")
+    if target != "darwin-aarch64":
+        raise ValueError("Only Apple silicon (darwin-aarch64) is currently approved as a release target")
     if not re.fullmatch(r"[A-Za-z0-9_.-]+\.dmg", artifact.name):
         raise ValueError("Release asset must be a simple DMG filename")
     digest = hashlib.sha256()

@@ -8,6 +8,9 @@ fi
 app="$1"
 dmg="$2"
 [[ -d "$app/Contents" && -f "$dmg" ]] || { printf 'Missing app bundle or DMG.\n' >&2; exit 1; }
+root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+python3 "$root/scripts/release_architecture.py" "$app"
+bash "$root/scripts/check-dmg-layout.sh" "$dmg" --apple-silicon
 metadata="$(codesign -dv --verbose=4 "$app" 2>&1)"
 [[ "$metadata" == *'Authority=Developer ID Application:'* ]] || { printf 'A Developer ID Application signature is required.\n' >&2; exit 1; }
 [[ "$metadata" == *'(runtime)'* ]] || { printf 'Hardened Runtime is required.\n' >&2; exit 1; }

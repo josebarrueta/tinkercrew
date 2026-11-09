@@ -1,0 +1,10 @@
+Source/scope information: tokio 1.54.1
+
+Conservatively include this fixed-list Rust crate, including available alternate/test/proc-macro notices, rather than excluding it based on dependency kind or linker elimination. Native/network/TLS providers and other dependency components keep their separate evidence and approval status.
+
+Exact published source archive:
+https://static.crates.io/crates/tokio/tokio-1.54.1.crate
+SHA-256: b52fd3255258d26fac7264ab5a76b53c13367136dc011d3d6ad4f8ed070396a3
+
+Texts and quoted source notice bytes were checked against this locked archive.
+Engineering evidence does not grant owner/legal or publication approval.

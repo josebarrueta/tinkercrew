@@ -1,0 +1,11 @@
+Verbatim notice comments from the locked published source. Tinkeroo-authored source labels follow.
+Includes conservative test/alternate-feature notices; not proof each source member is in the binary.
+
+Source: socket2-0.6.5/src/lib.rs, socket2-0.6.5/src/socket.rs, socket2-0.6.5/src/sys/unix.rs, socket2-0.6.5/src/sys/windows.rs
+// Copyright 2015 The Rust Project Developers.
+//
+// Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
+// https://www.apache.org/licenses/LICENSE-2.0> or the MIT license
+// <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
+// option. This file may not be copied, modified, or distributed
+// except according to those terms.

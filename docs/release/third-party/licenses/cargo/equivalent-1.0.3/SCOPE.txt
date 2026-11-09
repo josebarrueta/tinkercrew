@@ -1,0 +1,10 @@
+Source/scope information: equivalent 1.0.3
+
+Conservatively include this fixed-list Rust crate, including available alternate/test/proc-macro notices, rather than excluding it based on dependency kind or linker elimination. Native/network/TLS providers and other dependency components keep their separate evidence and approval status.
+
+Exact published source archive:
+https://static.crates.io/crates/equivalent/equivalent-1.0.3.crate
+SHA-256: 00d174d5400e5e8fd687ad1049e2f578285fa914201b1af7e8b112a4546bd826
+
+Texts and quoted source notice bytes were checked against this locked archive.
+Engineering evidence does not grant owner/legal or publication approval.

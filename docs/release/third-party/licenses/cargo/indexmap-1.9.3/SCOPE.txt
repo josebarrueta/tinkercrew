@@ -1,0 +1,10 @@
+Source/scope information: indexmap 1.9.3
+
+Conservatively include this fixed-list Rust crate, including available alternate/test/proc-macro notices, rather than excluding it based on dependency kind or linker elimination. Native/network/TLS providers and other dependency components keep their separate evidence and approval status.
+
+Exact published source archive:
+https://static.crates.io/crates/indexmap/indexmap-1.9.3.crate
+SHA-256: bd070e393353796e801d209ad339e89596eb4c8d430d18ede6a1cced8fafbd99
+
+Texts and quoted source notice bytes were checked against this locked archive.
+Engineering evidence does not grant owner/legal or publication approval.

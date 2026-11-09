@@ -1,0 +1,10 @@
+Source/scope information: dunce 1.0.5
+
+Conservatively include this fixed-list Rust crate, including available alternate/test/proc-macro notices, rather than excluding it based on dependency kind or linker elimination. Native/network/TLS providers and other dependency components keep their separate evidence and approval status. The published CC0-1.0 text is the elected license alternative for this evidence; unavailable copies of alternate license texts are not invented.
+
+Exact published source archive:
+https://static.crates.io/crates/dunce/dunce-1.0.5.crate
+SHA-256: 92773504d58c093f6de2459af4af33faa518c13451eb8f2b5698ed3d36e7c813
+
+Texts and quoted source notice bytes were checked against this locked archive.
+Engineering evidence does not grant owner/legal or publication approval.
