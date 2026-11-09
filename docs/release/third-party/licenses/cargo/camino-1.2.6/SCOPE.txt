@@ -1,0 +1,10 @@
+Source/scope information: camino 1.2.6
+
+Conservatively include this fixed-list Rust crate, including available alternate/test/proc-macro notices, rather than excluding it based on dependency kind or linker elimination. Native/network/TLS providers and other dependency components keep their separate evidence and approval status.
+
+Exact published source archive:
+https://static.crates.io/crates/camino/camino-1.2.6.crate
+SHA-256: bbbad30e4b4c14a39e3cc8aed085a12a327257c316619c93581e017bc52be591
+
+Texts and quoted source notice bytes were checked against this locked archive.
+Engineering evidence does not grant owner/legal or publication approval.

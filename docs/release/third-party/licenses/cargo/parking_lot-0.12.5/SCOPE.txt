@@ -1,0 +1,10 @@
+Source/scope information: parking_lot 0.12.5
+
+Conservatively include this fixed-list Rust crate, including available alternate/test/proc-macro notices, rather than excluding it based on dependency kind or linker elimination. Native/network/TLS providers and other dependency components keep their separate evidence and approval status.
+
+Exact published source archive:
+https://static.crates.io/crates/parking_lot/parking_lot-0.12.5.crate
+SHA-256: 93857453250e3077bd71ff98b6a65ea6621a19bb0f559a85248955ac12c45a1a
+
+Texts and quoted source notice bytes were checked against this locked archive.
+Engineering evidence does not grant owner/legal or publication approval.

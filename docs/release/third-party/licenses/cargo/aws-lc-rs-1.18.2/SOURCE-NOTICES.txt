@@ -1,0 +1,84 @@
+Verbatim Rust source notices; Tinkeroo-authored source labels. Full license text accompanies these notices.
+
+Source: aws-lc-rs-1.18.2/src/aead.rs, aws-lc-rs-1.18.2/src/aead/poly1305.rs, aws-lc-rs-1.18.2/src/ec.rs, aws-lc-rs-1.18.2/src/ec/key_pair.rs, aws-lc-rs-1.18.2/src/ed25519.rs, aws-lc-rs-1.18.2/src/lib.rs, aws-lc-rs-1.18.2/src/rand.rs, aws-lc-rs-1.18.2/src/rsa.rs, aws-lc-rs-1.18.2/src/rsa/key.rs, aws-lc-rs-1.18.2/src/test.rs
+// Copyright 2015-2016 Brian Smith.
+// SPDX-License-Identifier: ISC
+// Modifications copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0 OR ISC
+
+
+Source: aws-lc-rs-1.18.2/src/aead/aead_ctx.rs, aws-lc-rs-1.18.2/src/aead/aes_gcm.rs, aws-lc-rs-1.18.2/src/aead/nonce_sequence.rs, aws-lc-rs-1.18.2/src/aead/nonce_sequence/counter32.rs, aws-lc-rs-1.18.2/src/aead/nonce_sequence/counter64.rs, aws-lc-rs-1.18.2/src/aead/rand_nonce.rs, aws-lc-rs-1.18.2/src/aead/tests/fips.rs, aws-lc-rs-1.18.2/src/aead/tests/fips/chacha20_poly1305_openssh.rs, aws-lc-rs-1.18.2/src/aead/tests/fips/quic.rs, aws-lc-rs-1.18.2/src/aead/tls.rs, aws-lc-rs-1.18.2/src/aead/unbound_key.rs, aws-lc-rs-1.18.2/src/agreement/agreement_tests.rs, aws-lc-rs-1.18.2/src/agreement/ephemeral.rs, aws-lc-rs-1.18.2/src/agreement/parsed_public_key_tests.rs, aws-lc-rs-1.18.2/src/agreement/tests/fips.rs, aws-lc-rs-1.18.2/src/bn.rs, aws-lc-rs-1.18.2/src/buffer.rs, aws-lc-rs-1.18.2/src/cbb.rs, aws-lc-rs-1.18.2/src/cbs.rs, aws-lc-rs-1.18.2/src/cipher/des.rs, aws-lc-rs-1.18.2/src/cipher/key.rs, aws-lc-rs-1.18.2/src/cipher/padded.rs, aws-lc-rs-1.18.2/src/cipher/streaming.rs, aws-lc-rs-1.18.2/src/cipher/tests/fips.rs, aws-lc-rs-1.18.2/src/cmac.rs, aws-lc-rs-1.18.2/src/cmac/tests/fips.rs, aws-lc-rs-1.18.2/src/digest/digest_ctx.rs, aws-lc-rs-1.18.2/src/digest/tests/fips.rs, aws-lc-rs-1.18.2/src/ec/encoding.rs, aws-lc-rs-1.18.2/src/ec/signature.rs, aws-lc-rs-1.18.2/src/encoding.rs, aws-lc-rs-1.18.2/src/evp_pkey.rs, aws-lc-rs-1.18.2/src/fips.rs, aws-lc-rs-1.18.2/src/hex.rs, aws-lc-rs-1.18.2/src/hkdf/tests/fips.rs, aws-lc-rs-1.18.2/src/hmac/tests/fips.rs, aws-lc-rs-1.18.2/src/kdf.rs, aws-lc-rs-1.18.2/src/kdf/kbkdf.rs, aws-lc-rs-1.18.2/src/kdf/sskdf.rs, aws-lc-rs-1.18.2/src/kem.rs, aws-lc-rs-1.18.2/src/key_wrap.rs, aws-lc-rs-1.18.2/src/key_wrap/tests.rs, aws-lc-rs-1.18.2/src/key_wrap/tests/fips.rs, aws-lc-rs-1.18.2/src/pbkdf2/tests/fips.rs, aws-lc-rs-1.18.2/src/pqdsa.rs, aws-lc-rs-1.18.2/src/pqdsa/key_pair.rs, aws-lc-rs-1.18.2/src/pqdsa/signature.rs, aws-lc-rs-1.18.2/src/ptr.rs, aws-lc-rs-1.18.2/src/rsa/encoding.rs, aws-lc-rs-1.18.2/src/rsa/encryption.rs, aws-lc-rs-1.18.2/src/rsa/encryption/oaep.rs, aws-lc-rs-1.18.2/src/rsa/encryption/pkcs1.rs, aws-lc-rs-1.18.2/src/rsa/signature.rs, aws-lc-rs-1.18.2/src/rsa/tests/fips.rs, aws-lc-rs-1.18.2/src/signature/parsed_public_key_tests.rs, aws-lc-rs-1.18.2/src/signature/tests/fips.rs, aws-lc-rs-1.18.2/src/signature/tests/fips/keys.rs, aws-lc-rs-1.18.2/src/tls_prf.rs, aws-lc-rs-1.18.2/src/tls_prf/tests/fips.rs, aws-lc-rs-1.18.2/src/unstable.rs, aws-lc-rs-1.18.2/src/unstable/signature.rs
+// Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0 OR ISC
+
+
+Source: aws-lc-rs-1.18.2/src/aead/chacha.rs, aws-lc-rs-1.18.2/src/cipher/chacha.rs
+// Copyright 2016 Brian Smith.
+// Portions Copyright (c) 2016, Google Inc.
+// SPDX-License-Identifier: ISC
+// Modifications copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0 OR ISC
+
+
+Source: aws-lc-rs-1.18.2/src/aead/chacha20_poly1305_openssh.rs
+// Copyright 2016 Brian Smith.
+// SPDX-License-Identifier: ISC
+// Modifications copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0 OR ISC
+
+
+Source: aws-lc-rs-1.18.2/src/aead/nonce.rs, aws-lc-rs-1.18.2/src/aead/quic.rs, aws-lc-rs-1.18.2/src/cipher.rs, aws-lc-rs-1.18.2/src/cipher/aes.rs, aws-lc-rs-1.18.2/src/cipher/block.rs, aws-lc-rs-1.18.2/src/io.rs, aws-lc-rs-1.18.2/src/io/positive.rs, aws-lc-rs-1.18.2/src/iv.rs
+// Copyright 2018 Brian Smith.
+// SPDX-License-Identifier: ISC
+// Modifications copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0 OR ISC
+
+
+Source: aws-lc-rs-1.18.2/src/agreement.rs, aws-lc-rs-1.18.2/src/signature.rs
+// Copyright 2015-2017 Brian Smith.
+// SPDX-License-Identifier: ISC
+// Modifications copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0 OR ISC
+
+
+Source: aws-lc-rs-1.18.2/src/constant_time.rs, aws-lc-rs-1.18.2/src/digest/sha.rs, aws-lc-rs-1.18.2/src/hmac.rs, aws-lc-rs-1.18.2/src/pbkdf2.rs
+// Copyright 2015-2022 Brian Smith.
+// SPDX-License-Identifier: ISC
+// Modifications copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0 OR ISC
+
+
+Source: aws-lc-rs-1.18.2/src/debug.rs
+// Copyright 2018 Trent Clarke.
+// SPDX-License-Identifier: ISC
+// Modifications copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0 OR ISC
+
+
+Source: aws-lc-rs-1.18.2/src/digest.rs
+// Copyright 2015-2019 Brian Smith.
+// SPDX-License-Identifier: ISC
+// Modifications copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0 OR ISC
+
+
+Source: aws-lc-rs-1.18.2/src/endian.rs, aws-lc-rs-1.18.2/src/error.rs
+// Copyright 2015-2021 Brian Smith.
+// SPDX-License-Identifier: ISC
+// Modifications copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0 OR ISC
+
+
+Source: aws-lc-rs-1.18.2/src/hkdf.rs, aws-lc-rs-1.18.2/src/io/der.rs
+// Copyright 2015 Brian Smith.
+// SPDX-License-Identifier: ISC
+// Modifications copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0 OR ISC
+
+
+Source: aws-lc-rs-1.18.2/src/pkcs8.rs
+// Copyright 2017 Brian Smith.
+// SPDX-License-Identifier: ISC
+// Modifications copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0 OR ISC
+

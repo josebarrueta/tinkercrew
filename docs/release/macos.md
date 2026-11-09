@@ -6,8 +6,8 @@ Status: packaging/signing/notarization automation and signed-update design imple
 
 - Minimum macOS: **12.0**.
 - Development builds use the current machine's architecture and are explicitly ad-hoc signed by the development-only config.
-- Public release workflow builds **Universal 2** (`universal-apple-darwin`) with both `aarch64-apple-darwin` and `x86_64-apple-darwin` Rust targets. One DMG supports both Apple silicon and Intel.
-- A successful cross-build is not Intel runtime validation. Test an actual supported Intel Mac and an Apple silicon Mac before claiming support/publication. No Rosetta requirement is intended.
+- Owner-approved first-release scope is **Apple silicon only**: production builds use `aarch64-apple-darwin`, manifest target `darwin-aarch64`, and an `aarch64` DMG asset. **Intel and Universal 2 are deferred**, not supported by this release.
+- Finalization and strict release verification require the app's main executable and all embedded Mach-O code to be **arm64 only**; mounted DMG contents are checked too. Metadata generation rejects Intel/Universal targets. This proves architecture, not runtime compatibility, signing or acceptance. Clean-Mac testing on supported Apple silicon Macs is still required.
 - No ADB executable is embedded today; official external Platform-Tools remains separately installed. Any future embedded USB helper must pass the same signing-team/embedded-code checks and licensing review.
 
 ## Local development packaging
@@ -53,7 +53,7 @@ No release inputs belong in source, `.env` commits, issue comments, build logs, 
 1. Complete/triage #21 acceptance and the dependency evidence/source-availability review in #25; the original #4/#10 acceptance is consolidated in #21. Respect unsupported TBP/provisioning handoffs. The workflow cannot replace this decision.
 2. Update `app/package.json`, `app/src-tauri/Cargo.toml`, and `app/src-tauri/tauri.conf.json` to the same version; refresh lockfiles. Commit reviewed code and create the matching immutable `vVERSION` tag.
 3. Dispatch the workflow **on that tag** and approve the protected environment. It fails before signing if the ref/version or required inputs are missing.
-4. It runs software checks and dependency review preflight without signing inputs, then builds a Developer-ID-signed/notarized Universal app and DMG, and finalizes the DMG with `scripts/finalize-macos-release.sh`.
+4. It runs software checks and dependency review preflight without signing inputs, then builds a Developer-ID-signed/notarized Apple silicon app and DMG, and finalizes the DMG with `scripts/finalize-macos-release.sh`.
 5. The finalizer submits the **final DMG** using `notarytool --wait`, requires `Accepted`, staples app and DMG, and runs strict release verification. It never passes a private key/password's contents as a CLI argument.
 6. `scripts/verify-macos-release.sh` requires Developer ID, Hardened Runtime, valid signatures on all embedded Mach-O code with the same signing team, valid app/DMG stapled tickets, and Gatekeeper assessments. It fails on ad-hoc development builds. No extra JIT, unsigned executable memory, disabled library validation, App Sandbox, or debug entitlements are configured.
 7. Only after stapling/verification, it signs both the immutable DMG and `release-manifest.json` with the update key, then independently verifies both signatures against the configured public key using `tools/release-verify`.
@@ -62,7 +62,7 @@ No release inputs belong in source, `.env` commits, issue comments, build logs, 
 For an attended local finalization, first build with an installed Developer ID identity and Tauri's documented notarization environment. Then supply absolute key-file paths, `TAURI_SIGNING_PRIVATE_KEY` or `TAURI_SIGNING_PRIVATE_KEY_PATH`, `TC_UPDATE_PUBLIC_KEY_FILE`, and either `TC_NOTARY_PROFILE` (an existing local Keychain notary profile) or the App Store Connect API environment. Run:
 
 ```sh
-bash scripts/finalize-macos-release.sh /absolute/Tinkeroo.app /absolute/input.dmg VERSION darwin-universal
+bash scripts/finalize-macos-release.sh /absolute/Tinkeroo.app /absolute/input.dmg VERSION darwin-aarch64
 ```
 
 The finalizer first repeats the dependency review and actual bundle-resource checks; it refuses pending evidence even if signing credentials are present. After those gates, this performs real Apple submissions and is intentionally **not** part of routine checks. Production credentials/notarization remain untested here. The release verifier's signed public fixture tests prove Tauri/Minisign compatibility and tamper rejection, not Apple approval or custody of a production key.
@@ -90,7 +90,7 @@ Verify against an already trusted public key, not a new key downloaded alongside
 
 ## Clean-Mac acceptance — pending
 
-Before publishing the draft, record software versions and verify on Apple silicon and Intel:
+Before publishing the draft, record software versions and verify on supported Apple silicon Macs. Intel acceptance is deferred with Intel distribution, not marked passed:
 
 - Download through a browser so quarantine/Gatekeeper behavior is exercised.
 - Open the DMG and drag to Applications; launch without bypassing Gatekeeper.

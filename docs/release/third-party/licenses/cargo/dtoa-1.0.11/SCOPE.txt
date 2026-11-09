@@ -1,0 +1,10 @@
+Source/scope information: dtoa 1.0.11
+
+Conservatively include this fixed-list Rust crate, including available alternate/test/proc-macro notices, rather than excluding it based on dependency kind or linker elimination. Native/network/TLS providers and other dependency components keep their separate evidence and approval status. MIT is the elected available root license alternative; verbatim source notices retain the additional adapted-source attributions and MIT grants.
+
+Exact published source archive:
+https://static.crates.io/crates/dtoa/dtoa-1.0.11.crate
+SHA-256: 4c3cf4824e2d5f025c7b531afcb2325364084a16806f6d47fbc1f5fbd9960590
+
+Texts and quoted source notice bytes were checked against this locked archive.
+Engineering evidence does not grant owner/legal or publication approval.

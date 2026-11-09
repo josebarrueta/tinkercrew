@@ -1,0 +1,10 @@
+Source/scope information: indexmap 2.14.2
+
+Conservatively include this fixed-list Rust crate, including available alternate/test/proc-macro notices, rather than excluding it based on dependency kind or linker elimination. Native/network/TLS providers and other dependency components keep their separate evidence and approval status.
+
+Exact published source archive:
+https://static.crates.io/crates/indexmap/indexmap-2.14.2.crate
+SHA-256: cc4e190f5d26ca7051642629da2c52fc03bde85a03197c99408dcd291734c855
+
+Texts and quoted source notice bytes were checked against this locked archive.
+Engineering evidence does not grant owner/legal or publication approval.

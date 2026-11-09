@@ -1,0 +1,10 @@
+Source/scope information: erased-serde 0.4.10
+
+Conservatively include this fixed-list Rust crate, including available alternate/test/proc-macro notices, rather than excluding it based on dependency kind or linker elimination. Native/network/TLS providers and other dependency components keep their separate evidence and approval status.
+
+Exact published source archive:
+https://static.crates.io/crates/erased-serde/erased-serde-0.4.10.crate
+SHA-256: d2add8a07dd6a8d93ff627029c51de145e12686fbc36ecb298ac22e74cf02dec
+
+Texts and quoted source notice bytes were checked against this locked archive.
+Engineering evidence does not grant owner/legal or publication approval.

@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Read-only regression check: headless DMGs must still support drag-to-Applications.
 set -euo pipefail
-if [[ "$#" != 1 || ! -f "$1" ]]; then
-  printf 'Usage: %s DMG\n' "$0" >&2
+if [[ "$#" -lt 1 || "$#" -gt 2 || ! -f "$1" || ( "$#" == 2 && "$2" != --apple-silicon ) ]]; then
+  printf 'Usage: %s DMG [--apple-silicon]\n' "$0" >&2
   exit 2
 fi
 mount="$(mktemp -d "${TMPDIR:-/tmp}/tinkercrew-dmg-check.XXXXXX")"
@@ -21,4 +21,7 @@ attached=1
 [[ -L "$mount/Applications" && "$(readlink "$mount/Applications")" == /Applications ]] || { printf 'DMG lacks the drag-to-Applications link.\n' >&2; exit 1; }
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 python3 "$root/scripts/dependency_notices.py" bundle-check --root "$root" --inventory "$root/docs/release/third-party/DEPENDENCY_INVENTORY.json" --evidence "$root/docs/release/third-party/evidence.json" --notices "$root/docs/release/third-party/DEPENDENCY_NOTICES.txt" --app "$mount/Tinkeroo.app"
+if [[ "${2:-}" == --apple-silicon ]]; then
+  python3 "$root/scripts/release_architecture.py" "$mount/Tinkeroo.app"
+fi
 printf 'Read-only DMG app, Applications-link and dependency-disclosure checks passed.\n'

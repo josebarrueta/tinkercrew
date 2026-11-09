@@ -1,0 +1,10 @@
+Source/scope information: syn 3.0.9
+
+Conservatively include this fixed-list Rust crate, including available alternate/test/proc-macro notices, rather than excluding it based on dependency kind or linker elimination. Native/network/TLS providers and other dependency components keep their separate evidence and approval status.
+
+Exact published source archive:
+https://static.crates.io/crates/syn/syn-3.0.9.crate
+SHA-256: d78c8dee4c7bf0e14673097256fed6142ce9d3b85a408189d07482442145823b
+
+Texts and quoted source notice bytes were checked against this locked archive.
+Engineering evidence does not grant owner/legal or publication approval.

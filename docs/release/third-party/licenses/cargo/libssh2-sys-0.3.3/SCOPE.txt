@@ -1,0 +1,9 @@
+Source/scope information: libssh2-sys 0.3.3
+
+Vendored libssh2 static build with OpenSSL backend and zlib support. Full COPYING plus per-file notice comments retained, including OpenBSD, chacha and poly1305 material. Some upstream SPDX labels differ from their full grant text; the grant text is reproduced unchanged and ISC is conservatively included in the expression. No inference that alternate Windows/crypto backends were compiled.
+
+Exact published source archive (no upstream modification asserted by this note):
+https://static.crates.io/crates/libssh2-sys/libssh2-sys-0.3.3.crate
+SHA-256: 0f5eb74291e8691cab524a01274a1b1e7742b1a94f29d8b101d8aadc8372c1cd
+
+This is engineering scope documentation, not owner/legal or publication approval.

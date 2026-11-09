@@ -1,0 +1,10 @@
+Source/scope information: futures-macro 0.3.34
+
+Conservatively include this fixed-list Rust crate, including available alternate/test/proc-macro notices, rather than excluding it based on dependency kind or linker elimination. Native/network/TLS providers and other dependency components keep their separate evidence and approval status.
+
+Exact published source archive:
+https://static.crates.io/crates/futures-macro/futures-macro-0.3.34.crate
+SHA-256: 9fb9654ba8355388abeb8dcb4fc62f511300867002afc858860463bdd9fe0c44
+
+Texts and quoted source notice bytes were checked against this locked archive.
+Engineering evidence does not grant owner/legal or publication approval.

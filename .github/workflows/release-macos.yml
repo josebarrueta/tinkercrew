@@ -40,7 +40,7 @@ jobs:
         run: |
           rustup update stable --no-self-update
           rustup default stable
-          rustup target add aarch64-apple-darwin x86_64-apple-darwin
+          rustup target add aarch64-apple-darwin
           cd app
           npm ci
           npx playwright install chromium
@@ -93,7 +93,7 @@ jobs:
           with open(os.environ['GITHUB_ENV'], 'a') as env:
               env.write(f'APPLE_API_KEY_PATH={key}\nTC_UPDATE_PUBLIC_KEY_FILE={public}\n')
           PY
-      - name: Build Developer ID signed and notarized Universal app and DMG
+      - name: Build Developer ID signed and notarized Apple silicon app and DMG
         uses: tauri-apps/tauri-action@1deb371b0cd8bd54025b384f1cd735e725c4060f # v1
         env:
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
@@ -103,7 +103,7 @@ jobs:
           APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
         with:
           projectPath: app
-          args: --target universal-apple-darwin --bundles app,dmg --ci
+          args: --target aarch64-apple-darwin --bundles app,dmg --ci
       - name: Final notarization, stapling, signature checks, and signed metadata
         env:
           APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
@@ -113,19 +113,19 @@ jobs:
         run: |
           set -euo pipefail
           version="$(node -p 'JSON.parse(require("fs").readFileSync("app/package.json", "utf8")).version')"
-          bundle=app/src-tauri/target/universal-apple-darwin/release/bundle
+          bundle=app/src-tauri/target/aarch64-apple-darwin/release/bundle
           dmgs=("$bundle"/dmg/*.dmg)
           test "${#dmgs[@]}" = 1
-          bash scripts/finalize-macos-release.sh "$bundle/macos/Tinkeroo.app" "${dmgs[0]}" "$version" darwin-universal
+          bash scripts/finalize-macos-release.sh "$bundle/macos/Tinkeroo.app" "${dmgs[0]}" "$version" darwin-aarch64
       - name: Create draft only (owner must complete acceptance before publication)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           version="${GITHUB_REF_NAME#v}"
-          out="artifacts/release/$version/darwin-universal"
+          out="artifacts/release/$version/darwin-aarch64"
           gh release create "$GITHUB_REF_NAME" --verify-tag --draft --title "Tinkeroo $version" \
-            --notes 'Signed/notarized release candidate. Owner must complete clean-Mac, hardware, offline, and family acceptance before publication. Install by dragging Tinkeroo to Applications; no Gatekeeper bypass is supported.' \
+            --notes 'Apple silicon only; Intel is not supported in this release. Signed/notarized release candidate. Owner must complete clean-Mac, hardware, offline, and family acceptance before publication. Install by dragging Tinkeroo to Applications; no Gatekeeper bypass is supported.' \
             "$out"/*.dmg "$out"/*.dmg.sig "$out/release-manifest.json" "$out/release-manifest.json.sig"
       - name: Remove temporary signing material
         if: always()

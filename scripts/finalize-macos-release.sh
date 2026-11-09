@@ -13,7 +13,8 @@ source_dmg="$(cd "$(dirname "$2")" && pwd)/$(basename "$2")"
 version="$3"
 target="$4"
 [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9.-]+)?$ ]] || { printf 'Invalid release version.\n' >&2; exit 2; }
-case "$target" in darwin-aarch64|darwin-x86_64|darwin-universal) ;; *) printf 'Invalid release target.\n' >&2; exit 2 ;; esac
+[[ "$target" == darwin-aarch64 ]] || { printf 'Only Apple silicon (darwin-aarch64) is currently approved for release.\n' >&2; exit 2; }
+python3 "$root/scripts/release_architecture.py" "$app"
 python3 "$root/scripts/dependency_notices.py" release-check --root "$root" --inventory "$root/docs/release/third-party/DEPENDENCY_INVENTORY.json" --evidence "$root/docs/release/third-party/evidence.json" --notices "$root/docs/release/third-party/DEPENDENCY_NOTICES.txt" --review "$root/docs/release/third-party/review.json"
 python3 "$root/scripts/dependency_notices.py" bundle-check --root "$root" --inventory "$root/docs/release/third-party/DEPENDENCY_INVENTORY.json" --evidence "$root/docs/release/third-party/evidence.json" --notices "$root/docs/release/third-party/DEPENDENCY_NOTICES.txt" --app "$app"
 : "${TC_UPDATE_PUBLIC_KEY_FILE:?Set the release verification public-key file}"

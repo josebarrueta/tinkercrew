@@ -1,0 +1,10 @@
+Source/scope information: uuid 1.28.0
+
+Conservatively include this fixed-list Rust crate, including available alternate/test/proc-macro notices, rather than excluding it based on dependency kind or linker elimination. Native/network/TLS providers and other dependency components keep their separate evidence and approval status. MIT is the elected available root license alternative; verbatim source notices retain the additional adapted-source attributions and MIT grants.
+
+Exact published source archive:
+https://static.crates.io/crates/uuid/uuid-1.28.0.crate
+SHA-256: 7cc1186384beb7dd8eedea376413fd654937285ea6c9cfbb928dc3043ea4b606
+
+Texts and quoted source notice bytes were checked against this locked archive.
+Engineering evidence does not grant owner/legal or publication approval.

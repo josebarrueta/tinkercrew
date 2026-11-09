@@ -1,0 +1,10 @@
+Verbatim notice comments from the locked published source. Tinkeroo-authored source labels follow.
+Includes conservative test/alternate-feature notices; not proof each source member is in the binary.
+
+Source: parking_lot-0.12.5/src/condvar.rs, parking_lot-0.12.5/src/elision.rs, parking_lot-0.12.5/src/fair_mutex.rs, parking_lot-0.12.5/src/lib.rs, parking_lot-0.12.5/src/mutex.rs, parking_lot-0.12.5/src/once.rs, parking_lot-0.12.5/src/raw_fair_mutex.rs, parking_lot-0.12.5/src/raw_mutex.rs, parking_lot-0.12.5/src/raw_rwlock.rs, parking_lot-0.12.5/src/remutex.rs, parking_lot-0.12.5/src/rwlock.rs, parking_lot-0.12.5/src/util.rs
+// Copyright 2016 Amanieu d'Antras
+//
+// Licensed under the Apache License, Version 2.0, <LICENSE-APACHE or
+// http://apache.org/licenses/LICENSE-2.0> or the MIT license <LICENSE-MIT or
+// http://opensource.org/licenses/MIT>, at your option. This file may not be
+// copied, modified, or distributed except according to those terms.

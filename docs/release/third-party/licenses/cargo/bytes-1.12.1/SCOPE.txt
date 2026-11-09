@@ -1,0 +1,10 @@
+Source/scope information: bytes 1.12.1
+
+Conservatively include this fixed-list Rust crate, including available alternate/test/proc-macro notices, rather than excluding it based on dependency kind or linker elimination. Native/network/TLS providers and other dependency components keep their separate evidence and approval status.
+
+Exact published source archive:
+https://static.crates.io/crates/bytes/bytes-1.12.1.crate
+SHA-256: fc652a48c352aef3ea3aed32080501cf3ef6ed5da78602a020c991775b0aff04
+
+Texts and quoted source notice bytes were checked against this locked archive.
+Engineering evidence does not grant owner/legal or publication approval.

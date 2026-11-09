@@ -1,0 +1,10 @@
+Source/scope information: tower 0.5.3
+
+PeakEWMA source is derived from Apache-2.0 Finagle/Twitter code; root MIT notice alone is insufficient. Matching upstream Apache/NOTICE and feature scope review remains open.
+
+Exact published source archive:
+https://static.crates.io/crates/tower/tower-0.5.3.crate
+SHA-256: ebe5ef63511595f1344e2d5cfa636d973292adc0eec1f0ad45fae9f0851ab1d4
+
+Texts and quoted source notice bytes were checked against this locked archive.
+Engineering evidence does not grant owner/legal or publication approval.

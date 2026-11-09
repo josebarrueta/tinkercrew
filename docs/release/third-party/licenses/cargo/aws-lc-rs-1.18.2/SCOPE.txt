@@ -1,0 +1,9 @@
+Source/scope information: aws-lc-rs 1.18.2
+
+Rust wrapper includes ISC-covered source from Brian Smith, Trent Clarke and Google in addition to Amazon modifications. Root LICENSE and per-file copyright/SPDX notices are both retained; native aws-lc-sys remains a separately pending entry.
+
+Exact published source archive (no upstream modification asserted by this note):
+https://static.crates.io/crates/aws-lc-rs/aws-lc-rs-1.18.2.crate
+SHA-256: faac5829c2b74c28f830747e7818ccfb684261b5f48a1118b1e2a13d36dfab13
+
+This is engineering scope documentation, not owner/legal or publication approval.

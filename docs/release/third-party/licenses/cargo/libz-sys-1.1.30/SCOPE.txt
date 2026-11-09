@@ -1,0 +1,9 @@
+Source/scope information: libz-sys 1.1.30
+
+Current arm64 build output links system libz (-lz), not a bundled archive. Stock zlib notice is included conservatively for the upstream fallback. zlib-ng features are not enabled. This entry covers this Rust wrapper and its stock zlib path, not unrelated optional contrib utilities.
+
+Exact published source archive (no upstream modification asserted by this note):
+https://static.crates.io/crates/libz-sys/libz-sys-1.1.30.crate
+SHA-256: f710a23e6dbf193214fd46ca56a9d6864e550abe86202184532ae7275e46de19
+
+This is engineering scope documentation, not owner/legal or publication approval.
